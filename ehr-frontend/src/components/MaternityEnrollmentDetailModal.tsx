@@ -16,6 +16,7 @@ import { useNotification } from './GlobalNotification';
 import { formatDateToDDMMYYYY } from '../utils/dateFormatting';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { useConfirmation } from '../hooks/useConfirmation';
+import PartographChart from './PartographChart';
 
 interface MaternityEnrollmentDetailModalProps {
   enrollmentId: string;
@@ -25,7 +26,7 @@ interface MaternityEnrollmentDetailModalProps {
   onUpdated?: () => void;
 }
 
-type TabKey = 'summary' | 'anc' | 'delivery' | 'postnatal' | 'risk';
+type TabKey = 'summary' | 'anc' | 'delivery' | 'postnatal' | 'risk' | 'partograph';
 
 type NumberLike = string | number | null | undefined;
 type VitalsSource = { id?: string; recordedAt?: string | null; recordedByName?: string | null };
@@ -2377,6 +2378,23 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
     );
   };
 
+  const renderPartographTab = () => {
+    if (!enrollment) return null;
+    const deliveryId = enrollment.delivery?.id;
+    if (!deliveryId) {
+      return (
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
+          Partograph monitoring is available once a delivery record has been created.
+        </div>
+      );
+    }
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <PartographChart deliveryId={deliveryId} tenantSlug={tenantSlug} token={token} />
+      </div>
+    );
+  };
+
   const renderPostnatalTab = () => {
     if (!enrollment) return null;
     const visits = enrollment.postnatal_visits || [];
@@ -2762,6 +2780,8 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
         return renderPostnatalTab();
       case 'risk':
         return renderRiskTab();
+      case 'partograph':
+        return renderPartographTab();
       default:
         return null;
     }
@@ -2831,6 +2851,12 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
               active={activeTab === 'risk'}
               onClick={() => setActiveTab('risk')}
               badge={enrollment?.risk_factors?.length ?? 0}
+            />
+            <TabButton
+              label="Partograph"
+              icon={<LineChart className="w-4 h-4" />}
+              active={activeTab === 'partograph'}
+              onClick={() => setActiveTab('partograph')}
             />
           </div>
 

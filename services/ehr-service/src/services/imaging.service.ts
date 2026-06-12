@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
@@ -8,6 +8,7 @@ import { CdssHookService } from './cdss-hook.service';
 import { StorageService } from './storage.service';
 import { CdssService } from './cdss.service';
 import { MinioService } from './minio.service';
+import { NotificationCenterService } from './notification-center.service';
 import { ImagingOrderAiReview } from '../entities/imaging-order-ai-review.entity';
 import { RadiologyReportDraft } from '../entities/radiology-report-draft.entity';
 import { RadiologyDiscrepancyReview } from '../entities/radiology-discrepancy-review.entity';
@@ -25,6 +26,7 @@ export class ImagingService {
     private readonly storageService: StorageService,
     private readonly cdssService: CdssService,
     private readonly minioService: MinioService,
+    @Optional() private readonly notificationCenterService?: NotificationCenterService,
   ) {
     const ttlCandidate = Number(process.env.IMAGING_SIGNED_URL_TTL ?? 300);
     this.signedUrlTtlSeconds = Number.isFinite(ttlCandidate) && ttlCandidate > 0 ? ttlCandidate : 300;
@@ -1727,6 +1729,40 @@ export class ImagingService {
     );
 
     const postWorkflow = await this.syncRadiologyPostReportWorkflow(tenantDb, reportId, userId);
+
+    // S229: notify ordering provider that report is ready for review
+    try {
+      const orderRows = await tenantDb.query(
+        `SELECT io.ordering_provider, u.email as provider_email, u.phone as provider_phone,
+                st.study_name, m.modality_code, p.first_name || ' ' || p.last_name as patient_name
+         FROM imaging_orders io
+         INNER JOIN users u ON u.id = io.ordering_provider
+         INNER JOIN imaging_study_types st ON st.id = io.study_type_id
+         INNER JOIN imaging_modalities m ON m.id = st.modality_id
+         INNER JOIN patients p ON p.id = io.patient_id
+         WHERE io.id = $1`,
+        [result[0].imaging_order_id],
+      );
+      if (orderRows.length > 0 && this.notificationCenterService) {
+        const order = orderRows[0];
+        const isCritical = result[0].is_critical;
+        const subject = isCritical
+          ? `⚠️ CRITICAL: Radiology report ready — ${order.patient_name}`
+          : `Radiology report ready — ${order.patient_name}`;
+        const message = isCritical
+          ? `CRITICAL FINDING: The ${order.modality_code} ${order.study_name} report for ${order.patient_name} is finalized and requires urgent review.`
+          : `The ${order.modality_code} ${order.study_name} report for ${order.patient_name} is finalized. Please review and acknowledge in the EHR.`;
+        await this.notificationCenterService.notifyTrigger(tenantDb, 'radiology_report_ready', {
+          recipientEmail: order.provider_email || undefined,
+          recipientSms: order.provider_phone || undefined,
+          patientId: result[0].patient_id,
+          subject,
+          message,
+        });
+      }
+    } catch (notifErr: any) {
+      this.logger.warn(`radiology_report_ready notification failed (non-fatal): ${notifErr?.message}`);
+    }
 
     this.logger.log(`Signed imaging report ${reportId} by user ${userId}`);
     return {

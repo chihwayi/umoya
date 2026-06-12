@@ -443,4 +443,39 @@ export class MaternityController {
   async getRecentPostnatalVisits(@Request() req: RequestWithTenant) {
     return this.maternityService.getRecentPostnatalVisits(req.tenantDb);
   }
+
+  // ── S228: Digital Partograph ─────────────────────────────────────────────
+
+  @Post('partograph')
+  @ApiOperation({ summary: 'Record a partograph entry for an active delivery' })
+  @ApiResponse({ status: 201, description: 'Partograph entry recorded with CDSS alerts' })
+  async recordPartographEntry(
+    @Request() req: RequestWithTenant,
+    @Body() body: any,
+  ) {
+    const userId = req['user']?.id;
+    return this.maternityService.recordPartographEntry(req.tenantDb, body.delivery_id, body, userId);
+  }
+
+  @Get('partograph/delivery/:deliveryId')
+  @ApiOperation({ summary: 'Get full partograph data for a delivery (all entries + delivery context)' })
+  @ApiResponse({ status: 200, description: 'Partograph data with ordered time-series entries' })
+  async getPartographData(
+    @Request() req: RequestWithTenant,
+    @Param('deliveryId') deliveryId: string,
+  ) {
+    return this.maternityService.getPartographData(req.tenantDb, deliveryId);
+  }
+
+  @Patch('partograph/:id')
+  @ApiOperation({ summary: 'Correct a partograph entry' })
+  @ApiResponse({ status: 200, description: 'Entry updated with recalculated CDSS alerts' })
+  async patchPartographEntry(
+    @Request() req: RequestWithTenant,
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    const userId = req['user']?.id;
+    return this.maternityService.patchPartographEntry(req.tenantDb, id, body, userId);
+  }
 }

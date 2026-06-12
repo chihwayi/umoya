@@ -6403,6 +6403,28 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  // S228 Partograph
+  recordPartographEntry: async (tenantSlug: string, token: string, payload: any) => {
+    const response = await ehrAxios.post('/maternity/partograph', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getPartographData: async (tenantSlug: string, token: string, deliveryId: string) => {
+    const response = await ehrAxios.get(`/maternity/partograph/delivery/${deliveryId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  patchPartographEntry: async (tenantSlug: string, token: string, entryId: string, payload: any) => {
+    const response = await ehrAxios.patch(`/maternity/partograph/${entryId}`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   // Patient History API
   getMedicalHistory: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/patients/${patientId}/history/medical`, {

@@ -4853,7 +4853,8 @@ export class DatabaseProvisioningService {
             ('appointment_reminder', 'Appointment Reminder', 'Reminder with appointment details 24 hours before the appointment.'),
             ('payment_received', 'Payment Received', 'Receipt confirmation with invoice number and amount when a payment is recorded.'),
             ('claim_status_updated', 'Claim Status Updated', 'Status update with claim number and new status when a medical-aid claim status changes.'),
-            ('staff_invitation', 'Staff Invitation', 'Invitation email with an accept link when a staff member is invited to the practice.')
+            ('staff_invitation', 'Staff Invitation', 'Invitation email with an accept link when a staff member is invited to the practice.'),
+            ('radiology_report_ready', 'Radiology Report Ready', 'Notifies the ordering provider when a radiology report is finalized and awaiting acknowledgement. Critical findings trigger an urgent variant.')
           ON CONFLICT DO NOTHING`,
         ],
       },
@@ -5271,6 +5272,55 @@ export class DatabaseProvisioningService {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
           )`,
           `CREATE INDEX IF NOT EXISTS idx_ncd_profile_patient ON ncd_comorbidity_profile(patient_id)`,
+        ],
+      },
+      {
+        id: 'sprint229_radiology_feedback_trigger',
+        label: 'Sprint 229 — Radiology Report Feedback: seed radiology_report_ready notification trigger',
+        version: '2026.06.12.0',
+        description: 'Seeds radiology_report_ready notification trigger config so ordering providers are notified when a report is signed',
+        statements: () => [
+          `INSERT INTO notification_trigger_configs (trigger_key, label, description)
+           VALUES ('radiology_report_ready', 'Radiology Report Ready',
+             'Notifies the ordering provider when a radiology report is finalized and awaiting acknowledgement. Critical findings trigger an urgent variant.')
+           ON CONFLICT DO NOTHING`,
+        ],
+      },
+      {
+        id: 'sprint228_partograph',
+        label: 'Sprint 228 — Digital Partograph (WHO labor monitoring)',
+        version: '2026.06.12.0',
+        description: 'partograph_entries table for real-time labor progress tracking (cervicogram, descent, vitals, CDSS alerts)',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS partograph_entries (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            delivery_id UUID NOT NULL REFERENCES deliveries(id) ON DELETE CASCADE,
+            patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            entry_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            hours_in_labor NUMERIC(5,1),
+            cervical_dilation NUMERIC(4,1),
+            fetal_head_station SMALLINT CHECK (fetal_head_station BETWEEN -5 AND 5),
+            fetal_heart_rate SMALLINT,
+            contractions_per_10min SMALLINT CHECK (contractions_per_10min BETWEEN 0 AND 5),
+            contraction_duration_secs SMALLINT,
+            maternal_bp_systolic SMALLINT,
+            maternal_bp_diastolic SMALLINT,
+            maternal_pulse SMALLINT,
+            maternal_temp NUMERIC(4,1),
+            urine_output_ml INTEGER,
+            liquor VARCHAR(1) CHECK (liquor IN ('C','M','B','A','D')),
+            moulding SMALLINT CHECK (moulding BETWEEN 0 AND 3),
+            oxytocin_units NUMERIC(5,2),
+            drugs_given TEXT,
+            alert_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+            recorded_by UUID REFERENCES users(id),
+            notes TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_partograph_delivery ON partograph_entries(delivery_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_partograph_patient ON partograph_entries(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_partograph_entry_time ON partograph_entries(entry_time)`,
         ],
       },
     ];

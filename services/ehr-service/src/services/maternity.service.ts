@@ -4138,4 +4138,106 @@ export class MaternityService {
     const reason = `WHO postnatal schedule: next recommended visit at ${nextMilestone} days postpartum.`;
     return { suggestedDate, reason, riskLevel };
   }
+
+  // ── S228: Digital Partograph ─────────────────────────────────────────────
+
+  async recordPartographEntry(tenantDb: DataSource, deliveryId: string, data: any, userId?: string) {
+    const deliveryRows = await tenantDb.query(
+      `SELECT id, patient_id, admission_date FROM deliveries WHERE id = $1`,
+      [deliveryId],
+    );
+    if (deliveryRows.length === 0) throw new BadRequestException('Delivery record not found');
+    const delivery = deliveryRows[0];
+
+    const admissionTime = delivery.admission_date ? new Date(delivery.admission_date) : null;
+    const entryTime = data.entry_time ? new Date(data.entry_time) : new Date();
+    const hoursInLabor = admissionTime
+      ? Math.max(0, (entryTime.getTime() - admissionTime.getTime()) / 3600000)
+      : data.hours_in_labor ?? null;
+
+    const alertFlags = this.computePartographAlerts(data, hoursInLabor);
+
+    const rows = await tenantDb.query(
+      `INSERT INTO partograph_entries
+        (delivery_id, patient_id, entry_time, hours_in_labor, cervical_dilation, fetal_head_station,
+         fetal_heart_rate, contractions_per_10min, contraction_duration_secs,
+         maternal_bp_systolic, maternal_bp_diastolic, maternal_pulse, maternal_temp,
+         urine_output_ml, liquor, moulding, oxytocin_units, drugs_given,
+         alert_flags, recorded_by, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+       RETURNING *`,
+      [
+        deliveryId, delivery.patient_id, entryTime.toISOString(),
+        hoursInLabor ?? null,
+        data.cervical_dilation ?? null, data.fetal_head_station ?? null,
+        data.fetal_heart_rate ?? null, data.contractions_per_10min ?? null, data.contraction_duration_secs ?? null,
+        data.maternal_bp_systolic ?? null, data.maternal_bp_diastolic ?? null,
+        data.maternal_pulse ?? null, data.maternal_temp ?? null,
+        data.urine_output_ml ?? null, data.liquor ?? null, data.moulding ?? null,
+        data.oxytocin_units ?? null, data.drugs_given ?? null,
+        JSON.stringify(alertFlags), userId ?? null, data.notes ?? null,
+      ],
+    );
+
+    return { entry: rows[0], alerts: alertFlags };
+  }
+
+  async getPartographData(tenantDb: DataSource, deliveryId: string) {
+    const [delivery, entries] = await Promise.all([
+      tenantDb.query(
+        `SELECT d.*, me.expected_delivery_date, me.gestational_age_at_enrollment,
+                p.first_name || ' ' || p.last_name as patient_name, p.patient_number
+         FROM deliveries d
+         INNER JOIN maternity_enrollments me ON me.id = d.maternity_enrollment_id
+         INNER JOIN patients p ON p.id = d.patient_id
+         WHERE d.id = $1`,
+        [deliveryId],
+      ),
+      tenantDb.query(
+        `SELECT * FROM partograph_entries WHERE delivery_id = $1 ORDER BY entry_time ASC`,
+        [deliveryId],
+      ),
+    ]);
+    if (delivery.length === 0) throw new BadRequestException('Delivery not found');
+    return { delivery: delivery[0], entries };
+  }
+
+  async patchPartographEntry(tenantDb: DataSource, entryId: string, data: any, userId?: string) {
+    const existing = await tenantDb.query(`SELECT * FROM partograph_entries WHERE id = $1`, [entryId]);
+    if (existing.length === 0) throw new BadRequestException('Partograph entry not found');
+    const merged = { ...existing[0], ...data };
+    const alertFlags = this.computePartographAlerts(merged, merged.hours_in_labor);
+    await tenantDb.query(
+      `UPDATE partograph_entries SET
+        cervical_dilation = $1, fetal_head_station = $2, fetal_heart_rate = $3,
+        contractions_per_10min = $4, contraction_duration_secs = $5,
+        maternal_bp_systolic = $6, maternal_bp_diastolic = $7, maternal_pulse = $8, maternal_temp = $9,
+        urine_output_ml = $10, liquor = $11, moulding = $12, oxytocin_units = $13, drugs_given = $14,
+        alert_flags = $15, notes = $16, updated_at = NOW()
+       WHERE id = $17`,
+      [
+        merged.cervical_dilation, merged.fetal_head_station, merged.fetal_heart_rate,
+        merged.contractions_per_10min, merged.contraction_duration_secs,
+        merged.maternal_bp_systolic, merged.maternal_bp_diastolic, merged.maternal_pulse, merged.maternal_temp,
+        merged.urine_output_ml, merged.liquor, merged.moulding, merged.oxytocin_units, merged.drugs_given,
+        JSON.stringify(alertFlags), merged.notes, entryId,
+      ],
+    );
+    return { ...merged, alert_flags: alertFlags };
+  }
+
+  private computePartographAlerts(data: any, hoursInLabor: number | null): Array<{ code: string; severity: 'warning' | 'critical'; message: string }> {
+    const alerts: Array<{ code: string; severity: 'warning' | 'critical'; message: string }> = [];
+    const fhr = Number(data.fetal_heart_rate);
+    if (fhr > 0 && fhr < 100) alerts.push({ code: 'FHR_BRADYCARDIA', severity: 'critical', message: 'Fetal bradycardia (FHR < 100 bpm) — assess for cord compression or fetal compromise.' });
+    if (fhr > 180) alerts.push({ code: 'FHR_TACHYCARDIA', severity: 'warning', message: 'Fetal tachycardia (FHR > 180 bpm) — consider maternal fever, fetal compromise.' });
+    if (data.liquor === 'M') alerts.push({ code: 'MECONIUM', severity: 'warning', message: 'Meconium-stained liquor — risk of fetal compromise; prepare for neonatal resuscitation.' });
+    if (data.liquor === 'B') alerts.push({ code: 'BLOOD_LIQUOR', severity: 'critical', message: 'Blood-stained liquor — urgent assessment for abruption or vasa praevia.' });
+    if (Number(data.moulding) >= 3) alerts.push({ code: 'SEVERE_MOULDING', severity: 'critical', message: 'Severe moulding (grade 3) — obstructed labour; urgent review for operative delivery.' });
+    const sbp = Number(data.maternal_bp_systolic);
+    const dbp = Number(data.maternal_bp_diastolic);
+    if (sbp >= 160 || dbp >= 110) alerts.push({ code: 'SEVERE_HYPERTENSION', severity: 'critical', message: 'Severe hypertension — eclampsia risk; give MgSO4 + antihypertensive urgently.' });
+    else if (sbp >= 140 || dbp >= 90) alerts.push({ code: 'HYPERTENSION', severity: 'warning', message: 'Hypertension in labour — monitor closely for pre-eclampsia.' });
+    return alerts;
+  }
 }

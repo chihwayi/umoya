@@ -210,15 +210,23 @@ All entities, services, and controllers registered in:
 
 ---
 
-## Pending / Next Steps
+## Completion Status
 
-| Area | Gap | Priority |
-|------|-----|----------|
-| Frontend | UI components for 9 new specialty modules | High |
-| Frontend | NCD comorbidity dashboard (DM↔CKD↔CVD triad view) | High |
-| Triage UI | Fix `[object Object]` in Top Reason field | High — see TRIAGE-BUGS.md |
-| Triage UI | Remove duplicate search boxes, simplify page | Medium |
-| Malaria | ACT weight-based dosing table (already in service) | Done ✅ |
-| Maternity | ANC registry entity, partograph digital tracking, PPH/eclampsia risk | Medium |
-| Traditional Medicine | Herb-drug interaction checker | Low |
-| Radiology | Structured report → ordering specialty feedback loop | Medium |
+All S226 deliverables are implemented and committed (`a223a4fa`).
+
+| Area | Item | Status |
+|------|------|--------|
+| Frontend | UI for 9 new specialty modules | ✅ Done |
+| Frontend | NCD comorbidity dashboard (DM↔CKD↔CVD triad view) | ✅ Done |
+| Triage UI | `[object Object]` in Top Reason — nurse-friendly copilot panel | ✅ Done |
+| Triage UI | Duplicate search boxes removed, cancel wired | ✅ Done |
+| Malaria | ACT weight-based dosing table | ✅ Done |
+| DB | Provisioning bundle `sprint226_specialty_modules` | ✅ Done |
+
+## Future Sprints — Completed in S228/S229
+
+| Area | Item | Status |
+|------|------|--------|
+| Maternity | Digital WHO partograph — `partograph_entries` table, CDSS alerts (FHR/BP/liquor/moulding), SVG cervicogram chart, `PartographChart` component in `MaternityEnrollmentDetailModal` | ✅ S228 Done |
+| Traditional Medicine | Herb-drug interaction checker | ✅ Already implemented (S226) |
+| Radiology | Structured report → ordering provider notification on `signReport()` via `NotificationCenterService`; `radiology_report_ready` trigger config seeded | ✅ S229 Done |
