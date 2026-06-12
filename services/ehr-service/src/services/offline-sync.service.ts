@@ -5,6 +5,8 @@ import { ConflictResolverService } from './conflict-resolver.service';
 
 interface SyncOperation {
   clientId: string;
+  /** S225: stable per-op idempotency key (preferred replay-detection key). */
+  clientOpId?: string;
   operationType: 'create' | 'update';
   entityType: string;
   entityId?: string;
@@ -44,6 +46,7 @@ export class OfflineSyncService {
 
       const logEntry: Partial<SyncQueueLog> = {
         clientId: op.clientId,
+        clientOpId: op.clientOpId,
         operationType: op.operationType,
         entityType: op.entityType,
         entityId: op.entityId as any,
@@ -84,6 +87,15 @@ export class OfflineSyncService {
 
   private async findSyncedReplay(ds: any, op: SyncOperation): Promise<SyncQueueLog | null> {
     try {
+      // Prefer the explicit per-op idempotency key when the client sends one;
+      // fall back to the (clientId, entityType, clientTimestamp) tuple for
+      // pre-S225 clients.
+      if (op.clientOpId) {
+        const byOpId = await ds.getRepository(SyncQueueLog).findOne({
+          where: { clientOpId: op.clientOpId, syncStatus: 'synced' },
+        });
+        if (byOpId) return byOpId;
+      }
       const existing = await ds.getRepository(SyncQueueLog).findOne({
         where: {
           clientId: op.clientId,

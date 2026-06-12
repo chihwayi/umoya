@@ -4890,6 +4890,27 @@ export class DatabaseProvisioningService {
           `DO $$ BEGIN ALTER TABLE claim_submissions ADD COLUMN IF NOT EXISTS edi_content TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
         ],
       },
+      {
+        id: 'sprint225_offline_idempotency',
+        label: 'Sprint 225 — True Offline-First Client (server idempotency)',
+        version: '2026.06.12.0',
+        description:
+          'idempotency_keys table backing the X-Client-Op-Id replay interceptor; client_op_id on sync_queue_logs for per-op replay detection',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS idempotency_keys (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            op_id VARCHAR(80) NOT NULL,
+            method VARCHAR(10) NOT NULL,
+            path TEXT NOT NULL,
+            response JSONB,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS uidx_idempotency_keys_op_id ON idempotency_keys(op_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created_at ON idempotency_keys(created_at)`,
+          `DO $$ BEGIN ALTER TABLE sync_queue_logs ADD COLUMN IF NOT EXISTS client_op_id TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+          `DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sync_queue_logs_client_op_id ON sync_queue_logs(client_op_id); EXCEPTION WHEN undefined_table THEN NULL; END $$`,
+        ],
+      },
     ];
   }
 

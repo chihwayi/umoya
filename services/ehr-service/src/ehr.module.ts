@@ -1,5 +1,5 @@
 import { Module, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -427,6 +427,7 @@ import { AppointmentReminderCronService } from './services/appointment-reminder-
 import { McazComplianceController } from './controllers/mcaz-compliance.controller';
 import { McazComplianceService } from './services/mcaz-compliance.service';
 import { EdiSerializerService } from './services/edi-serializer.service';
+import { IdempotencyInterceptor } from './interceptors/idempotency.interceptor';
 import { ClinicalWorkflowService } from './services/clinical-workflow.service';
 import { CarePlanService } from './services/care-plan.service';
 import { CarePlanTemplateService } from './services/care-plan-template.service';
@@ -1177,6 +1178,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     {
       provide: APP_GUARD,
       useClass: MfaGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: IdempotencyInterceptor,
     },
   ],
   exports: [SmsService],

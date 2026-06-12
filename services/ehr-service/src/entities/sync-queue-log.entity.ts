@@ -4,6 +4,8 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeor
 export class SyncQueueLog {
   @PrimaryGeneratedColumn('uuid') id: string;
   @Column({ name: 'client_id', type: 'text' }) clientId: string;
+  // S225: stable per-operation idempotency key from the device queue.
+  @Column({ name: 'client_op_id', type: 'text', nullable: true }) clientOpId: string;
   @Column({ name: 'operation_type', type: 'text' }) operationType: string; // create|update
   @Column({ name: 'entity_type', type: 'text' }) entityType: string; // vitals|medical_record|prescription|lab_order
   @Column({ name: 'entity_id', type: 'uuid', nullable: true }) entityId: string;

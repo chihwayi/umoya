@@ -50,23 +50,36 @@ export function useOfflineSync() {
     if (drainInFlight) return drainInFlight;
 
     drainInFlight = (async () => {
-      const queue = await OfflineQueue.loadAll();
+      // S225: only attempt items whose backoff window has elapsed, replay each
+      // with its stable X-Client-Op-Id so the server idempotency layer can
+      // dedupe retries after a lost response.
+      const queue = await OfflineQueue.loadDue();
       if (queue.length === 0) {
-        setPending(0);
+        await refreshCount();
         return;
       }
 
       setSyncing(true);
       for (const item of queue) {
+        const config = { headers: { 'X-Client-Op-Id': item.clientOpId } };
         try {
           if (item.method === 'POST') {
-            await api.post(item.endpoint, item.body);
+            await api.post(item.endpoint, item.body, config);
           } else if (item.method === 'PATCH') {
-            await api.patch(item.endpoint, item.body);
+            await api.patch(item.endpoint, item.body, config);
           }
           await OfflineQueue.remove(item.id);
-        } catch {
-          // Leave remaining items and stop (network/server not ready)
+        } catch (error: any) {
+          if (error?.response) {
+            // Server rejected this item (4xx/5xx): back it off and keep
+            // draining — one poisoned write must not block the whole queue.
+            await OfflineQueue.markAttempt(
+              item.id,
+              error.response?.data?.message || `HTTP ${error.response.status}`,
+            );
+            continue;
+          }
+          // No response = still offline; stop and retry on the next trigger.
           break;
         }
       }

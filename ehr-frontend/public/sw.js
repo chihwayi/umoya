@@ -1,70 +1,98 @@
-const CACHE_NAME = 'umoya-lite-v1';
-const OFFLINE_URLS = [
-  '/',
-  '/index.html',
-  '/static/js/main.chunk.js',
-  '/manifest.json',
-];
+/* Umoya offline app-shell service worker (S225).
+ *
+ * Strategy:
+ *  - App shell (/, /index.html, manifest) precached at install.
+ *  - Hashed build assets (/static/...) cache-first with background fill — after
+ *    one online visit the SPA boots fully offline through load shedding.
+ *  - Navigations network-first, falling back to the cached shell offline.
+ *  - API calls network-first with a JSON { offline: true } fallback so the app
+ *    layer (offlineQueue/offlineCache) can react instead of crashing.
+ *
+ * NOTE: the previous sw.js contained TypeScript syntax (`as any`) in a .js
+ * file — a parse error — and was never registered, so web offline support was
+ * effectively zero. This worker is plain JS and is registered in src/index.tsx.
+ */
+const CACHE_NAME = 'umoya-shell-v2';
+const SHELL_URLS = ['/', '/index.html', '/manifest.json'];
 
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(OFFLINE_URLS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)).then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener('fetch', event => {
-  // Network first for API calls; cache first for assets
-  if (event.request.url.includes('/api/')) {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        // Return cached response or offline indicator
-        return new Response(JSON.stringify({ offline: true, cached: false }), {
-          headers: { 'Content-Type': 'application/json' },
-        });
-      })
-    );
-  } else {
-    event.respondWith(
-      caches.match(event.request).then(cached => cached || fetch(event.request))
-    );
-  }
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
 });
 
-self.addEventListener('sync', event => {
-  if (event.tag === 'umoya-offline-sync') {
-    event.waitUntil(syncOfflineQueue());
-  }
-});
-
-async function syncOfflineQueue() {
-  // Simple check for pending items in IndexedDB
-  // In a real implementation, we'd use a library like idb
-  const db = await new Promise((resolve, reject) => {
-    const req = indexedDB.open('umoya_offline', 1);
-    req.onsuccess = e => resolve((e.target as any).result);
-    req.onerror = e => reject((e.target as any).error);
-  });
-
-  const tx = (db as any).transaction('offline_queue', 'readonly');
-  const store = tx.objectStore('offline_queue');
-  const pendingItems = await new Promise<any[]>(resolve => {
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result);
-  });
-
-  if (pendingItems.length === 0) return;
-
-  try {
-    const response = await fetch('/api/lite/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: pendingItems }),
-    });
-    if (response.ok) {
-      const rwTx = (db as any).transaction('offline_queue', 'readwrite');
-      rwTx.objectStore('offline_queue').clear();
-    }
-  } catch (err) {
-    console.error('Background sync failed', err);
-  }
+function isApiRequest(url) {
+  return url.pathname.startsWith('/api/');
 }
+
+function isStaticAsset(url) {
+  return (
+    url.pathname.startsWith('/static/') ||
+    /\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/.test(url.pathname)
+  );
+}
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return; // writes go through the app-level queue
+
+  const url = new URL(request.url);
+
+  if (isApiRequest(url)) {
+    event.respondWith(
+      fetch(request).catch(
+        () =>
+          new Response(JSON.stringify({ offline: true, cached: false }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          })
+      )
+    );
+    return;
+  }
+
+  if (request.mode === 'navigate') {
+    // Network-first navigation; offline falls back to the cached shell.
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          return response;
+        })
+        .catch(() => caches.match('/index.html').then((cached) => cached || caches.match('/')))
+    );
+    return;
+  }
+
+  if (url.origin === self.location.origin && isStaticAsset(url)) {
+    // Cache-first for hashed build assets: filenames change per build, so a
+    // cached asset is always the correct version for the cached shell.
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            }
+            return response;
+          })
+      )
+    );
+    return;
+  }
+
+  // Everything else: network with cache fallback.
+  event.respondWith(fetch(request).catch(() => caches.match(request)));
+});

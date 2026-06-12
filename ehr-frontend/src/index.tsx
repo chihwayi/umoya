@@ -41,3 +41,13 @@ root.render(
     <App />
   </React.StrictMode>
 );
+// S225 — register the offline app-shell service worker (production builds only;
+// CRA dev server doesn't serve the precachable shell). Without this the SPA
+// cannot boot offline at all.
+if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .catch((error) => console.warn('Service worker registration failed:', error));
+  });
+}

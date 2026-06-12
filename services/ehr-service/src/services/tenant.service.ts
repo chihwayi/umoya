@@ -320,6 +320,8 @@ import { AtMessageLog } from '../entities/at-message-log.entity';
 import { UssdSession } from '../entities/ussd-session.entity';
 import { NotificationTemplate } from '../entities/notification-template.entity';
 import { NotificationTriggerConfig } from '../entities/notification-trigger-config.entity';
+import { IdempotencyKey } from '../entities/idempotency-key.entity';
+import { SyncQueueLog } from '../entities/sync-queue-log.entity';
 import { NotificationLog } from '../entities/notification-log.entity';
 import { BirthNotification } from '../entities/birth-notification.entity';
 import { DeathCertificate } from '../entities/death-certificate.entity';
@@ -907,6 +909,8 @@ export class TenantService {
         UssdSession,
         NotificationTemplate,
         NotificationTriggerConfig,
+        IdempotencyKey,
+        SyncQueueLog,
         NotificationLog,
         SocialDeterminant,
         FamilyCouncilConsent,

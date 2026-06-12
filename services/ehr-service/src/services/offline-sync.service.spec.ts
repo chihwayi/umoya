@@ -66,6 +66,24 @@ describe('OfflineSyncService (load-shedding resilience)', () => {
     expect(savedLogs[0]).toMatchObject({ syncStatus: 'synced', entityType: 'vitals' });
   });
 
+  it('replay detection prefers the per-op clientOpId when the client sends one', async () => {
+    const { ds, repository, savedLogs, queries } = makeDs();
+    // First findOne call (by clientOpId) hits; tuple lookup never needed.
+    (repository.findOne as jest.Mock).mockImplementationOnce(async (args: any) => {
+      expect(args.where).toMatchObject({ clientOpId: 'op-abc', syncStatus: 'synced' });
+      return { entityId: 'row-7', syncStatus: 'synced' };
+    });
+    const service = makeService(ds);
+
+    const result = await service.processBatch('clinic-a', [
+      createOp({ clientOpId: 'op-abc' }) as any,
+    ]);
+
+    expect(result.results[0]).toMatchObject({ status: 'already_synced', id: 'row-7' });
+    expect(queries.filter((q) => /INSERT INTO vitals/.test(q.sql))).toHaveLength(0);
+    expect(savedLogs).toHaveLength(0);
+  });
+
   it('replays of an already-synced op are idempotent — not applied or re-logged', async () => {
     const { ds, savedLogs, queries } = makeDs({
       existingSyncedLog: { entityId: 'row-9', syncStatus: 'synced' },
