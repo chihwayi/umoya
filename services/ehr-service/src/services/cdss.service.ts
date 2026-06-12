@@ -971,13 +971,13 @@ export class CdssService {
         return responseData;
       }
       
-      // If Python service returns empty, use fallback
+      // If Python service returns empty, use fallback — service IS reachable
       this.logger.warn(`CDSS returned empty diagnoses (suggested_diagnoses: ${responseData?.suggested_diagnoses?.length || 0}, differentialDiagnoses: ${responseData?.differentialDiagnoses?.length || 0}), using fallback`);
-      return this.basicDiagnosisAssist(symptoms);
+      return this.basicDiagnosisAssist(symptoms, false);
     } catch (error: any) {
       this.logger.warn(`CDSS diagnostic assistance unavailable: ${error.message}`);
-      // Fallback to basic logic
-      return this.basicDiagnosisAssist(symptoms);
+      // Service threw — it may genuinely be unreachable
+      return this.basicDiagnosisAssist(symptoms, true);
     }
   }
 
@@ -1070,7 +1070,7 @@ export class CdssService {
    * Tuned for Zimbabwe disease burden: TB, HIV, Malaria, Cholera co-prevalence.
    * Conservative: only surfaces diagnoses with clear symptom support.
    */
-  private async basicDiagnosisAssist(symptoms: any) {
+  private async basicDiagnosisAssist(symptoms: any, cdssUnavailable: boolean = true) {
     let symptomText = '';
     if (typeof symptoms === 'string') {
       symptomText = symptoms.toLowerCase();
@@ -1184,8 +1184,12 @@ export class CdssService {
       recommendedTests: [...new Set(recommendedTests)],
       urgencyLevel: redFlags.length > 0 ? 'high' : diagnoses.some(d => d.probability >= 0.5) ? 'moderate' : 'low',
       source: 'local_fallback',
-      cdss_unavailable: true,
-      warning: 'CDSS service unavailable. Showing local rule-based fallback. Results are indicative only — must be validated clinically.',
+      cdss_unavailable: cdssUnavailable,
+      warning: cdssUnavailable
+        ? 'CDSS service unavailable. Showing local rule-based fallback. Results are indicative only — must be validated clinically.'
+        : topDiagnoses.length > 0
+          ? 'No AI diagnoses matched — showing local rule-based suggestions. Enter specific clinical symptoms for AI-assisted results.'
+          : 'No diagnoses matched the provided input. Please enter specific clinical symptoms (e.g. fever, cough) rather than visit reasons.',
     };
   }
 

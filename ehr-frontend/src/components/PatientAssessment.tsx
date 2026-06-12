@@ -555,15 +555,29 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                         ? Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
                         : undefined;
                       
+                      const VISIT_REASON_PATTERNS = /^(follow[- ]?up|routine|review|check[- ]?up|consultation|antenatal|postnatal|post[- ]?natal|well[- ]?baby|immunis|immuniz|vaccin|scheduled|annual|periodic)/i;
                       const symptomsArray = [
-                        chiefComplaint, 
-                        chiefComplaintConcept?.term, 
+                        // Only include chiefComplaint when it looks like a real symptom, not a visit reason
+                        chiefComplaint && !VISIT_REASON_PATTERNS.test(chiefComplaint.trim()) ? chiefComplaint : null,
+                        chiefComplaintConcept?.term && !VISIT_REASON_PATTERNS.test(chiefComplaintConcept.term.trim()) ? chiefComplaintConcept.term : null,
                         onset,
                         ...observationsConcepts.map(c => c.term)
                       ];
                       const uniqueSymptoms = Array.from(new Set(symptomsArray.filter((s): s is string => !!s)));
                       console.log('🔍 Sending symptoms to API:', uniqueSymptoms);
-                      
+
+                      if (uniqueSymptoms.length === 0) {
+                        setDiagnosisSuggestions({
+                          suggested_diagnoses: [],
+                          recommended_tests: [],
+                          red_flags: [],
+                          urgencyLevel: 'low',
+                          cdss_unavailable: false,
+                          warning: 'Please document specific clinical symptoms (e.g. fever, cough, chest pain) to get AI-assisted diagnosis suggestions.',
+                        });
+                        return;
+                      }
+
                       const result = await Api.ehrApi.getDiagnosisSuggestions({
                         symptoms: uniqueSymptoms,
                         age: patientAge,
