@@ -213,10 +213,10 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   };
 
   useEffect(() => {
-    if (!chiefComplaint && appointments.length > 0 && appointments[0]?.reason) {
-      setChiefComplaint(appointments[0].reason);
+    if (appointments.length > 0 && appointments[0]?.reason) {
+      setChiefComplaint(prev => prev || appointments[0].reason);
     }
-  }, [appointments, chiefComplaint]);
+  }, [appointments]);
 
   useEffect(() => {
     if (suggestedPriority) {
