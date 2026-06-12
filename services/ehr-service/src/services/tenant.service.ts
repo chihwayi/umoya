@@ -192,6 +192,23 @@ import { NcdTreatmentReview } from '../entities/ncd-treatment-review.entity';
 import { TmRemedy } from '../entities/tm-remedy.entity';
 import { HdiAlert } from '../entities/hdi-alert.entity';
 import { TmToxicityEvent } from '../entities/tm-toxicity-event.entity';
+import { OrthopaedicRegister } from '../entities/orthopaedic-register.entity';
+import { FractureRecord } from '../entities/fracture-record.entity';
+import { JointReplacementRecord } from '../entities/joint-replacement-record.entity';
+import { EntVisit } from '../entities/ent-visit.entity';
+import { AudiogramRecord } from '../entities/audiogram-record.entity';
+import { GastroRegister } from '../entities/gastro-register.entity';
+import { EndoscopyRecord } from '../entities/endoscopy-record.entity';
+import { RheumatologyRegister } from '../entities/rheumatology-register.entity';
+import { JointAssessment } from '../entities/joint-assessment.entity';
+import { DmardRecord } from '../entities/dmard-record.entity';
+import { HaematologyRegister } from '../entities/haematology-register.entity';
+import { UrologyRegister } from '../entities/urology-register.entity';
+import { PhysioReferral } from '../entities/physio-referral.entity';
+import { PhysioSession } from '../entities/physio-session.entity';
+import { EndocrineRegister } from '../entities/endocrine-register.entity';
+import { EcgRecord } from '../entities/ecg-record.entity';
+import { NcdComorbidityProfile } from '../entities/ncd-comorbidity-profile.entity';
 import { ScdRegister } from '../entities/scd-register.entity';
 import { ScdCrisisEvent } from '../entities/scd-crisis-event.entity';
 import { ScdTreatmentRecord } from '../entities/scd-treatment-record.entity';
@@ -782,6 +799,23 @@ export class TenantService {
         TmRemedy,
         HdiAlert,
         TmToxicityEvent,
+        OrthopaedicRegister,
+        FractureRecord,
+        JointReplacementRecord,
+        EntVisit,
+        AudiogramRecord,
+        GastroRegister,
+        EndoscopyRecord,
+        RheumatologyRegister,
+        JointAssessment,
+        DmardRecord,
+        HaematologyRegister,
+        UrologyRegister,
+        PhysioReferral,
+        PhysioSession,
+        EndocrineRegister,
+        EcgRecord,
+        NcdComorbidityProfile,
         ScdRegister,
         ScdCrisisEvent,
         ScdTreatmentRecord,

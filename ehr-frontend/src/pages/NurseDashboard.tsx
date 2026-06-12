@@ -4410,21 +4410,37 @@ const NurseDashboard: React.FC = () => {
               {triageCopilotResult && (
                 <div className="mt-3 text-sm text-slate-700 space-y-2">
                   <div>
-                    <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
-                    {triageCopilotResult.riskLevel &&
-                      ['high', 'critical'].includes(String(triageCopilotResult.riskLevel).toLowerCase()) && (
-                        <p className="text-xs text-red-700">
-                          Escalation suggested: consider urgent provider review and continuous monitoring.
-                        </p>
-                    )}
+                    {(() => {
+                      const rl = String(triageCopilotResult.riskLevel || '').toLowerCase();
+                      const actionMap: Record<string, { label: string; action: string; colorClass: string }> = {
+                        critical: { label: 'CRITICAL', action: 'Call doctor NOW — do not leave patient unattended.', colorClass: 'text-red-700' },
+                        high: { label: 'HIGH', action: 'Fetch senior nurse or doctor within 10 minutes.', colorClass: 'text-orange-700' },
+                        medium: { label: 'MEDIUM', action: 'Monitor every 30 minutes; escalate if condition deteriorates.', colorClass: 'text-amber-700' },
+                        low: { label: 'LOW', action: 'Routine care; reassess in 1 hour.', colorClass: 'text-green-700' },
+                      };
+                      const entry = actionMap[rl];
+                      return entry ? (
+                        <div className="mb-2">
+                          <p><strong>Risk Level:</strong> <span className={`font-bold ${entry.colorClass}`}>{entry.label}</span></p>
+                          <p className={`text-xs mt-1 font-semibold ${entry.colorClass}`}>⚡ {entry.action}</p>
+                        </div>
+                      ) : (
+                        <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
+                      );
+                    })()}
                     <p><strong>Suggested Triage Level:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
                     {(() => {
                       let topReason: string | null = null;
                       if (Array.isArray(triageCopilotResult.reasons) && triageCopilotResult.reasons.length > 0) {
-                        topReason = String(triageCopilotResult.reasons[0]);
+                        const r = triageCopilotResult.reasons[0];
+                        topReason = typeof r === 'object' && r !== null
+                          ? String(r.text || r.term || r.label || r.name || r.description || JSON.stringify(r))
+                          : String(r);
                       } else if (Array.isArray(triageCopilotResult.risk?.factors) && triageCopilotResult.risk.factors.length > 0) {
                         const f = triageCopilotResult.risk.factors[0];
-                        topReason = String((f && (f.name || f.factor || f.label)) || f || '');
+                        topReason = typeof f === 'object' && f !== null
+                          ? String(f.name || f.factor || f.label || f.text || f.description || JSON.stringify(f))
+                          : String(f || '');
                       }
                       return topReason ? (
                         <p><strong>Top Reason:</strong> {topReason}</p>
@@ -4448,29 +4464,9 @@ const NurseDashboard: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  <div className="text-xs text-slate-600 space-y-1">
-                    <p className="font-semibold text-slate-700">Transparency</p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-[11px] font-semibold text-amber-800">
-                        Source: {triageCopilotResult.source || 'CDSS Nurse Triage Copilot'}
-                      </span>
-                      {triageCopilotResult.audit?.modelVersion && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700">
-                          Model: {String(triageCopilotResult.audit.modelVersion)}
-                        </span>
-                      )}
-                      {typeof triageCopilotResult.risk?.overall_score === 'number' && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full border border-indigo-200 bg-indigo-50 text-[11px] font-semibold text-indigo-800">
-                          Confidence score: {triageCopilotResult.risk.overall_score.toFixed(1)}
-                        </span>
-                      )}
-                      {triageCopilotResult.audit?.promptContextHash && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700">
-                          Context hash: {String(triageCopilotResult.audit.promptContextHash).slice(0, 8)}…
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    AI decision support — {triageCopilotResult.source || 'CDSS'} · Review before acting
+                  </p>
                   <div className="mt-1 flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -4521,10 +4517,11 @@ const NurseDashboard: React.FC = () => {
                 </div>
               )}
             </div>
-            <PatientAssessment 
+            <PatientAssessment
               patient={selectedPatient || undefined}
-              appointments={appointments.filter(a => String(a.patient.id) === String(selectedPatient?.id))} 
+              appointments={appointments.filter(a => String(a.patient.id) === String(selectedPatient?.id))}
               suggestedPriority={triageSuggestedPriority || undefined}
+              onClose={() => { setSelectedPatient(null); setActiveTab('queue'); }}
               onSave={() => {
                 fetchTodayAppointments();
                 showSuccess('Triage Saved', 'Assessment recorded successfully.');

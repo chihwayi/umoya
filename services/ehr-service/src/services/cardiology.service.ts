@@ -3,6 +3,8 @@ import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { TerminologyService } from './terminology.service';
+import { CdssService } from './cdss.service';
+import { EcgRecord } from '../entities/ecg-record.entity';
 
 interface CardiologyFilters {
   patientId?: string;
@@ -29,6 +31,7 @@ export class CardiologyService {
   constructor(
     private readonly financeService: FinanceService,
     private readonly terminologyService: TerminologyService,
+    private readonly cdssService: CdssService,
   ) {}
 
   private extractConceptId(candidate: any): string | null {
@@ -644,4 +647,67 @@ export class CardiologyService {
       diagnosticBacklog,
     };
   }
+
+  // ── ECG ───────────────────────────────────────────────────────────────────
+
+  async recordEcg(tenantDb: DataSource, data: Partial<EcgRecord>): Promise<EcgRecord & { cdss: any }> {
+    const repo = tenantDb.getRepository(EcgRecord);
+    const saved = await repo.save(repo.create({
+      ...data,
+      requiresUrgentReview: data.acsFeatures || data.requiresUrgentReview || false,
+    }));
+
+    const cdss = await this.cdssService.riskAssessment({
+      patientId: data.patientId,
+      diagnoses: [data.rhythm ?? 'ecg', data.acsFeatures ? 'ACS features' : 'routine ECG'],
+      vitals: { heartRate: data.heartRateBpm },
+      context: 'ecg_interpretation',
+      specialty: 'cardiology',
+      module: 'ecg',
+    }, null as any, undefined).catch(() => null);
+
+    return { ...saved, cdss: cdss ?? { cdssUnavailable: true } };
+  }
+
+  async getEcgs(tenantDb: DataSource, patientId: string): Promise<EcgRecord[]> {
+    return tenantDb.getRepository(EcgRecord).find({
+      where: { patientId },
+      order: { recordedAt: 'DESC' },
+    });
+  }
+
+  async getEcg(tenantDb: DataSource, id: string): Promise<EcgRecord> {
+    const rec = await tenantDb.getRepository(EcgRecord).findOne({ where: { id } });
+    if (!rec) throw new NotFoundException(`ECG record ${id} not found`);
+    return rec;
+  }
+
+  async interpretEcg(tenantDb: DataSource, payload: Record<string, any>): Promise<any> {
+    const local = localEcgInterpret(payload);
+    const cdss = await this.cdssService.diagnosisAssist({
+      patientId: payload.patientId,
+      symptoms: [payload.rhythm ?? 'arrhythmia', payload.stChanges ?? ''],
+      vitals: { heartRate: payload.heartRateBpm, qtcMs: payload.qtcMs },
+      specialty: 'cardiology',
+      module: 'ecg_interpretation',
+    }, null as any, undefined).catch(() => null);
+    return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
+  }
+}
+
+function localEcgInterpret(p: Record<string, any>): Record<string, any> {
+  const alerts: string[] = [];
+  let urgency = 'routine';
+
+  if (p.acsFeatures) { alerts.push('ACS features — STEMI/NSTEMI protocol activation'); urgency = 'immediate'; }
+  if (p.rhythm === 'vt') { alerts.push('Ventricular tachycardia — immediate senior review'); urgency = 'immediate'; }
+  if (p.rhythm === 'af') { alerts.push('Atrial fibrillation — rate/rhythm control assessment needed'); }
+  if (Number(p.qtcMs) > 500) { alerts.push(`QTc prolonged: ${p.qtcMs} ms — check medications causing QT prolongation`); }
+  if (Number(p.qtcMs) > 440 && Number(p.qtcMs) <= 500) { alerts.push(`QTc borderline prolonged: ${p.qtcMs} ms`); }
+  if (p.bundleBranchBlock === 'LBBB') { alerts.push('New LBBB — treat as STEMI equivalent if clinical context fits'); }
+  if (p.lvHypertrophy) { alerts.push('LV hypertrophy — assess for hypertension, aortic stenosis'); }
+  if (Number(p.heartRateBpm) > 150) { alerts.push(`Tachycardia: ${p.heartRateBpm} bpm`); if (urgency === 'routine') urgency = 'urgent'; }
+  if (Number(p.heartRateBpm) < 40) { alerts.push(`Bradycardia: ${p.heartRateBpm} bpm — consider pacing`); if (urgency === 'routine') urgency = 'urgent'; }
+
+  return { urgency, alerts, interpretation: alerts.length ? alerts.join('; ') : 'No acute features identified' };
 }

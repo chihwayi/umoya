@@ -91,6 +91,15 @@ import MaternityDoctorDashboard from './MaternityDoctorDashboard';
 import OncologyDashboard from './OncologyDashboard';
 import CardiologyDashboard from './CardiologyDashboard';
 import OphthalmologyDashboard from './OphthalmologyDashboard';
+import OrthopaedicsDashboard from '../components/OrthopaedicsDashboard';
+import EntDashboard from '../components/EntDashboard';
+import GastroenterologyDashboard from '../components/GastroenterologyDashboard';
+import RheumatologyDashboard from '../components/RheumatologyDashboard';
+import HaematologyDashboard from '../components/HaematologyDashboard';
+import UrologyDashboard from '../components/UrologyDashboard';
+import PhysiotherapyDashboard from '../components/PhysiotherapyDashboard';
+import EndocrinologyDashboard from '../components/EndocrinologyDashboard';
+import NcdComorbiditydashboard from '../components/NcdComorbiditydashboard';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -649,6 +658,132 @@ const DoctorDashboard: React.FC = () => {
         route: tenantPath('/doctor/ophthalmology'),
         requiresPaymentClearance: true,
         paymentLockedMessage: 'Ophthalmology workflows are locked until payment clears.',
+      },
+      {
+        title: 'Orthopaedics',
+        description: 'Fracture register, joint replacement tracking, Wells DVT score, and post-op rehab planning.',
+        gradient: 'from-slate-600 via-slate-700 to-slate-900',
+        border: 'border-slate-500',
+        icon: Activity,
+        chips: ['Fracture Register', 'Joint Replacement', 'DVT Risk', 'Rehab Plans'],
+        buttonLabel: 'Open Orthopaedics',
+        buttonTextColor: 'text-slate-700',
+        buttonHover: 'hover:bg-slate-50',
+        route: tenantPath('/doctor/orthopaedics'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
+        title: 'ENT (Ear, Nose & Throat)',
+        description: 'ENT visits, pure-tone audiometry with auto PTA, Centor tonsillitis triage, and rhinosinusitis assessment.',
+        gradient: 'from-teal-500 via-cyan-600 to-teal-700',
+        border: 'border-teal-400',
+        icon: Activity,
+        chips: ['ENT Visits', 'Audiograms', 'Centor Score', 'Rhinosinusitis'],
+        buttonLabel: 'Open ENT Suite',
+        buttonTextColor: 'text-teal-700',
+        buttonHover: 'hover:bg-teal-50',
+        route: tenantPath('/doctor/ent'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
+        title: 'Gastroenterology',
+        description: 'GI register, endoscopy records, Rockall upper GI bleed risk, and Child-Pugh cirrhosis classification.',
+        gradient: 'from-amber-500 via-orange-500 to-amber-600',
+        border: 'border-amber-400',
+        icon: Activity,
+        chips: ['GI Register', 'Endoscopy', 'Rockall Score', 'Child-Pugh'],
+        buttonLabel: 'Open Gastroenterology',
+        buttonTextColor: 'text-amber-700',
+        buttonHover: 'hover:bg-amber-50',
+        route: tenantPath('/doctor/gastroenterology'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
+        title: 'Rheumatology',
+        description: 'DAS28-guided treat-to-target, DMARD prescribing, gout protocol, and biologic TB pre-screen.',
+        gradient: 'from-purple-500 via-violet-600 to-purple-700',
+        border: 'border-purple-400',
+        icon: Activity,
+        chips: ['DAS28 Assessments', 'DMARD Prescribing', 'Gout Protocol', 'Biologic Safety'],
+        buttonLabel: 'Open Rheumatology',
+        buttonTextColor: 'text-purple-700',
+        buttonHover: 'hover:bg-purple-50',
+        route: tenantPath('/doctor/rheumatology'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
+        title: 'Haematology',
+        description: 'MCV-based anaemia workup, restrictive transfusion trigger, and Ann Arbor lymphoma staging.',
+        gradient: 'from-red-500 via-rose-600 to-red-700',
+        border: 'border-red-400',
+        icon: Activity,
+        chips: ['Anaemia Classification', 'Transfusion Trigger', 'Lymphoma Staging', 'Register'],
+        buttonLabel: 'Open Haematology',
+        buttonTextColor: 'text-red-700',
+        buttonHover: 'hover:bg-red-50',
+        route: tenantPath('/doctor/haematology'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
+        title: 'Urology',
+        description: 'BPH IPSS management, renal stone algorithm (ESWL/URS/PCNL), and age-adjusted PSA interpretation.',
+        gradient: 'from-blue-500 via-indigo-600 to-blue-700',
+        border: 'border-blue-400',
+        icon: Activity,
+        chips: ['BPH / IPSS', 'Renal Stone', 'PSA Interpretation', 'Register'],
+        buttonLabel: 'Open Urology',
+        buttonTextColor: 'text-blue-700',
+        buttonHover: 'hover:bg-blue-50',
+        route: tenantPath('/doctor/urology'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
+        title: 'Physiotherapy & Rehabilitation',
+        description: 'Cross-specialty rehab referrals, session tracking, Barthel stroke rehab, and cardiac rehab phase planning.',
+        gradient: 'from-emerald-500 via-green-600 to-emerald-700',
+        border: 'border-emerald-400',
+        icon: Activity,
+        chips: ['Referrals', 'Session Tracking', 'Stroke Rehab', 'Cardiac Rehab'],
+        buttonLabel: 'Open Physiotherapy',
+        buttonTextColor: 'text-emerald-700',
+        buttonHover: 'hover:bg-emerald-50',
+        route: tenantPath('/doctor/physiotherapy'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
+        title: 'Endocrinology',
+        description: 'Thyroid algorithm (TSH/FT4), adrenal crisis 6-step protocol, and levothyroxine dose calculator.',
+        gradient: 'from-yellow-500 via-amber-500 to-yellow-600',
+        border: 'border-yellow-400',
+        icon: Activity,
+        chips: ['Thyroid Management', 'Adrenal Crisis', 'Levothyroxine Dose', 'Register'],
+        buttonLabel: 'Open Endocrinology',
+        buttonTextColor: 'text-yellow-700',
+        buttonHover: 'hover:bg-yellow-50',
+        route: tenantPath('/doctor/endocrinology'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
+      },
+      {
+        title: 'NCD Comorbidity Profile',
+        description: 'Unified DM↔CKD↔CVD↔Retinopathy comorbidity profile with Framingham 10-year CVD risk.',
+        gradient: 'from-indigo-500 via-violet-600 to-indigo-700',
+        border: 'border-indigo-400',
+        icon: Activity,
+        chips: ['DM Profile', 'CKD Stage', 'CVD Risk', 'Retinopathy'],
+        buttonLabel: 'Open NCD Comorbidity',
+        buttonTextColor: 'text-indigo-700',
+        buttonHover: 'hover:bg-indigo-50',
+        route: tenantPath('/doctor/ncd-comorbidity'),
+        requiresPaymentClearance: false,
+        paymentLockedMessage: '',
       },
     ];
   }, [tenantSlug]);
@@ -1816,6 +1951,15 @@ const DoctorDashboard: React.FC = () => {
   const isDoctorOncologyRoute = normalizedPath === `${doctorBasePath}/oncology`;
   const isDoctorCardiologyRoute = normalizedPath === `${doctorBasePath}/cardiology`;
   const isDoctorOphthalmologyRoute = normalizedPath === `${doctorBasePath}/ophthalmology`;
+  const isDoctorOrthopaedicsRoute = normalizedPath === `${doctorBasePath}/orthopaedics`;
+  const isDoctorEntRoute = normalizedPath === `${doctorBasePath}/ent`;
+  const isDoctorGastroenterologyRoute = normalizedPath === `${doctorBasePath}/gastroenterology`;
+  const isDoctorRheumatologyRoute = normalizedPath === `${doctorBasePath}/rheumatology`;
+  const isDoctorHaematologyRoute = normalizedPath === `${doctorBasePath}/haematology`;
+  const isDoctorUrologyRoute = normalizedPath === `${doctorBasePath}/urology`;
+  const isDoctorPhysiotherapyRoute = normalizedPath === `${doctorBasePath}/physiotherapy`;
+  const isDoctorEndocrinologyRoute = normalizedPath === `${doctorBasePath}/endocrinology`;
+  const isDoctorNcdComorbidityRoute = normalizedPath === `${doctorBasePath}/ncd-comorbidity`;
   const isDoctorPatientDetailRoute = normalizedPath.startsWith(`${doctorBasePath}/patients/`);
   const isDoctorTreatmentDetailRoute = normalizedPath.startsWith(`${doctorBasePath}/treatments/`);
   const isDoctorSpecialtyModuleRoute =
@@ -1834,7 +1978,16 @@ const DoctorDashboard: React.FC = () => {
     isDoctorMaternityRoute ||
     isDoctorOncologyRoute ||
     isDoctorCardiologyRoute ||
-    isDoctorOphthalmologyRoute;
+    isDoctorOphthalmologyRoute ||
+    isDoctorOrthopaedicsRoute ||
+    isDoctorEntRoute ||
+    isDoctorGastroenterologyRoute ||
+    isDoctorRheumatologyRoute ||
+    isDoctorHaematologyRoute ||
+    isDoctorUrologyRoute ||
+    isDoctorPhysiotherapyRoute ||
+    isDoctorEndocrinologyRoute ||
+    isDoctorNcdComorbidityRoute;
   const isDoctorSubpageRoute =
     isDoctorPatientsRoute ||
     isDoctorAppointmentsRoute ||
@@ -1889,6 +2042,24 @@ const DoctorDashboard: React.FC = () => {
     ? 'Cardiology'
     : isDoctorOphthalmologyRoute
     ? 'Ophthalmology'
+    : isDoctorOrthopaedicsRoute
+    ? 'Orthopaedics'
+    : isDoctorEntRoute
+    ? 'ENT (Ear, Nose & Throat)'
+    : isDoctorGastroenterologyRoute
+    ? 'Gastroenterology'
+    : isDoctorRheumatologyRoute
+    ? 'Rheumatology'
+    : isDoctorHaematologyRoute
+    ? 'Haematology'
+    : isDoctorUrologyRoute
+    ? 'Urology'
+    : isDoctorPhysiotherapyRoute
+    ? 'Physiotherapy & Rehabilitation'
+    : isDoctorEndocrinologyRoute
+    ? 'Endocrinology'
+    : isDoctorNcdComorbidityRoute
+    ? 'NCD Comorbidity Profile'
     : 'Doctor Dashboard';
 
   const headerSubtitle = isDoctorModulesRoute
@@ -1937,6 +2108,24 @@ const DoctorDashboard: React.FC = () => {
     ? 'Cardiac risk stratification, diagnostics, and finance-gated care workflow.'
     : isDoctorOphthalmologyRoute
     ? 'Ocular encounters, visual acuity, imaging, procedures, and follow-up management.'
+    : isDoctorOrthopaedicsRoute
+    ? 'Fracture management, joint replacement tracking, DVT risk scoring, and rehab planning.'
+    : isDoctorEntRoute
+    ? 'ENT visits, audiometry, Centor tonsillitis score, and rhinosinusitis triage.'
+    : isDoctorGastroenterologyRoute
+    ? 'GI register, endoscopy records, Rockall upper GI bleed risk, and Child-Pugh cirrhosis classification.'
+    : isDoctorRheumatologyRoute
+    ? 'DAS28-guided treat-to-target, DMARD prescribing, gout protocol, and biologic TB pre-screen.'
+    : isDoctorHaematologyRoute
+    ? 'MCV-based anaemia workup, restrictive transfusion trigger, and Ann Arbor lymphoma staging.'
+    : isDoctorUrologyRoute
+    ? 'BPH IPSS management, renal stone algorithm, and age-adjusted PSA interpretation.'
+    : isDoctorPhysiotherapyRoute
+    ? 'Rehab referrals, session tracking, Barthel stroke rehab, and cardiac rehab phase planning.'
+    : isDoctorEndocrinologyRoute
+    ? 'Thyroid algorithm, adrenal crisis 6-step protocol, and levothyroxine dose calculator.'
+    : isDoctorNcdComorbidityRoute
+    ? 'Unified DM↔CKD↔CVD↔Retinopathy comorbidity profile with Framingham 10-year CVD risk.'
     : `Welcome back, Dr. ${currentUser?.lastName}`;
   const subpageHeroTone = isDoctorEmergencyRoute
     ? 'border-red-200/70 bg-gradient-to-r from-red-50 via-orange-50 to-red-100/70'
@@ -1970,6 +2159,24 @@ const DoctorDashboard: React.FC = () => {
     ? 'border-rose-200/70 bg-gradient-to-r from-red-50 via-rose-50 to-amber-100/70'
     : isDoctorOphthalmologyRoute
     ? 'border-sky-200/70 bg-gradient-to-r from-sky-50 via-indigo-50 to-blue-100/70'
+    : isDoctorOrthopaedicsRoute
+    ? 'border-slate-200/70 bg-gradient-to-r from-slate-50 via-gray-50 to-slate-100/70'
+    : isDoctorEntRoute
+    ? 'border-teal-200/70 bg-gradient-to-r from-teal-50 via-cyan-50 to-teal-100/70'
+    : isDoctorGastroenterologyRoute
+    ? 'border-amber-200/70 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-100/70'
+    : isDoctorRheumatologyRoute
+    ? 'border-purple-200/70 bg-gradient-to-r from-purple-50 via-violet-50 to-purple-100/70'
+    : isDoctorHaematologyRoute
+    ? 'border-red-200/70 bg-gradient-to-r from-red-50 via-rose-50 to-red-100/70'
+    : isDoctorUrologyRoute
+    ? 'border-blue-200/70 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-100/70'
+    : isDoctorPhysiotherapyRoute
+    ? 'border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-green-50 to-emerald-100/70'
+    : isDoctorEndocrinologyRoute
+    ? 'border-yellow-200/70 bg-gradient-to-r from-yellow-50 via-amber-50 to-yellow-100/70'
+    : isDoctorNcdComorbidityRoute
+    ? 'border-indigo-200/70 bg-gradient-to-r from-indigo-50 via-violet-50 to-indigo-100/70'
     : 'border-slate-200/70 bg-gradient-to-r from-white via-slate-50 to-blue-50';
 
   return (
@@ -2467,6 +2674,15 @@ const DoctorDashboard: React.FC = () => {
               {isDoctorOncologyRoute && <OncologyDashboard embedded />}
               {isDoctorCardiologyRoute && <CardiologyDashboard embedded />}
               {isDoctorOphthalmologyRoute && <OphthalmologyDashboard embedded />}
+              {isDoctorOrthopaedicsRoute && <OrthopaedicsDashboard />}
+              {isDoctorEntRoute && <EntDashboard />}
+              {isDoctorGastroenterologyRoute && <GastroenterologyDashboard />}
+              {isDoctorRheumatologyRoute && <RheumatologyDashboard />}
+              {isDoctorHaematologyRoute && <HaematologyDashboard />}
+              {isDoctorUrologyRoute && <UrologyDashboard />}
+              {isDoctorPhysiotherapyRoute && <PhysiotherapyDashboard />}
+              {isDoctorEndocrinologyRoute && <EndocrinologyDashboard />}
+              {isDoctorNcdComorbidityRoute && <NcdComorbiditydashboard />}
             </div>
           )}
 

@@ -25,6 +25,15 @@ import { NurseTaskController } from './controllers/nurse-task.controller';
 import { AmbientController } from './controllers/ambient.controller';
 import { EncounterPrechartController } from './controllers/encounter-prechart.controller';
 import { InboxController } from './controllers/inbox.controller';
+import { OrthopaedicsController } from './controllers/orthopaedics.controller';
+import { EntController } from './controllers/ent.controller';
+import { GastroenterologyController } from './controllers/gastroenterology.controller';
+import { RheumatologyController } from './controllers/rheumatology.controller';
+import { HaematologyController } from './controllers/haematology.controller';
+import { UrologyController } from './controllers/urology.controller';
+import { PhysiotherapyController } from './controllers/physiotherapy.controller';
+import { EndocrinologyController } from './controllers/endocrinology.controller';
+import { NcdComorbidityController } from './controllers/ncd-comorbidity.controller';
 import { TbController } from './controllers/tb.controller';
 import { PediatricsController } from './controllers/pediatrics.controller';
 import { MentalHealthController } from './controllers/mental-health.controller';
@@ -281,6 +290,15 @@ import { AmbientGateway } from './gateways/ambient.gateway';
 import { AppointmentPrecharterService } from './services/appointment-precharter.service';
 import { InboxTriageService } from './services/inbox-triage.service';
 import { InboxGateway } from './gateways/inbox.gateway';
+import { OrthopaedicsService } from './services/orthopaedics.service';
+import { EntService } from './services/ent.service';
+import { GastroenterologyService } from './services/gastroenterology.service';
+import { RheumatologyService } from './services/rheumatology.service';
+import { HaematologyService } from './services/haematology.service';
+import { UrologyService } from './services/urology.service';
+import { PhysiotherapyService } from './services/physiotherapy.service';
+import { EndocrinologyService } from './services/endocrinology.service';
+import { NcdComorbidityService } from './services/ncd-comorbidity.service';
 import { TbService } from './services/tb.service';
 import { PediatricsService } from './services/pediatrics.service';
 import { MentalHealthService } from './services/mental-health.service';
@@ -631,6 +649,15 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AmbientController,
     EncounterPrechartController,
     InboxController,
+    OrthopaedicsController,
+    EntController,
+    GastroenterologyController,
+    RheumatologyController,
+    HaematologyController,
+    UrologyController,
+    PhysiotherapyController,
+    EndocrinologyController,
+    NcdComorbidityController,
     TbController,
     PediatricsController,
     MentalHealthController,
@@ -1136,6 +1163,15 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AmbientService,
     AppointmentPrecharterService,
     InboxTriageService,
+    OrthopaedicsService,
+    EntService,
+    GastroenterologyService,
+    RheumatologyService,
+    HaematologyService,
+    UrologyService,
+    PhysiotherapyService,
+    EndocrinologyService,
+    NcdComorbidityService,
     TbService,
     PediatricsService,
     MentalHealthService,

@@ -440,4 +440,197 @@ export class TriageService {
     const repo = await this.getRepository(tenantId);
     return repo.find({ where: { patientId }, order: { recordedAt: 'DESC' } });
   }
+
+  // ── SATS / ESI scoring ─────────────────────────────────────────────────────
+
+  satsScore(payload: Record<string, any>): Record<string, any> {
+    return calculateSats(payload);
+  }
+
+  newsScore(payload: Record<string, any>): Record<string, any> {
+    return calculateNews2(payload);
+  }
+
+  codeBlueProtocol(payload: Record<string, any>): Record<string, any> {
+    return codeBlueWorkflow(payload);
+  }
+}
+
+// ── South African Triage Scale (SATS) ────────────────────────────────────────
+
+function calculateSats(p: Record<string, any>): Record<string, any> {
+  // Trauma/injury score (TIS): GCS + RR + SBP components
+  const gcs = Number(p.gcs ?? 15);
+  const rr = Number(p.respiratoryRate ?? p.rr ?? 16);
+  const sbp = Number(p.systolicBp ?? p.sbp ?? 120);
+
+  let tis = 0;
+  // GCS contribution (0–4)
+  if (gcs >= 14) tis += 4;
+  else if (gcs >= 11) tis += 3;
+  else if (gcs >= 8) tis += 2;
+  else if (gcs >= 5) tis += 1;
+
+  // RR contribution (0–4)
+  if (rr >= 10 && rr <= 29) tis += 4;
+  else if (rr > 29) tis += 3;
+  else if (rr >= 6 && rr <= 9) tis += 2;
+  else if (rr >= 1 && rr <= 5) tis += 1;
+
+  // SBP contribution (0–4)
+  if (sbp > 89) tis += 4;
+  else if (sbp >= 76) tis += 3;
+  else if (sbp >= 50) tis += 2;
+  else if (sbp >= 1) tis += 1;
+
+  // Clinical discriminators (override to immediate/very urgent)
+  const discriminators: string[] = [];
+  if (gcs <= 8) discriminators.push('Impaired consciousness (GCS≤8)');
+  if (!isNaN(Number(p.spo2)) && Number(p.spo2) < 90) discriminators.push('SpO2 <90%');
+  if (p.activeHaemorrhage) discriminators.push('Active haemorrhage');
+  if (p.airwayObstruction) discriminators.push('Airway obstruction');
+  if (p.currentSeizure) discriminators.push('Current seizure');
+  if (p.acuteChestPain) discriminators.push('Acute chest pain');
+  if (p.strokeSigns) discriminators.push('Stroke signs (FAST positive)');
+  if (p.eclampsiaFeatures) discriminators.push('Eclampsia features');
+
+  let category: string, colour: string, waitTime: string, action: string;
+
+  if (discriminators.length > 0 || tis <= 8) {
+    category = '1'; colour = 'RED'; waitTime = 'Immediate';
+    action = 'Immediate resuscitation; call senior/doctor now; prepare resus bay';
+  } else if (tis <= 11 || p.severeDistress) {
+    category = '2'; colour = 'ORANGE'; waitTime = '≤10 minutes';
+    action = 'Very urgent; continuous observation; early senior review';
+  } else if (p.moderateDistress || Number(p.painScore ?? 0) >= 7) {
+    category = '3'; colour = 'YELLOW'; waitTime = '≤1 hour';
+    action = 'Urgent; regular monitoring; analgesic if needed';
+  } else if (tis === 12 && !p.severeDistress) {
+    category = '4'; colour = 'GREEN'; waitTime = '≤4 hours';
+    action = 'Routine; nurse-led triage; can wait';
+  } else {
+    category = '5'; colour = 'BLUE'; waitTime = 'Refer/self-care';
+    action = 'Non-urgent; refer to clinic or pharmacy; no immediate risk';
+  }
+
+  return {
+    source: 'local_sats',
+    traumaInjuryScore: tis,
+    category,
+    colour,
+    waitTime,
+    action,
+    discriminators,
+    inputs: { gcs, rr, sbp },
+    guideline: 'South African Triage Scale (SATS) 4th Edition; adaptable to Zimbabwean ED settings',
+  };
+}
+
+// ── NEWS2 (National Early Warning Score 2) ────────────────────────────────────
+
+function calculateNews2(p: Record<string, any>): Record<string, any> {
+  let score = 0;
+  const components: Record<string, number> = {};
+
+  const rr = Number(p.respiratoryRate ?? p.rr ?? NaN);
+  const spo2 = Number(p.spo2 ?? NaN);
+  const sbp = Number(p.systolicBp ?? p.sbp ?? NaN);
+  const hr = Number(p.heartRate ?? p.hr ?? NaN);
+  const temp = Number(p.temperature ?? p.temp ?? NaN);
+  const gcs = Number(p.gcs ?? 15);
+  const onO2 = !!p.onSupplementalOxygen;
+
+  if (!isNaN(rr)) {
+    const rrScore = rr <= 8 ? 3 : rr <= 11 ? 1 : rr <= 20 ? 0 : rr <= 24 ? 2 : 3;
+    score += rrScore; components['rr'] = rrScore;
+  }
+  if (!isNaN(spo2)) {
+    const spScore = spo2 <= 91 ? 3 : spo2 <= 93 ? 2 : spo2 <= 95 ? 1 : 0;
+    score += spScore; components['spo2'] = spScore;
+  }
+  if (onO2) { score += 2; components['supplementalO2'] = 2; }
+  if (!isNaN(sbp)) {
+    const bpScore = sbp <= 90 ? 3 : sbp <= 100 ? 2 : sbp <= 110 ? 1 : sbp <= 219 ? 0 : 3;
+    score += bpScore; components['sbp'] = bpScore;
+  }
+  if (!isNaN(hr)) {
+    const hrScore = hr <= 40 ? 3 : hr <= 50 ? 1 : hr <= 90 ? 0 : hr <= 110 ? 1 : hr <= 130 ? 2 : 3;
+    score += hrScore; components['hr'] = hrScore;
+  }
+  if (!isNaN(temp)) {
+    const tScore = temp <= 35.0 ? 3 : temp <= 36.0 ? 1 : temp <= 38.0 ? 0 : temp <= 39.0 ? 1 : 2;
+    score += tScore; components['temp'] = tScore;
+  }
+  if (gcs < 15) { score += 3; components['consciousness'] = 3; }
+
+  let risk: string, response: string;
+  if (score >= 7 || components['consciousness'] === 3) {
+    risk = 'HIGH'; response = 'URGENT escalation: continuous monitoring; senior review NOW; consider ICU/HDU transfer';
+  } else if (score >= 5) {
+    risk = 'MEDIUM'; response = 'Urgent review by senior nurse/doctor; monitor ≥30 min; consider HDU';
+  } else if (score >= 3) {
+    risk = 'LOW_MEDIUM'; response = 'Review by nurse/doctor; increase monitoring frequency to ≥1 hourly';
+  } else {
+    risk = 'LOW'; response = 'Routine monitoring; 4–6 hourly observations';
+  }
+
+  return { source: 'local_news2', score, risk, response, components, guideline: 'NEWS2 — Royal College of Physicians 2017' };
+}
+
+// ── Code Blue Workflow ────────────────────────────────────────────────────────
+
+function codeBlueWorkflow(p: Record<string, any>): Record<string, any> {
+  const triggerReason = String(p.triggerReason ?? '').toLowerCase();
+  const hasPulse = p.hasPulse !== false;
+  const isBreathing = p.isBreathing !== false;
+
+  const immediateActions = [
+    '1. CALL FOR HELP — activate code blue team/resus team immediately',
+    '2. Lay patient flat; ensure airway patent (head-tilt chin-lift or jaw thrust if trauma)',
+    '3. If no pulse: start CPR immediately — 30 compressions : 2 breaths; 100-120/min',
+    '4. Attach defibrillator/AED as soon as available',
+    '5. Obtain IV access; 0.9% NaCl 250 ml bolus if hypotensive',
+    '6. Administer oxygen (high-flow 15 L/min via non-rebreather mask)',
+    '7. Check blood glucose; treat hypoglycaemia if confirmed (50 ml 50% dextrose IV)',
+    '8. Assign roles: airway, compressions, IV access, medications, recorder',
+  ];
+
+  const rhythmActions: Record<string, string[]> = {
+    vf_vt: [
+      'Shockable rhythm (VF/pulseless VT)',
+      'Defibrillate: 200 J biphasic (or 360 J monophasic); resume CPR immediately for 2 min',
+      'Adrenaline 1 mg IV after 3rd shock then every 3-5 min',
+      'Amiodarone 300 mg IV after 3rd shock; repeat 150 mg after 5th shock',
+    ],
+    asystole_pea: [
+      'Non-shockable rhythm (Asystole/PEA)',
+      'Adrenaline 1 mg IV ASAP; repeat every 3-5 min',
+      'Treat reversible causes: 4 H\'s (Hypoxia, Hypovolaemia, Hypo/Hyperkalaemia, Hypothermia) + 4 T\'s (Tension pneumothorax, Tamponade, Toxins, Thromboembolism)',
+    ],
+  };
+
+  const returnOfCirculation = [
+    'Post-ROSC: maintain SpO2 94–98%; target SBP >100 mmHg',
+    'Targeted temperature management: avoid fever (>37.8°C); cooling if comatose post-arrest',
+    'Urgent 12-lead ECG; consider PPCI if STEMI or suspected cardiac cause',
+    'Transfer to ICU/HDU; glucose control 4-10 mmol/L',
+  ];
+
+  const isShockable = triggerReason.includes('vf') || triggerReason.includes('vt') || triggerReason.includes('shockable');
+  const rhythmGuide = isShockable ? rhythmActions.vf_vt : rhythmActions.asystole_pea;
+
+  return {
+    source: 'local_als_protocol',
+    codeBlueActivated: true,
+    immediateActions,
+    rhythmSpecificActions: rhythmGuide,
+    postROSC: returnOfCirculation,
+    drugDosing: {
+      adrenaline: '1 mg (1:10,000) IV every 3-5 min during CPR',
+      amiodarone: '300 mg IV first dose; 150 mg second dose',
+      atropine: 'NOT routinely recommended (removed from ALS 2021 guidelines)',
+      dextrose: '50 ml of 50% dextrose for documented hypoglycaemia',
+    },
+    guideline: 'ALS Algorithm — Resuscitation Council UK 2021; Zimbabwe Emergency Medicine guidelines',
+  };
 }

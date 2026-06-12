@@ -10,7 +10,6 @@ import AllergiesModal from './AllergiesModal';
 import ModalPortal from './ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import Icd10Suggestions from './Icd10Suggestions';
-import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
 interface Patient {
   id: string;
@@ -503,39 +502,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
         </div>
       )}
 
-      {/* Guideline Search Section */}
-      <div className="rounded-2xl">
-        <GuidelineSearchPanel
-          searchFn={async (query) => {
-            const token = localStorage.getItem('ehr_token');
-            const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-            if (!token || !tenantSlug) {
-              throw new Error('Session expired');
-            }
-
-            let searchContext = "Triage protocols, clinical guidelines";
-            if (patient) {
-              const patientContext = [];
-              if (patient.dateOfBirth) {
-                const age = Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-                patientContext.push(`${age}yo`);
-              }
-              if (patient.gender) patientContext.push(patient.gender);
-              if (patientContext.length > 0) {
-                searchContext += `. Patient: ${patientContext.join(', ')}`;
-              }
-            }
-            if (chiefComplaint) searchContext += `. CC: ${chiefComplaint}`;
-            if (chiefComplaintConcept) searchContext += ` (SNOMED: ${chiefComplaintConcept.term})`;
-            if (observations) searchContext += `. Obs: ${observations}`;
-
-            const finalQuery = `${searchContext}: ${query}`;
-            return Api.ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
-          }}
-          contextLabel="Patient Assessment"
-        />
-      </div>
-
       {/* Triage Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -584,7 +550,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                         setDiagnosisSuggestions(suggestionsData);
                       } else if (suggestionsData.differentialDiagnoses && Array.isArray(suggestionsData.differentialDiagnoses)) {
                         console.log('⚠️ Using fallback differentialDiagnoses format, count:', suggestionsData.differentialDiagnoses.length);
-                        // Handle fallback format - even if empty, create structure
                         const convertedDiagnoses = suggestionsData.differentialDiagnoses.map((d: any) => ({
                           diagnosis: d.condition || d.diagnosis || 'Unknown',
                           probability: d.probability || 0.5,
@@ -594,16 +559,16 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                         setDiagnosisSuggestions({
                           suggested_diagnoses: convertedDiagnoses,
                           recommended_tests: suggestionsData.recommendedTests || suggestionsData.recommended_tests || [],
-                          red_flags: []
+                          red_flags: [],
+                          cdss_unavailable: !!suggestionsData.cdss_unavailable,
                         });
                       } else {
                         console.warn('⚠️ Unexpected response format:', suggestionsData);
-                        // Still show the structure even if empty
                         setDiagnosisSuggestions({
                           suggested_diagnoses: [],
                           recommended_tests: suggestionsData.recommendedTests || suggestionsData.recommended_tests || [],
                           red_flags: [],
-                          error: 'No diagnoses found. The symptom matching might need adjustment.'
+                          cdss_unavailable: !!suggestionsData.cdss_unavailable,
                         });
                       }
                     } catch (error) {
@@ -701,7 +666,11 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                     )}
                   </>
                 ) : (
-                  <p className="text-xs text-slate-600">No diagnoses found. Try providing more detailed symptoms.</p>
+                  <p className="text-xs text-slate-600">
+                    {diagnosisSuggestions.cdss_unavailable
+                      ? 'CDSS offline — enter diagnosis manually or try again shortly.'
+                      : 'No diagnoses found. Try providing more detailed symptoms.'}
+                  </p>
                 )}
               </div>
             )}
@@ -999,37 +968,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
 
         {/* Right rail */}
         <div className="space-y-6">
-          {/* Guideline Search Card */}
-          <GuidelineSearchPanel
-            searchFn={async (query) => {
-              const token = localStorage.getItem('ehr_token');
-              const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-              if (!token || !tenantSlug) {
-                throw new Error('Session expired');
-              }
-
-              let searchContext = "Triage protocols, clinical guidelines";
-              if (patient) {
-                const patientContext = [];
-                if (patient.dateOfBirth) {
-                  const age = Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-                  patientContext.push(`${age}yo`);
-                }
-                if (patient.gender) patientContext.push(patient.gender);
-                if (patientContext.length > 0) {
-                  searchContext += `. Patient: ${patientContext.join(', ')}`;
-                }
-              }
-              if (chiefComplaint) searchContext += `. CC: ${chiefComplaint}`;
-              if (chiefComplaintConcept) searchContext += ` (SNOMED: ${chiefComplaintConcept.term})`;
-              if (observations) searchContext += `. Obs: ${observations}`;
-
-              const finalQuery = `${searchContext}: ${query}`;
-              return Api.ehrApi.searchGuidelines(finalQuery, token, tenantSlug);
-            }}
-            contextLabel="Patient Assessment"
-            className="bg-gradient-to-br from-white to-slate-50 border-slate-200/60 shadow-sm"
-          />
 
 
           <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
@@ -1049,7 +987,24 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
             </button>
             {triageCopilotResult && (
               <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900">
-                <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
+                {(() => {
+                  const rl = String(triageCopilotResult.riskLevel || '').toLowerCase();
+                  const actionMap: Record<string, { label: string; action: string; colorClass: string }> = {
+                    critical: { label: 'CRITICAL', action: 'Call doctor NOW — do not leave patient unattended.', colorClass: 'text-red-700' },
+                    high: { label: 'HIGH', action: 'Fetch senior nurse or doctor within 10 minutes.', colorClass: 'text-orange-700' },
+                    medium: { label: 'MEDIUM', action: 'Monitor every 30 min; escalate if deteriorates.', colorClass: 'text-amber-700' },
+                    low: { label: 'LOW', action: 'Routine care; reassess in 1 hour.', colorClass: 'text-green-700' },
+                  };
+                  const entry = actionMap[rl];
+                  return entry ? (
+                    <div className="mb-1">
+                      <p><strong>Risk:</strong> <span className={`font-bold ${entry.colorClass}`}>{entry.label}</span></p>
+                      <p className={`font-semibold ${entry.colorClass}`}>⚡ {entry.action}</p>
+                    </div>
+                  ) : (
+                    <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
+                  );
+                })()}
                 <p><strong>Suggested:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
                 <div className="mt-2 flex gap-2">
                   <button type="button" onClick={() => handleTriageCopilotDecision('accept')} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>

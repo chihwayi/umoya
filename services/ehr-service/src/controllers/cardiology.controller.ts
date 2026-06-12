@@ -60,4 +60,32 @@ export class CardiologyController {
   async getDashboardSummary(@Request() req: RequestWithTenant) {
     return this.cardiologyService.getDashboardSummary(req.tenantDb);
   }
+
+  @Post('ecg')
+  @ApiOperation({ summary: 'Record an ECG' })
+  @ApiResponse({ status: 201, description: 'ECG recorded with CDSS interpretation' })
+  async recordEcg(@Request() req: RequestWithTenant, @Body() body: any) {
+    return this.cardiologyService.recordEcg(req.tenantDb, body);
+  }
+
+  @Get('ecg/patient/:patientId')
+  @ApiOperation({ summary: 'Get ECGs for a patient' })
+  @ApiResponse({ status: 200, description: 'ECG list' })
+  async getEcgs(@Request() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.cardiologyService.getEcgs(req.tenantDb, patientId);
+  }
+
+  @Get('ecg/:id')
+  @ApiOperation({ summary: 'Get a single ECG record' })
+  @ApiResponse({ status: 200, description: 'ECG record' })
+  async getEcg(@Request() req: RequestWithTenant, @Param('id') id: string) {
+    return this.cardiologyService.getEcg(req.tenantDb, id);
+  }
+
+  @Post('cdss/ecg-interpret')
+  @ApiOperation({ summary: 'CDSS ECG interpretation (without saving)' })
+  @ApiResponse({ status: 200, description: 'ECG interpretation result' })
+  async interpretEcg(@Request() req: RequestWithTenant, @Body() body: any) {
+    return this.cardiologyService.interpretEcg(req.tenantDb, body);
+  }
 }

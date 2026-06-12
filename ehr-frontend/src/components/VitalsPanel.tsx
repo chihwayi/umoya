@@ -40,7 +40,6 @@ interface VitalsData {
   respiratoryRate: number;
   weight: number;
   height: number;
-  painLevel: number;
   bloodGlucose?: number;
   notes: string;
 }
@@ -87,7 +86,6 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
     respiratoryRate: 0,
     weight: 0,
     height: 0,
-    painLevel: 0,
     bloodGlucose: 0,
     notes: ''
   });
@@ -191,10 +189,6 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
         if (value > 20) return { status: 'High', tone: 'high' };
         if (value < 12) return { status: 'Low', tone: 'low' };
         return { status: 'Normal', tone: 'normal' };
-      case 'painLevel':
-        if (value >= 7) return { status: 'Severe', tone: 'critical' };
-        if (value >= 4) return { status: 'Moderate', tone: 'high' };
-        return { status: 'Mild', tone: 'low' };
       case 'bloodGlucose': // mmol/L
         if (value >= 25 || value < 3) return { status: 'Critical', tone: 'critical' };
         if (value > 11) return { status: 'High', tone: 'high' };
@@ -262,7 +256,6 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
         weight:           vitals.weight           || undefined,
         height:           vitals.height           || undefined,
         bmi:              bmi                     || undefined,
-        painLevel:        vitals.painLevel        || undefined,
         bloodGlucose:     vitals.bloodGlucose     || undefined,
         notes:            vitals.notes            || undefined,
         // Structured SNOMED observations — fed into the CDSS risk engine
@@ -910,15 +903,6 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
               'number',
               50,
               250
-            )}
-            {renderVitalInput(
-              'Pain Level',
-              'painLevel',
-              '/10',
-              <AlertTriangle className="w-4 h-4 text-red-600" />,
-              'number',
-              0,
-              10
             )}
             {renderVitalInput(
               'Blood Glucose',

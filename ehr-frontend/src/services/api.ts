@@ -13906,3 +13906,160 @@ export const storeroomApi = {
     return response.data;
   },
 };
+
+const h = (token: string, tenantSlug: string) => ({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` });
+
+export const orthopaedicsApi = {
+  getRegister: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/orthopaedics/register', { headers: h(token, tenantSlug), params }),
+  createRegister: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/orthopaedics/register', data, { headers: h(token, tenantSlug) }),
+  getFractures: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/orthopaedics/fractures', { headers: h(token, tenantSlug), params }),
+  recordFracture: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/orthopaedics/fractures', data, { headers: h(token, tenantSlug) }),
+  updateFracture: (id: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/orthopaedics/fractures/${id}`, data, { headers: h(token, tenantSlug) }),
+  getJointReplacements: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/orthopaedics/joint-replacement', { headers: h(token, tenantSlug), params }),
+  recordJointReplacement: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/orthopaedics/joint-replacement', data, { headers: h(token, tenantSlug) }),
+  dvtRisk: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/orthopaedics/cdss/dvt-risk', data, { headers: h(token, tenantSlug) }),
+  rehabPlan: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/orthopaedics/cdss/rehab-plan', data, { headers: h(token, tenantSlug) }),
+};
+
+export const entApi = {
+  getVisits: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/ent/visits', { headers: h(token, tenantSlug), params }),
+  createVisit: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/ent/visits', data, { headers: h(token, tenantSlug) }),
+  updateVisit: (id: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/ent/visits/${id}`, data, { headers: h(token, tenantSlug) }),
+  getAudiograms: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/ent/audiograms', { headers: h(token, tenantSlug), params }),
+  recordAudiogram: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/ent/audiograms', data, { headers: h(token, tenantSlug) }),
+  tonsillitisTriage: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/ent/cdss/tonsillitis-triage', data, { headers: h(token, tenantSlug) }),
+  rhinosinusitisTriage: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/ent/cdss/rhinosinusitis-triage', data, { headers: h(token, tenantSlug) }),
+};
+
+export const gastroenterologyApi = {
+  getRegister: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/gastroenterology/register', { headers: h(token, tenantSlug), params }),
+  createRegister: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/gastroenterology/register', data, { headers: h(token, tenantSlug) }),
+  getEndoscopies: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/gastroenterology/endoscopy', { headers: h(token, tenantSlug), params }),
+  recordEndoscopy: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/gastroenterology/endoscopy', data, { headers: h(token, tenantSlug) }),
+  upperGiBleedRisk: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/gastroenterology/cdss/upper-gi-bleed-risk', data, { headers: h(token, tenantSlug) }),
+  cirrhosisRisk: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/gastroenterology/cdss/cirrhosis-risk', data, { headers: h(token, tenantSlug) }),
+  dyspepsia: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/gastroenterology/cdss/dyspepsia', data, { headers: h(token, tenantSlug) }),
+};
+
+export const rheumatologyApi = {
+  getRegister: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/rheumatology/register', { headers: h(token, tenantSlug), params }),
+  createRegister: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/rheumatology/register', data, { headers: h(token, tenantSlug) }),
+  getAssessments: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/rheumatology/assessments', { headers: h(token, tenantSlug), params }),
+  recordAssessment: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/rheumatology/assessments', data, { headers: h(token, tenantSlug) }),
+  getDmards: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/rheumatology/dmards', { headers: h(token, tenantSlug), params }),
+  prescribeDmard: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/rheumatology/dmards', data, { headers: h(token, tenantSlug) }),
+  stopDmard: (id: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/rheumatology/dmards/${id}/stop`, data, { headers: h(token, tenantSlug) }),
+  treatToTarget: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/rheumatology/cdss/treat-to-target', data, { headers: h(token, tenantSlug) }),
+  goutProtocol: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/rheumatology/cdss/gout', data, { headers: h(token, tenantSlug) }),
+  biologicSafety: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/rheumatology/cdss/biologic-safety', data, { headers: h(token, tenantSlug) }),
+};
+
+export const haematologyApi = {
+  getRegister: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/haematology/register', { headers: h(token, tenantSlug), params }),
+  createRegister: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/haematology/register', data, { headers: h(token, tenantSlug) }),
+  updateRegister: (id: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/haematology/register/${id}`, data, { headers: h(token, tenantSlug) }),
+  anaemiaWorkup: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/haematology/cdss/anaemia-workup', data, { headers: h(token, tenantSlug) }),
+  transfusionTrigger: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/haematology/cdss/transfusion-trigger', data, { headers: h(token, tenantSlug) }),
+  lymphomaStaging: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/haematology/cdss/lymphoma-staging', data, { headers: h(token, tenantSlug) }),
+};
+
+export const urologyApi = {
+  getRegister: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/urology/register', { headers: h(token, tenantSlug), params }),
+  createRegister: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/urology/register', data, { headers: h(token, tenantSlug) }),
+  updateRegister: (id: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/urology/register/${id}`, data, { headers: h(token, tenantSlug) }),
+  bphCdss: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/urology/cdss/bph', data, { headers: h(token, tenantSlug) }),
+  renalStoneCdss: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/urology/cdss/renal-stone', data, { headers: h(token, tenantSlug) }),
+  psaCdss: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/urology/cdss/psa', data, { headers: h(token, tenantSlug) }),
+};
+
+export const physiotherapyApi = {
+  getReferrals: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/physiotherapy/referrals', { headers: h(token, tenantSlug), params }),
+  createReferral: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/physiotherapy/referrals', data, { headers: h(token, tenantSlug) }),
+  acceptReferral: (id: string, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/physiotherapy/referrals/${id}/accept`, {}, { headers: h(token, tenantSlug) }),
+  dischargeReferral: (id: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/physiotherapy/referrals/${id}/discharge`, data, { headers: h(token, tenantSlug) }),
+  getSessions: (referralId: string, token: string, tenantSlug: string) =>
+    ehrAxios.get(`/physiotherapy/referrals/${referralId}/sessions`, { headers: h(token, tenantSlug) }),
+  recordSession: (referralId: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post(`/physiotherapy/referrals/${referralId}/sessions`, data, { headers: h(token, tenantSlug) }),
+  getPatientReferrals: (patientId: string, token: string, tenantSlug: string) =>
+    ehrAxios.get(`/physiotherapy/patient/${patientId}/referrals`, { headers: h(token, tenantSlug) }),
+  strokeRehab: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/physiotherapy/cdss/stroke-rehab', data, { headers: h(token, tenantSlug) }),
+  cardiacRehab: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/physiotherapy/cdss/cardiac-rehab', data, { headers: h(token, tenantSlug) }),
+};
+
+export const endocrinologyApi = {
+  getRegister: (token: string, tenantSlug: string, params?: any) =>
+    ehrAxios.get('/endocrinology/register', { headers: h(token, tenantSlug), params }),
+  createRegister: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/endocrinology/register', data, { headers: h(token, tenantSlug) }),
+  updateRegister: (id: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/endocrinology/register/${id}`, data, { headers: h(token, tenantSlug) }),
+  thyroidCdss: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/endocrinology/cdss/thyroid', data, { headers: h(token, tenantSlug) }),
+  adrenalCrisis: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/endocrinology/cdss/adrenal-crisis', data, { headers: h(token, tenantSlug) }),
+  levothyroxineDose: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/endocrinology/cdss/levothyroxine-dose', data, { headers: h(token, tenantSlug) }),
+};
+
+export const ncdComorbidityApi = {
+  getProfile: (patientId: string, token: string, tenantSlug: string) =>
+    ehrAxios.get(`/ncd-comorbidity/patient/${patientId}`, { headers: h(token, tenantSlug) }),
+  updateProfile: (patientId: string, data: any, token: string, tenantSlug: string) =>
+    ehrAxios.patch(`/ncd-comorbidity/patient/${patientId}`, data, { headers: h(token, tenantSlug) }),
+  syncProfile: (patientId: string, token: string, tenantSlug: string) =>
+    ehrAxios.post(`/ncd-comorbidity/patient/${patientId}/sync`, {}, { headers: h(token, tenantSlug) }),
+  cvdRisk: (data: any, token: string, tenantSlug: string) =>
+    ehrAxios.post('/ncd-comorbidity/cdss/cvd-risk', data, { headers: h(token, tenantSlug) }),
+};

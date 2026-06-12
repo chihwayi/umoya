@@ -66,4 +66,19 @@ export class FamilyPlanningController {
   getMethodEligibility(@Body() body: any, @Request() req: RequestWithTenant) {
     return this.cdssService.familyPlanningMethodEligibility(body, req.tenantId!);
   }
+
+  @Post('cdss/method-counselling')
+  methodCounselling(@Body() body: any) {
+    return this.familyPlanningService.methodCounselling(body);
+  }
+
+  @Post('cdss/missed-method')
+  missedMethod(@Body() body: any) {
+    return this.familyPlanningService.missedMethodProtocol(body);
+  }
+
+  @Post('cdss/postpartum-contraception')
+  postpartumContraception(@Body() body: any) {
+    return this.familyPlanningService.postpartumContraception(body);
+  }
 }

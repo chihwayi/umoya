@@ -114,4 +114,14 @@ export class PediatricsController {
   assessMilestones(@Body() body: Record<string, any>) {
     return this.svc.assessMilestones(body);
   }
+
+  @Post('cdss/imci')
+  imciAssessment(@Body() body: Record<string, any>) {
+    return this.svc.imciAssessment(body);
+  }
+
+  @Post('cdss/epi-schedule')
+  epiSchedule(@Body() body: Record<string, any>) {
+    return this.svc.epiSchedule(body);
+  }
 }
