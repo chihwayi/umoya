@@ -178,10 +178,12 @@ describe('TelemedicineVideoService', () => {
     });
 
     it('returns null after exhausting all retry attempts', async () => {
-      jest.useRealTimers();
       mockAxiosInstance.get.mockResolvedValue({ data: { data: [] } });
 
-      const result = await service.getRecordingWithRetry('consult-1', 'room-abc', 2, 0);
+      const promise = service.getRecordingWithRetry('consult-1', 'room-abc', 2, 0);
+      // advance the single 0 ms setTimeout that fires between retry 1 and 2
+      await (jest as any).advanceTimersByTimeAsync(0);
+      const result = await promise;
 
       expect(result).toBeNull();
       expect(mockAxiosInstance.get).toHaveBeenCalledTimes(2);

@@ -17116,6 +17116,537 @@ async def cchd_algorithm(body: dict):
     }
 
 
+@app.post("/dialysis/cdss/ktv-calculator")
+async def calculate_ktv(body: dict):
+    """
+    Daugirdas II single-pool Kt/V.
+    body: { pre_bun: float, post_bun: float, uf_liters: float, post_weight_kg: float, session_hours: float }
+    """
+    import math
+    pre_bun = float(body.get("pre_bun", 1))
+    post_bun = float(body.get("post_bun", 1))
+    uf_l = float(body.get("uf_liters", 0))
+    weight_kg = float(body.get("post_weight_kg", 70))
+    t_hours = float(body.get("session_hours", 4))
+
+    if pre_bun <= 0 or post_bun <= 0 or weight_kg <= 0:
+        return {"error": "Invalid inputs for Kt/V calculation."}
+
+    R = post_bun / pre_bun
+    ktv = -math.log(R - 0.008 * t_hours) + (4 - 3.5 * R) * uf_l / weight_kg
+
+    adequate = ktv >= 1.2
+    return {
+        "kt_v": round(ktv, 3),
+        "adequate": adequate,
+        "recommendation": "Kt/V adequate." if adequate else f"Kt/V {ktv:.3f} below target 1.2. Increase session duration or blood flow rate.",
+    }
+
+
+
+# ── Sprint 242: Aviation Medicine CDSS ────────────────────────────────────────
+_DISQ_CLASS1 = {
+    "epilepsy": "Permanent disqualification for Class 1. CAAZ waiver exceptional only.",
+    "insulin_dependent_diabetes": "Class 1 disqualifying under ICAO Annex 1 standard. Class 2 possible with controlled T2DM.",
+    "psychosis": "Active psychosis disqualifying. Assess after sustained remission.",
+    "bipolar_disorder": "Disqualifying if unstable or on lithium. Stable on monotherapy — specialist review.",
+    "alcohol_dependence": "Disqualifying. Minimum 2 years sobriety with documentation before reassessment.",
+    "permanent_cardiac_pacemaker": "Pacemaker disqualifying for Class 1 in most CAAZ/ICAO states. May apply for Class 2 waiver.",
+}
+
+@app.post("/aviation/cdss/fitness-check")
+async def aviation_fitness_check(body: dict):
+    """
+    Check for ICAO Annex 1 disqualifying conditions.
+    body: { exam_class, conditions, bp_systolic, bp_diastolic, vision_meets_standard, hearing_meets_standard, colour_vision }
+    """
+    exam_class = body.get("exam_class", "class1")
+    conditions = body.get("conditions", [])
+    flags = []
+
+    for cond in conditions:
+        if cond in _DISQ_CLASS1:
+            flags.append({"severity": "disqualifying", "condition": cond, "guidance": _DISQ_CLASS1[cond]})
+
+    systolic = body.get("bp_systolic", 0)
+    diastolic = body.get("bp_diastolic", 0)
+    if systolic > 160 or diastolic > 95:
+        flags.append({"severity": "fail", "condition": "hypertension",
+                      "guidance": f"BP {systolic}/{diastolic} exceeds ICAO standard (≤160/95). Cannot certify until controlled."})
+
+    if not body.get("vision_meets_standard", True):
+        flags.append({"severity": "fail", "condition": "vision",
+                      "guidance": "Visual acuity below ICAO standard. Ophthalmology referral required before certificate."})
+
+    if exam_class == "class1" and body.get("colour_vision") == "failed":
+        flags.append({"severity": "disqualifying", "condition": "colour_vision",
+                      "guidance": "Colour vision failure — Class 1 disqualifying. Class 2 possible (day/sunset VFR limitations)."})
+
+    if not body.get("hearing_meets_standard", True):
+        flags.append({"severity": "fail", "condition": "hearing",
+                      "guidance": "Audiometric standard not met. Audiologist referral required before certificate."})
+
+    return {
+        "fit_to_certify": len(flags) == 0,
+        "flags": flags,
+        "recommendation": (
+            "UNFIT — resolve disqualifying conditions before certification." if flags
+            else "No disqualifying conditions identified. Proceed with certification."
+        ),
+    }
+
+
+HBOT_CONTRAINDICATIONS = {
+    "absolute": {
+        "untreated_pneumothorax": "Untreated pneumothorax is an ABSOLUTE contraindication. Risk of tension pneumothorax on ascent.",
+        "bleomycin_use": "Bleomycin history — ABSOLUTE contraindication. Pulmonary O2 toxicity risk is fatal.",
+        "disulfiram_use": "Disulfiram inhibits SOD. ABSOLUTE contraindication — severe O2 toxicity risk.",
+    },
+    "relative": {
+        "cisplatin_use": "Cisplatin concurrent use — RELATIVE CI. Pulmonary/renal toxicity potentiated.",
+        "doxorubicin_concurrent": "Concurrent doxorubicin — RELATIVE CI. Cardiopulmonary toxicity risk.",
+        "severe_copd": "Severe COPD — hypoxic drive risk at 1 ATA ascent. Careful monitoring.",
+        "claustrophobia_severe": "Severe claustrophobia — pre-treat with anxiolytic. Slow chamber compress.",
+        "pregnancy": "Relative CI (especially 1st trimester). Risk-benefit discussion required.",
+    }
+}
+
+@app.post("/hbot/cdss/contraindication-check")
+async def hbot_contraindication_check(body: dict):
+    """
+    Evaluate HBOT contraindications.
+    body: { untreated_pneumothorax, bleomycin_use, disulfiram_use,
+             cisplatin_use, doxorubicin_concurrent, severe_copd,
+             claustrophobia_severe, pregnancy }
+    """
+    flags = []
+    for field, guidance in HBOT_CONTRAINDICATIONS["absolute"].items():
+        if body.get(field):
+            flags.append({"type": "absolute", "condition": field, "guidance": guidance})
+    for field, guidance in HBOT_CONTRAINDICATIONS["relative"].items():
+        if body.get(field):
+            flags.append({"type": "relative", "condition": field, "guidance": guidance})
+
+    absolute_present = any(f["type"] == "absolute" for f in flags)
+    return {
+        "cleared": not absolute_present,
+        "absolute_count": sum(1 for f in flags if f["type"] == "absolute"),
+        "relative_count": sum(1 for f in flags if f["type"] == "relative"),
+        "flags": flags,
+        "recommendation": (
+            "DO NOT PROCEED — absolute contraindication present." if absolute_present
+            else ("Senior physician review required before proceeding." if flags else "No contraindications identified. Clear to proceed.")
+        ),
+    }
+
+
+@app.post("/prosthetics/cdss/k-level-prediction")
+async def predict_k_level(body: dict):
+    """
+    Predict MFCL K-level from clinical parameters.
+    body: { amputation_level, aetiology, age, pre_amputation_ambulatory,
+             contralateral_limb_intact, cardiovascular_disease, cognition_intact }
+    """
+    score = 0
+    aetiology = body.get("aetiology", "")
+    age = body.get("age", 60)
+
+    if aetiology in ("dysvascular", "diabetic"):
+        score -= 1
+    if aetiology in ("trauma", "congenital"):
+        score += 1
+    if age < 50:
+        score += 1
+    elif age > 70:
+        score -= 1
+
+    if body.get("pre_amputation_ambulatory"):
+        score += 2
+    if body.get("contralateral_limb_intact"):
+        score += 1
+    if body.get("cardiovascular_disease"):
+        score -= 1
+    if not body.get("cognition_intact", True):
+        score -= 2
+
+    level = body.get("amputation_level", "transtibial")
+    if level in ("transtibial", "syme", "foot_partial"):
+        score += 1
+    elif level in ("transfemoral", "knee_disarticulation"):
+        score -= 1
+    elif level in ("hip_disarticulation", "bilateral"):
+        score -= 2
+
+    predicted = max(0, min(4, 2 + score))
+    descriptions = {
+        0: "No functional potential",
+        1: "Household ambulator",
+        2: "Limited community ambulator",
+        3: "Community ambulator",
+        4: "High activity user",
+    }
+
+    return {
+        "predicted_k_level": predicted,
+        "description": descriptions[predicted],
+        "rationale": (
+            f"Score {score} based on aetiology ({aetiology}), age {age}, "
+            "pre-amputation status, contralateral limb, comorbidities, and amputation level."
+        ),
+        "note": "Clinical judgement must confirm. K-level determines prosthetic component eligibility.",
+    }
+
+
+@app.post("/pmh/cdss/epds-interpret")
+async def epds_interpret(body: dict):
+    """
+    Interpret EPDS total score and Q10.
+    body: { total_score: int, q10_score: int, days_postpartum: int }
+    """
+    total = body.get("total_score", 0)
+    q10   = body.get("q10_score", 0)
+
+    if q10 >= 1:
+        return {
+            "risk_level": "critical",
+            "action": "IMMEDIATE SAFETY RISK — self-harm ideation endorsed. Do not leave patient alone. Urgent psychiatric assessment required NOW.",
+            "next_steps": [
+                "Stay with patient",
+                "Notify senior clinician immediately",
+                "Complete risk assessment",
+                "Consider psychiatric admission",
+            ],
+        }
+    if total >= 13:
+        return {
+            "risk_level": "high",
+            "action": "Probable major depression (EPDS >=13). Psychiatric/perinatal MH referral within 24 hours.",
+            "next_steps": [
+                "Urgent referral",
+                "Consider SSRIs (discuss breastfeeding safety)",
+                "Safety plan",
+                "Involve family/social support",
+            ],
+        }
+    if total >= 10:
+        return {
+            "risk_level": "moderate",
+            "action": "Possible depression (EPDS 10-12). Enhanced monitoring and psychological support.",
+            "next_steps": [
+                "Re-screen in 2 weeks",
+                "CBT or peer support referral",
+                "Sleep support",
+                "Social work if needed",
+            ],
+        }
+    return {
+        "risk_level": "low",
+        "action": "Low risk (EPDS <10). Routine postnatal support. Scheduled re-screen at 3 months.",
+        "next_steps": ["Routine postnatal care", "Re-screen at 3 months"],
+    }
+
+
+@app.post("/nicu-followup/cdss/bayley-interpret")
+async def bayley_interpret(body: dict):
+    """
+    Interpret Bayley-III composite scores.
+    body: { cognitive: int|None, language: int|None, motor: int|None, corrected_age_months: float }
+    """
+    def classify(score):
+        if score is None: return "not_tested"
+        if score < 70:   return "severe"
+        if score < 85:   return "moderate"
+        if score < 100:  return "borderline"
+        return "normal"
+
+    delays = []
+    referrals = []
+    for domain, key in [("cognitive", "cognitive"), ("language", "language"), ("motor", "motor")]:
+        score = body.get(key)
+        cls = classify(score)
+        if cls in ("severe", "moderate"):
+            delays.append({"domain": domain, "score": score, "classification": cls})
+            if domain == "language":  referrals.append("Speech-Language Therapy")
+            if domain == "motor":     referrals.append("Physiotherapy and Occupational Therapy")
+            if domain == "cognitive": referrals.append("Early Childhood Intervention Programme")
+
+    return {
+        "delays": delays,
+        "referrals": list(set(referrals)),
+        "any_delay": len(delays) > 0,
+        "recommendation": "; ".join(
+            f"{d['domain'].title()} {d['classification']} delay (score {d['score']})" for d in delays
+        ) or "No significant developmental delay identified.",
+    }
+
+
+@app.post("/transport/cdss/priority-triage")
+async def transport_priority_triage(body: dict):
+    """
+    Recommend transport priority (P1/P2/P3) from clinical indicators.
+    body: {
+        gcs: int|None, systolic_bp: int|None, rr: int|None, spo2: int|None,
+        mechanism: str|None, chief_complaint: str|None, age_years: int|None
+    }
+    """
+    gcs        = body.get("gcs")
+    sbp        = body.get("systolic_bp")
+    rr         = body.get("rr")
+    spo2       = body.get("spo2")
+    mechanism  = (body.get("mechanism") or "").lower()
+    complaint  = (body.get("chief_complaint") or "").lower()
+
+    p1_flags: list[str] = []
+    p2_flags: list[str] = []
+
+    if gcs is not None and gcs <= 8:
+        p1_flags.append(f"GCS {gcs} (severe impairment)")
+    elif gcs is not None and gcs <= 12:
+        p2_flags.append(f"GCS {gcs} (moderate impairment)")
+
+    if sbp is not None:
+        if sbp < 90:
+            p1_flags.append(f"Hypotension SBP {sbp} mmHg")
+        elif sbp < 100:
+            p2_flags.append(f"Low SBP {sbp} mmHg")
+
+    if rr is not None:
+        if rr < 8 or rr > 29:
+            p1_flags.append(f"Critical RR {rr}")
+        elif rr < 12 or rr > 24:
+            p2_flags.append(f"Abnormal RR {rr}")
+
+    if spo2 is not None:
+        if spo2 < 90:
+            p1_flags.append(f"SpO2 {spo2}% — critical hypoxia")
+        elif spo2 < 94:
+            p2_flags.append(f"SpO2 {spo2}% — moderate hypoxia")
+
+    p1_keywords = ["cardiac arrest", "arrest", "stroke", "major trauma", "penetrating", "gunshot", "stab", "drowning", "anaphylaxis"]
+    p2_keywords = ["chest pain", "difficulty breathing", "fracture", "head injury", "seizure", "obstetric", "burns"]
+    if any(k in mechanism or k in complaint for k in p1_keywords):
+        p1_flags.append("High-acuity mechanism/complaint")
+    elif any(k in mechanism or k in complaint for k in p2_keywords):
+        p2_flags.append("Moderate-acuity mechanism/complaint")
+
+    if p1_flags:
+        priority = "p1"
+        target_response_mins = 8
+    elif p2_flags:
+        priority = "p2"
+        target_response_mins = 15
+    else:
+        priority = "p3"
+        target_response_mins = 30
+
+    return {
+        "recommended_priority": priority,
+        "target_response_mins": target_response_mins,
+        "p1_flags": p1_flags,
+        "p2_flags": p2_flags,
+        "rationale": "; ".join(p1_flags + p2_flags) or "No high-acuity indicators — routine transfer.",
+        "vehicle_type_suggestion": "ALS" if priority == "p1" else ("BLS" if priority == "p2" else "BLS"),
+    }
+
+
+BOTOX_CONTRAINDICATIONS = ["myasthenia_gravis", "eaton_lambert", "aminoglycoside_use", "pregnancy", "breastfeeding"]
+FILLER_CONTRAINDICATIONS = ["blood_thinners", "active_infection", "autoimmune_condition", "known_filler_hypersensitivity"]
+
+@app.post("/aesthetics/cdss/contraindication-check")
+async def aesthetics_contraindication_check(body: dict):
+    """
+    body: { procedure_type: str, conditions: list[str], medications: list[str], fitzpatrick_type: int }
+    """
+    procedure  = body.get("procedure_type", "")
+    conditions = [c.lower() for c in body.get("conditions", [])]
+    meds       = [m.lower() for m in body.get("medications", [])]
+    fitz       = body.get("fitzpatrick_type", 3)
+    flags      = []
+
+    if procedure == "botulinum_toxin":
+        for ci in BOTOX_CONTRAINDICATIONS:
+            if ci in conditions:
+                flags.append({
+                    "severity": "absolute",
+                    "condition": ci,
+                    "guidance": f"{ci.replace('_',' ').title()} is a contraindication for botulinum toxin. Do not proceed.",
+                })
+
+    if procedure == "dermal_filler":
+        if any("warfarin" in m or "clopidogrel" in m or "apixaban" in m for m in meds):
+            flags.append({
+                "severity": "relative",
+                "condition": "anticoagulation",
+                "guidance": "Anticoagulants increase bruising/haematoma risk. Consider withholding if clinically safe.",
+            })
+
+    if procedure in ("laser_hair_removal", "laser_rejuvenation") and fitz >= 5:
+        flags.append({
+            "severity": "caution",
+            "condition": "fitzpatrick_5_6",
+            "guidance": f"Fitzpatrick {fitz}: high melanin — ensure appropriate wavelength (Nd:YAG). Test patch mandatory.",
+        })
+
+    if procedure == "prp":
+        if any("haemophilia" in c or "platelet_disorder" in c for c in conditions):
+            flags.append({
+                "severity": "absolute",
+                "condition": "platelet_disorder",
+                "guidance": "Platelet disorder is a contraindication for PRP. Do not proceed.",
+            })
+
+    return {
+        "clear_to_proceed": not any(f["severity"] == "absolute" for f in flags),
+        "flags": flags,
+    }
+
+
+# ── Paediatric Cardiology CDSS ────────────────────────────────────────────────
+
+HIGH_RISK_CARDIAC_FOR_SBE = [
+    "prosthetic_valve", "previous_infective_endocarditis", "unrepaired_cyanotic_chd",
+    "corrected_chd_prosthetic_material_lt_6m", "repaired_chd_residual_defect", "cardiac_transplant_valvulopathy"
+]
+
+HIGH_RISK_PROCEDURES_FOR_SBE = [
+    "dental_procedure_gingival_manipulation", "dental_implant", "oral_biopsy",
+    "tonsillectomy", "adenoidectomy", "respiratory_tract_incision", "gi_biopsy_infected_site"
+]
+
+@app.post("/paed-cardiology/cdss/murmur-assess")
+async def murmur_assessment(body: dict):
+    grade = body.get("grade", 2)
+    timing = body.get("timing", "systolic")
+    radiation = body.get("radiation", False)
+    thrill = body.get("thrill", False)
+    quality = body.get("quality", "")
+    symptoms = body.get("associated_symptoms", [])
+
+    red_flags = []
+    if grade >= 3:
+        red_flags.append(f"Murmur grade {grade}/6 — high grade.")
+    if thrill:
+        red_flags.append("Palpable thrill — significant gradient likely.")
+    if radiation:
+        red_flags.append("Radiation to axilla/back/neck — structural lesion.")
+    if timing == "diastolic":
+        red_flags.append("Diastolic murmur — always pathological in children.")
+    if timing == "continuous":
+        red_flags.append("Continuous murmur — evaluate for PDA or AV fistula.")
+    if any(s in symptoms for s in ["syncope", "cyanosis", "exercise_intolerance"]):
+        red_flags.append("Significant associated symptoms — urgent evaluation.")
+
+    innocent = len(red_flags) == 0 and quality in ("vibratory", "musical", "blowing") and grade <= 2
+    return {
+        "likely_innocent": innocent,
+        "red_flags": red_flags,
+        "recommendation": (
+            "INNOCENT MURMUR likely. No investigation required if otherwise well. Re-evaluate if symptoms develop."
+            if innocent else
+            f"PATHOLOGICAL MURMUR suspected — {len(red_flags)} red flag(s). Echocardiography required. Paediatric cardiology referral."
+        ),
+    }
+
+
+@app.post("/paed-cardiology/cdss/sbe-prophylaxis")
+async def sbe_prophylaxis(body: dict):
+    cardiac = body.get("cardiac_condition", "")
+    procedure = body.get("procedure", "")
+    pcn_allergy = body.get("penicillin_allergic", False)
+
+    high_risk_cardiac = any(c in cardiac for c in HIGH_RISK_CARDIAC_FOR_SBE)
+    high_risk_procedure = any(p in procedure for p in HIGH_RISK_PROCEDURES_FOR_SBE)
+
+    if not high_risk_cardiac:
+        return {"prophylaxis_indicated": False, "recommendation": "Cardiac condition is NOT in high-risk category. SBE prophylaxis is NOT indicated."}
+    if not high_risk_procedure:
+        return {"prophylaxis_indicated": False, "recommendation": "Procedure is NOT in high-risk category. SBE prophylaxis is NOT indicated for this procedure."}
+
+    if pcn_allergy:
+        regimen = "Clindamycin 20 mg/kg (max 600 mg) orally/IV 30–60 min before procedure."
+    else:
+        regimen = "Amoxicillin 50 mg/kg (max 2 g) orally 30–60 min before procedure. If oral not possible: Ampicillin 50 mg/kg IV/IM."
+
+    return {
+        "prophylaxis_indicated": True,
+        "regimen": regimen,
+        "recommendation": f"SBE prophylaxis INDICATED: high-risk cardiac condition + high-risk procedure. Give {regimen}",
+    }
+
+
+# ── Occupational Medicine CDSS ────────────────────────────────────────────────
+from occupational_medicine import evaluate_ffd
+
+@app.post("/oem/cdss/ffd-eval")
+async def ffd_evaluation(body: dict):
+    return evaluate_ffd(body.get("vitals", {}))
+
+RESTRICTION_CODES = {
+    "no_lifting":           "No lifting > {kg} kg",
+    "no_heights":           "No work at heights",
+    "no_driving":           "Not fit to drive commercial vehicle",
+    "light_duties":         "Light duties only — no manual labour",
+    "limited_hours":        "Limited work hours: max {hours} h/day",
+    "no_repetitive":        "No repetitive upper limb movements",
+    "no_chemical_exposure": "No exposure to chemical agents until cleared",
+    "no_noise_exposure":    "No high-noise environment exposure",
+    "hearing_protection":   "Mandatory hearing protection at all times",
+    "desk_only":            "Office/sedentary work only",
+}
+
+@app.post("/oem/cdss/rtw-job-match")
+async def rtw_job_match(body: dict):
+    restrictions = set(body.get("restrictions", []))
+    demands = body.get("job_demands", {})
+    conflicts = []
+
+    if "no_lifting" in restrictions and demands.get("lifting_kg", 0) > 0:
+        conflicts.append(f"Job requires lifting {demands['lifting_kg']} kg — worker has no-lifting restriction.")
+    if "no_heights" in restrictions and demands.get("works_at_heights"):
+        conflicts.append("Job involves heights — worker has restriction against working at heights.")
+    if "no_driving" in restrictions and demands.get("drives_commercial"):
+        conflicts.append("Job requires commercial driving — worker is not fit to drive.")
+    if "no_chemical_exposure" in restrictions and demands.get("chemical_exposure"):
+        conflicts.append("Job has chemical exposure — worker must not be exposed until cleared.")
+    if "no_noise_exposure" in restrictions and demands.get("noise_db", 0) > 80:
+        conflicts.append(f"Job noise level {demands['noise_db']} dB — worker has noise exposure restriction.")
+    if "limited_hours" in restrictions and demands.get("hours_per_day", 0) > 6:
+        conflicts.append(f"Job requires {demands['hours_per_day']} h/day — worker on limited hours.")
+
+    return {
+        "suitable_for_rtw": len(conflicts) == 0,
+        "conflicts": conflicts,
+        "recommendation": "CLEARED FOR RTW as per restrictions." if not conflicts else "NOT CLEARED — resolve conflicts before RTW.",
+    }
+
+@app.post("/oem/cdss/exposure-risk")
+async def exposure_risk_assessment(body: dict):
+    twa = body.get("twa", 0.0)
+    oel = body.get("oel", 1.0)
+    ratio = twa / oel if oel > 0 else 0
+    ppe = body.get("ppe_used", False)
+
+    if ratio >= 2.0:
+        level = "critical"
+        action = "Immediate removal from exposure. Engineering controls mandatory. Medical surveillance escalation."
+    elif ratio >= 1.0:
+        level = "high"
+        action = "Overexposure — reduce exposure urgently. Review engineering controls. Increase monitoring frequency."
+    elif ratio >= 0.5:
+        level = "moderate"
+        action = "Approaching OEL. Monitor closely. Ensure PPE compliance. Quarterly biological monitoring."
+    else:
+        level = "low"
+        action = "Within acceptable range. Maintain annual monitoring. PPE continues." if ppe else "Low ratio but PPE not used — enforce PPE policy."
+
+    return {
+        "risk_level": level,
+        "twa_oel_ratio": round(ratio, 3),
+        "recommendation": action,
+        "ppe_compliant": ppe,
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

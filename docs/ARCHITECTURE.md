@@ -1,6 +1,6 @@
 # Umoya Architecture Reference
 
-Last updated: 2026-06-12
+Last updated: 2026-06-25
 
 This document contains the architecture rules, DB provisioning patterns, and agent constraints that apply to all work on this codebase. Read it before editing any file.
 
@@ -25,7 +25,7 @@ This document contains the architecture rules, DB provisioning patterns, and age
 - File: `services/tenant-service/src/entities/tenant.entity.ts`
 - Already has: `country: string` (default `'Zimbabwe'`), `enabledModules: string[]` (JSONB), `featureFlags: Record<string, boolean>` (JSONB), `deploymentMode: string`, `subscriptionState`, `billingEndsAt`, `graceEndsAt`, `autoDeleteAt`, `demoExpiresAt`.
 - Extend these fields — do not add parallel fields.
-- Valid module key strings (defined in `tenant.service.ts`): `finance`, `nurse_general`, `claims`, `hiv`, `maternity`, `radiology`, `oncology`, `cardiology`, `diabetes`, `pharmacy`, `laboratory`, `telemedicine`, `patient_portal`, `operating_room`, `emergency`, `ophthalmology`, `blood_bank`, `infection_control`, `revenue_cycle`, `population_health`.
+- Valid module key strings (defined in `tenant.service.ts`): `finance`, `nurse_general`, `claims`, `hiv`, `maternity`, `radiology`, `oncology`, `cardiology`, `diabetes`, `pharmacy`, `laboratory`, `telemedicine`, `patient_portal`, `operating_room`, `emergency`, `ophthalmology`, `blood_bank`, `infection_control`, `revenue_cycle`, `population_health`, `orthopaedics`, `ent`, `gastroenterology`, `rheumatology`, `haematology`, `urology`, `physiotherapy`, `endocrinology`, `cathlab`, `icu`, `nicu`, `well_baby_clinic`, `epi_immunisation`, `neonatal_screening`, `dialysis`, `aviation_medicine`, `hyperbaric`, `prosthetics`, `perinatal_mental_health`, `nicu_followup`, `patient_transport`, `aesthetics`, `paediatric_cardiology`, `occupational_medicine`.
 
 ---
 
@@ -92,6 +92,26 @@ Add a provisioning bundle to `getProvisioningBundles()` in `services/tenant-serv
 | `sprint226_specialty_modules` | `orthopaedic_registers`, `fracture_records`, `joint_replacement_records`; `ent_visits`, `audiogram_records`; `gastro_registers`, `endoscopy_records`; `rheumatology_registers`, `joint_assessments`, `dmard_records`; `haematology_registers`; `urology_registers`; `physio_referrals`, `physio_sessions`; `endocrine_registers`; `ncd_comorbidity_profiles` (17 tables total) |
 | `who_partograph` | `partograph_sessions` (labour start, admission cervix dilation, station); `partograph_observations` (time-series: cervical dilation, descent, FHR, contractions, moulding, liquor, oxytocin, drugs, BP, pulse, temperature, urine); alert line and action line computed per-session |
 | `radiology_notifications` | `radiology_report_notifications` (report_id, ordered_by, notified_at, channel, critical_flag); `notification_sent_at`, `notification_channel` columns on `imaging_reports` |
+| `sprint232_cathlab_core` | `cathlab_cases` (procedure, urgency, operator, anaesthetist, access site, contrast used, fluoro time, complications, outcome); `cathlab_vessels` (per-case lesion: vessel, stenosis%, TIMI pre/post, intervention, stent); `cathlab_stemi_activations` (door-to-balloon timer, ECG-to-device, outcome); `cathlab_scheduling` (slot assignment, room, priority) |
+| `sprint233_cathlab_ai` | `cathlab_risk_assessments` (ACS risk %, contrast nephropathy risk, bleeding risk, generated risk tier); `cathlab_ai_recommendations` (real-time guidance payloads) |
+| `sprint234_icu_core` | `icu_beds` (room, bed number, ventilator-capable flag); `icu_admissions` (APACHE II, SOFA, admission source, ventilated flag); `icu_fluid_balance` (intake/output time-series); `icu_vasopressors` (drug, dose, unit, start/stop); `icu_ventilator` (mode, settings, FiO₂, RSBI, compliance); `icu_daily_scores` (APACHE II, SOFA, GCS, NEWS2, sepsis_bundle_done, VAP_bundle_done, DVTPE_bundle_done, glycaemic_control) |
+| `sprint235_icu_ai_quality` | `icu_ai_alerts` (type, severity, message, resolved flag) |
+| `sprint236_nicu_core` | `nicu_admissions` (gestational age, birth weight, Apgar, incubator); `nicu_phototherapy` (bilirubin pre/post, lamp type, hours, outcome); `nicu_kmc` (duration minutes, weight pre/post, temperature); `nicu_feeds` (route, type, prescribed/actual ml, TPN flag); `nicu_drug_doses` (drug, weight-band-computed dose, route, frequency); `nicu_discharge_summaries` (structured neonatal discharge) |
+| `sprint237_nicu_advanced` | `nicu_hie` (severity grade, cooling indication, cooling start/end, MRI result, outcome); `nicu_coagulation` (INR, PT, APTT, platelets, fibrinogen, product administered); `nicu_echo_targeted` (PDA size, shunt direction, TAPSE, RVSP, intervention); `nicu_cdss_poct` (test type, result, action triggered) |
+| `sprint238_well_baby_clinic` | `well_baby_encounters` (age weeks/months, weight/length/HC, WAZ/HAZ/WHZ/BAZ z-scores, feeding mode); `well_baby_asq3` (domain scores: communication, gross motor, fine motor, problem solving, personal social; flags below cutoff); `well_baby_supplements` (supplement, dose, route, date) |
+| `sprint239_epi_immunisation` | `vaccination_records` (antigen, batch, site, route, administered_by, date); `aefi_reports` (adverse event, severity, outcome, reported_to_authorities); `cold_chain_logs` (fridge_id, temperature, timestamp); `vaccination_cohort_coverage` (antigen, period, eligible, vaccinated, coverage_pct) |
+| `sprint240_neonatal_screening` | `nbs_results` (test type, result value, unit, reference range, flag, action); `hearing_screening` (method OAE/AABR, ear, result, retest); `cchd_screening` (right hand SpO₂, foot SpO₂, pass flag); `rop_screening` (zone, stage, plus disease, action); `bilirubin_tracking` (TSB, hour of life, Bhutani zone, treatment threshold); `ddh_screening` (hip, Graf class, alpha angle, treatment) |
+| `sprint241_dialysis` | `dialysis_sessions` (modality HD/PD/CRRT, machine, access type, duration, blood flow, dialysate, anticoagulant, Kt/V, ultrafiltration, complications, recorded_by); `dialysis_access` (type, side, date inserted, patent flag, interventions) |
+| `sprint242_aviation_medicine` | `aviation_ame_registry` (examiner name, licence number, authority, valid until); `aviation_medical_exams` (class 1/2/LAPL, full structured exam data, decision, disqualifying conditions, valid from/until); `aviation_certificates` (generated certificate with audit trail) |
+| `sprint243_hyperbaric` | `hbot_sessions` (indication, protocol, chamber pressure, session duration, O₂ percentage, complications, recorded_by); `hbot_wound_outcomes` (wound area series, granulation, infection status) |
+| `sprint244_prosthetics` | `prosthetic_patients` (amputation level, side, K-level, aetiology); `prosthetic_devices` (type, manufacturer, serial, fit date, warranty expires); `prosthetic_outcomes` (assessment date, 6MWT, TUG, PLUS-M score) |
+| `sprint245_perinatal_mental_health` | `epds_assessments` (10-item responses, total score, flag ≥10 and ≥13 thresholds, bonding subscore, safeguarding flag, clinician reviewed flag); `pmh_referrals` (referral type, urgency, outcome) |
+| `sprint246_nicu_followup` | `nicu_followup_register` (corrected age tracking, prematurity degree, discharge diagnosis, assigned clinician); `nicu_followup_assessments` (Bayley cognitive/language/motor domain scores, visit date, milestone flags); `nicu_followup_schedule` (scheduled visits with auto-generated `is_overdue` generated column); `nicu_imaging_results` (cranial US and MRI series) |
+| `sprint247_patient_transport` | `transport_fleet` (vehicle registration, type, capacity, maintenance due); `transport_requests` (origin/destination facility, patient id, level of care, reason, urgency, assigned vehicle, dispatch timestamps); `transport_handovers` (clinical summary PDF, receiving staff signature) |
+| `sprint248_aesthetics` | `aesthetics_treatments` (procedure category, specific procedure, Fitzpatrick type, contraindications screened, pre/post photo MinIO keys, consent form id, session date, next session date, outcome); `aesthetics_schedules` (interval-based appointment series) |
+| `sprint249_paediatric_cardiology` | `paed_cardiology_register` (CHD diagnosis, anatomy, shunt direction, genetic syndrome, antenatal detection, current status); `paed_echo_reports` (structured echo data: LV dimensions, EF, SF auto-computed, PASP, generated `has_pulmonary_hypertension`; defect measurements); `paed_cardiology_interventions` (procedure type, date, surgeon, outcome); `paed_cardiology_followup` (visit date, corrected age, auto-generated `is_overdue`); `sbe_prophylaxis_records` (indication, procedure, antibiotic prescribed) |
+| `sprint230_occupational_medicine_core` | `oem_employers` (NSSA number, industry sector, contracted services); `oem_employee_links` (patient-to-employer, job title, department, hazard class); `oem_encounters` (pre-employment/periodic/exit/FFD visit, exam findings); `oem_certificates` (FFD category, restrictions, valid until, issued by) — includes status triggers for is_active |
+| `sprint231_occ_surveillance_rtw` | `oem_hazard_profiles` (employer hazards with type, OEL, BEI, control measures); `oem_exposure_records` (measured value, unit, generated `exceeds_oel`); `oem_biological_monitoring` (analyte, specimen, result, generated `exceeds_bei`); `oem_surveillance_schedule` (due date, generated `is_overdue`, generated `days_overdue`); `oem_rtw_plans` (restriction codes, graded return, employer_signed_at, status) |
 
 ### System-level column additions (via `ensureSubscriptionSchema()`)
 
@@ -156,6 +176,26 @@ Every controller must appear in `controllers: []`.
 | `SubscriptionPlansController` | `/subscription-plans` | Plan tier listing, tenant usage meter read, upgrade/downgrade, limit enforcement |
 | `WhoPartographController` | `/maternity/partograph` | Partograph session creation, time-series observation recording, alert/action line computation |
 | `RadiologyNotificationsController` | `/radiology/notifications` | Report finalisation notifications (push + SMS) to ordering clinician; critical finding alerts |
+| `CathLabController` | `/cathlab` | Case scheduling, procedure records, per-vessel lesion register, STEMI activation log |
+| `CathLabAiController` | `/cathlab/ai` | AI risk stratification (ACS, contrast nephropathy, bleeding), real-time CathLab AI recommendations |
+| `IcuController` | `/icu` | Bed registry, admissions with APACHE II/SOFA, fluid balance, vasopressors, ventilator, daily quality scores |
+| `IcuAiController` | `/icu/ai` | AI sepsis alerts, deterioration detection, bundle compliance monitoring |
+| `NicuController` | `/nicu` | Admissions, phototherapy, KMC, feeds, neonatal drug dosing, discharge summaries |
+| `NicuAdvancedController` | `/nicu/advanced` | HIE grading + cooling, coagulation management, targeted neonatal echo, neonatal POCT |
+| `WellBabyController` | `/well-baby` | Well-child encounters with WHO z-scores, ASQ-3 developmental screening, supplements |
+| `ImmunisationController` | `/immunisation` | Zimbabwe EPI schedule, catch-up computation, cold-chain log, AEFI recording, cohort coverage analytics |
+| `NeonatalScreeningController` | `/neonatal-screening` | NBS heel-prick, OAE/AABR hearing, CCHD pulse-ox, ROP, bilirubin Bhutani, DDH ultrasound |
+| `DialysisController` | `/dialysis` | HD/PD/CRRT session records, Kt/V, vascular access management |
+| `AviationMedicineController` | `/aviation-medicine` | AME registry, Class 1/2/LAPL structured medical exams, fitness certificate generation |
+| `HyperbaricController` | `/hyperbaric` | HBOT session scheduling, contraindication pre-screen, treatment records, wound outcome tracking |
+| `ProstheticsController` | `/prosthetics` | Amputee register, prosthetic device prescription and fitting, K-level outcomes (6MWT/TUG/PLUS-M) |
+| `PerinatalMentalHealthController` | `/perinatal-mental-health` | EPDS administration, bonding assessment, safeguarding flags, psychiatric referrals |
+| `NicuFollowupController` | `/nicu/followup` | High-risk neonatal follow-up register, Bayley assessments, corrected-age scheduling |
+| `PatientTransportController` | `/transport` | Fleet management, inter-facility transfer requests, dispatch workflow, handover records |
+| `AestheticsController` | `/aesthetics` | Treatment register, safety screening, photo documentation, interval scheduling, CDSS alerts |
+| `PaediatricCardiologyController` | `/paed-cardiology` | CHD register, structured echo reports, intervention log, follow-up scheduling, SBE prophylaxis |
+| `OccupationalMedicineController` | `/oem` | Employer register, employee-patient links, FFD encounters, fitness certificates, dashboard |
+| `OemSurveillanceController` | `/oem/surveillance` | Hazard profiles, exposure records (`exceeds_oel`), bio monitoring (`exceeds_bei`), overdue surveillance, RTW plans |
 
 ---
 

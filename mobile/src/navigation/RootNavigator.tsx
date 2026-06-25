@@ -27,6 +27,17 @@ import NicuDrugDoseScreen from "../screens/NicuDrugDoseScreen";
 import WellBabyScreen from "../screens/WellBabyScreen";
 import VaccinationCardScreen from "../screens/VaccinationCardScreen";
 import NeonatalScreeningScreen from "../screens/NeonatalScreeningScreen";
+import DialysisSessionScreen from "../screens/DialysisSessionScreen";
+import AviationCertScreen from "../screens/AviationCertScreen";
+import HbotSessionScreen from "../screens/HbotSessionScreen";
+import ProstheticsScreen from "../screens/ProstheticsScreen";
+import EpdsScreen from "../screens/EpdsScreen";
+import NicuFollowupScreen from "../screens/NicuFollowupScreen";
+import TransportDispatchScreen from "../screens/TransportDispatchScreen";
+import AestheticsTreatmentScreen from "../screens/AestheticsTreatmentScreen";
+import PaedCardiologyScreen from "../screens/PaedCardiologyScreen";
+import OccupationalMedicineScreen from "../screens/OccupationalMedicineScreen";
+import OemRtwScreen from "../screens/OemRtwScreen";
 
 import { NurseShiftScreen }  from "../components/nurse/NurseShiftScreen";
 import { NurseVitalsScreen } from "../components/nurse/NurseVitalsScreen";
@@ -92,6 +103,17 @@ const DoctorNavigator = () => (
     <DoctorStack.Screen name="WellBaby" component={WellBabyScreen} options={{ title: 'Well-Baby', headerShown: true }} />
     <DoctorStack.Screen name="VaccinationCard" component={VaccinationCardScreen} options={{ title: 'Vaccination Card', headerShown: true }} />
     <DoctorStack.Screen name="NeonatalScreening" component={NeonatalScreeningScreen} options={{ title: 'Newborn Screening', headerShown: true }} />
+    <DoctorStack.Screen name="DialysisSession" component={DialysisSessionScreen} options={{ title: 'Dialysis Sessions', headerShown: true }} />
+    <DoctorStack.Screen name="AviationCert" component={AviationCertScreen} options={{ title: 'Aviation Certificates', headerShown: true }} />
+    <DoctorStack.Screen name="HbotSession" component={HbotSessionScreen} options={{ title: 'HBOT Sessions', headerShown: true }} />
+    <DoctorStack.Screen name="Prosthetics" component={ProstheticsScreen} options={{ title: 'Prosthetic Devices', headerShown: true }} />
+    <DoctorStack.Screen name="Epds" component={EpdsScreen} options={{ title: 'EPDS Screening', headerShown: true }} />
+    <DoctorStack.Screen name="NicuFollowup" component={NicuFollowupScreen} options={{ title: 'NICU Follow-up', headerShown: true }} />
+    <DoctorStack.Screen name="TransportDispatch" component={TransportDispatchScreen} options={{ title: 'Transport Dispatch', headerShown: true }} />
+    <DoctorStack.Screen name="AestheticsTreatment" component={AestheticsTreatmentScreen} options={{ title: 'Aesthetics Treatment', headerShown: true }} />
+    <DoctorStack.Screen name="PaedCardiology" component={PaedCardiologyScreen} options={{ title: 'Paediatric Cardiology', headerShown: true }} />
+    <DoctorStack.Screen name="OccupationalMedicine" component={OccupationalMedicineScreen} options={{ title: 'Occ. Medicine', headerShown: true }} />
+    <DoctorStack.Screen name="OemRtw" component={OemRtwScreen} options={{ title: 'Return to Work', headerShown: true }} />
   </DoctorStack.Navigator>
 );
 

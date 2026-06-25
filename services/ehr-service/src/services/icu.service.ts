@@ -1,7 +1,37 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { CdssService } from './cdss.service';
 
 @Injectable()
 export class IcuService {
+  constructor(
+    @Optional() private readonly _dataSource?: any,
+    @Optional() private readonly cdssService?: CdssService,
+  ) {}
+
+  async ventProtocol(body: any): Promise<any> {
+    return this.cdssService?.getGuidelines('mechanical ventilation lung protective protocol', {
+      specialty: 'acute_care',
+      module: 'critical_care',
+      ...body,
+    });
+  }
+
+  async assessSedation(body: any): Promise<any> {
+    return this.cdssService?.getGuidelines('ICU sedation analgesia delirium PADIS', {
+      specialty: 'acute_care',
+      module: 'critical_care',
+      ...body,
+    });
+  }
+
+  async calculateSofa(body: any): Promise<any> {
+    return this.cdssService?.riskAssessment({
+      context: 'sofa_score',
+      specialty: 'acute_care',
+      module: 'critical_care',
+      ...body,
+    });
+  }
 
   async getCensus(db: any, icuType?: string): Promise<any[]> {
     return db.query(

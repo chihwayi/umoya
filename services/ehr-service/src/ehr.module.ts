@@ -277,6 +277,28 @@ import { ImmunisationController } from './controllers/immunisation.controller';
 import { ImmunisationService } from './services/immunisation.service';
 import { NeonatalScreeningController } from './controllers/neonatal-screening.controller';
 import { NeonatalScreeningService } from './services/neonatal-screening.service';
+import { DialysisController } from './controllers/dialysis.controller';
+import { DialysisService } from './services/dialysis.service';
+import { AviationMedicineController } from './controllers/aviation-medicine.controller';
+import { AviationMedicineService } from './services/aviation-medicine.service';
+import { HyperbaricController } from './controllers/hyperbaric.controller';
+import { HyperbaricService } from './services/hyperbaric.service';
+import { ProstheticsController } from './controllers/prosthetics.controller';
+import { ProstheticsService } from './services/prosthetics.service';
+import { PerinatalMentalHealthController } from './controllers/perinatal-mental-health.controller';
+import { PerinatalMentalHealthService } from './services/perinatal-mental-health.service';
+import { NicuFollowupController } from './controllers/nicu-followup.controller';
+import { NicuFollowupService } from './services/nicu-followup.service';
+import { OccupationalMedicineController } from './controllers/occupational-medicine.controller';
+import { OccupationalMedicineService } from './services/occupational-medicine.service';
+import { OemSurveillanceController } from './controllers/oem-surveillance.controller';
+import { OemSurveillanceService } from './services/oem-surveillance.service';
+import { PatientTransportController } from './controllers/patient-transport.controller';
+import { PatientTransportService } from './services/patient-transport.service';
+import { AestheticsController } from './controllers/aesthetics.controller';
+import { AestheticsService } from './services/aesthetics.service';
+import { PaediatricCardiologyController } from './controllers/paediatric-cardiology.controller';
+import { PaediatricCardiologyService } from './services/paediatric-cardiology.service';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -895,6 +917,17 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     WellBabyController,
     ImmunisationController,
     NeonatalScreeningController,
+    DialysisController,
+    AviationMedicineController,
+    HyperbaricController,
+    ProstheticsController,
+    PerinatalMentalHealthController,
+    NicuFollowupController,
+    PatientTransportController,
+    AestheticsController,
+    PaediatricCardiologyController,
+    OccupationalMedicineController,
+    OemSurveillanceController,
   ],
   providers: [
     NotificationCenterService,
@@ -1242,6 +1275,17 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     WellBabyService,
     ImmunisationService,
     NeonatalScreeningService,
+    DialysisService,
+    AviationMedicineService,
+    HyperbaricService,
+    ProstheticsService,
+    PerinatalMentalHealthService,
+    NicuFollowupService,
+    PatientTransportService,
+    AestheticsService,
+    PaediatricCardiologyService,
+    OccupationalMedicineService,
+    OemSurveillanceService,
     MfaGuard,
     {
       provide: APP_GUARD,

@@ -65,10 +65,13 @@ declare module 'lucide-react-native' {
   export const Thermometer: Icon;
   export const TrendingDown: Icon;
   export const TrendingUp: Icon;
+  export const Truck: Icon;
   export const User: Icon;
   export const Users: Icon;
   export const XCircle: Icon;
   export const Zap: Icon;
+  export const Sparkles: Icon;
+  export const Calendar: Icon;
 }
 
 declare module 'socket.io-client' {

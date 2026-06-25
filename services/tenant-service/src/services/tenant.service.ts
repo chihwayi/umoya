@@ -123,6 +123,16 @@ const ALL_MODULE_KEYS = [
   'well_baby_clinic',
   'immunisation',
   'neonatal_screening',
+  'dialysis',
+  'aviation_medicine',
+  'hyperbaric',
+  'prosthetics',
+  'perinatal_mental_health',
+  'patient_transport',
+  'aesthetics',
+  'paediatric_cardiology',
+  'nicu_followup',
+  'occupational_medicine',
 ] as const;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;

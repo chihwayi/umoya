@@ -3,6 +3,9 @@ describe('SmsService logic', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    // jest.spyOn requires the property to exist as an own property on global.
+    // After restoreAllMocks() the spy is removed; re-seed it before each test.
+    (global as any).fetch = jest.fn();
   });
 
   afterEach(() => {

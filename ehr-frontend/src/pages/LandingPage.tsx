@@ -93,6 +93,22 @@ const interestOptions = [
   'Automated notification center',
   'Tiered SaaS subscription plans',
   'True offline-first app shell (load-shedding resilient)',
+  'Cardiac Catheterisation Lab (CathLab + AI risk)',
+  'ICU / Critical Care with AI quality dashboard',
+  'NICU — neonatal ICU with HIE cooling and targeted echo',
+  'Well-Baby clinic with WHO z-scores and ASQ-3 screening',
+  'EPI / Immunisation programme with cold-chain and AEFI',
+  'Neonatal screening (NBS, hearing, CCHD, ROP, bilirubin)',
+  'Dialysis / Renal Replacement Therapy (HD, PD, CRRT)',
+  'Aviation medicine — CAAZ Class 1/2/LAPL medicals',
+  'Hyperbaric Oxygen Therapy (HBOT)',
+  'Prosthetics and Orthotics with outcome measures',
+  'Perinatal Mental Health (EPDS, bonding, safeguarding)',
+  'Post-NICU developmental follow-up with Bayley Scales',
+  'Patient Transport and inter-facility dispatch',
+  'Aesthetics and Regenerative Medicine with CDSS contraindication alerts',
+  'Paediatric Cardiology — CHD register, echo, interventions, SBE prophylaxis',
+  'Occupational Medicine — FFD, exposure surveillance, RTW coordination',
 ];
 
 const STANDARDS = [
@@ -111,10 +127,10 @@ const STANDARDS = [
 ];
 
 const stats = [
-  { value: '90+', label: 'Clinical modules', sub: 'From maternity and partograph to 9 new specialties' },
-  { value: '35+', label: 'AI capabilities', sub: 'Risk, forecasting, substitution, adherence, voice' },
+  { value: '110+', label: 'Clinical modules', sub: 'From maternity and CathLab to ICU, NICU, occupational medicine and beyond' },
+  { value: '40+', label: 'AI capabilities', sub: 'Risk, forecasting, substitution, adherence, voice, FFD, exposure, RTW' },
   { value: '8 langs', label: 'Mobile languages', sub: 'Auto-detected from device locale' },
-  { value: 'DHIS2', label: 'Program reporting', sub: 'HIV, maternal, vaccine cohorts' },
+  { value: 'DHIS2', label: 'Program reporting', sub: 'HIV, maternal, vaccine, ICU, neonatal cohorts' },
 ];
 
 const audiences = [
@@ -481,6 +497,26 @@ const modules = [
   { label: 'Notification Center', icon: MessageSquare, color: '#E8614D' },
   { label: 'Tiered Subscriptions', icon: BarChart3, color: '#0AA98A' },
   { label: 'Offline App Shell', icon: Zap, color: '#3B9EFF' },
+  { label: 'Cardiac Catheterisation Lab', icon: HeartPulse, color: '#E8614D' },
+  { label: 'CathLab AI Risk Panel', icon: Brain, color: '#0AA98A' },
+  { label: 'ICU / Critical Care', icon: Activity, color: '#3B9EFF' },
+  { label: 'ICU AI Quality Dashboard', icon: Sparkles, color: '#E8614D' },
+  { label: 'NICU — Neonatal ICU', icon: HeartPulse, color: '#0AA98A' },
+  { label: 'NICU Advanced (HIE, Echo)', icon: Brain, color: '#3B9EFF' },
+  { label: 'Well-Baby Clinic', icon: Users, color: '#E8614D' },
+  { label: 'EPI / Immunisation Programme', icon: ShieldCheck, color: '#0AA98A' },
+  { label: 'Neonatal Screening (NBS)', icon: FlaskConical, color: '#3B9EFF' },
+  { label: 'Dialysis / Renal Replacement', icon: Activity, color: '#E8614D' },
+  { label: 'Aviation Medicine (CAAZ)', icon: Zap, color: '#0AA98A' },
+  { label: 'Hyperbaric Oxygen (HBOT)', icon: TrendingUp, color: '#3B9EFF' },
+  { label: 'Prosthetics & Orthotics', icon: Workflow, color: '#E8614D' },
+  { label: 'Perinatal Mental Health (EPDS)', icon: HeartPulse, color: '#0AA98A' },
+  { label: 'Post-NICU Developmental Follow-up', icon: CheckCircle2, color: '#3B9EFF' },
+  { label: 'Patient Transport & Dispatch', icon: Network, color: '#E8614D' },
+  { label: 'Aesthetics & Regenerative', icon: Sparkles, color: '#0AA98A' },
+  { label: 'Paediatric Cardiology (CHD)', icon: HeartPulse, color: '#3B9EFF' },
+  { label: 'Occupational Medicine (OEM)', icon: Shield, color: '#E8614D' },
+  { label: 'OEM Surveillance & RTW', icon: TrendingUp, color: '#0AA98A' },
 ];
 
 const liveActivityItems = [
@@ -533,6 +569,27 @@ const liveActivityItems = [
   { type: 'mcaz',      text: 'MCAZ register: Morphine 10 mg/mL ampoule × 2 dispensed to patient #9021 — controlled-substance log entry captured with pharmacist signature', color: '#E8614D' },
   { type: 'notif',     text: 'Notification center: 24-hour appointment reminder batch — 47 SMS and 39 email reminders sent; 3 patients opted out of channel', color: '#3B9EFF' },
   { type: 'offline',   text: 'Offline replay: Power restored after 3-hour load-shedding — 14 queued vitals, 3 triage forms, and 1 ward round replayed idempotently; 0 conflicts', color: '#0AA98A' },
+  { type: 'cathlab',  text: 'CathLab STEMI activation: Door-to-balloon timer started — 12-lead ECG uploaded, cath team paged, procedure room primed for primary PCI', color: '#E8614D' },
+  { type: 'cathai',   text: 'CathLab AI: ACS risk 84% — contrast nephropathy risk HIGH (CKD stage 3, DM) → IV hydration protocol loaded before procedure', color: '#0AA98A' },
+  { type: 'icu',      text: 'ICU AI alert: SOFA score increased from 6 → 9 over 24 h — sepsis bundle compliance 2/5 elements missing → automatic escalation to intensivist', color: '#E8614D' },
+  { type: 'icuvent',  text: 'ICU ventilator: Patient on SIMV-VC, RSBI computed as 48 — spontaneous breathing trial initiated; VAP prevention bundle marked complete by nurse', color: '#3B9EFF' },
+  { type: 'nicu',     text: 'NICU phototherapy: Bilirubin 285 μmol/L at 48 h of life (Bhutani high-intermediate zone) — double phototherapy commenced, recheck in 6 hours', color: '#E8614D' },
+  { type: 'nicuhie',  text: 'NICU HIE: Grade II hypoxic-ischaemic encephalopathy confirmed — therapeutic hypothermia cooling initiated (33.5 °C target), neuroprotection protocol started', color: '#E8614D' },
+  { type: 'wellbaby', text: 'Well-baby clinic: 6-week visit — WAZ −0.8, HAZ −0.5 (normal range); ASQ-3 score: all domains above cutoff; breastfeeding exclusively — next visit at 10 weeks', color: '#0AA98A' },
+  { type: 'epi',      text: 'EPI programme: 14-week immunisation — DTP-HepB-Hib + PCV13 + Rota administered; cold-chain temperature 2.4 °C confirmed; AEFI none reported', color: '#3B9EFF' },
+  { type: 'nbs',      text: 'Neonatal screening: Heel-prick result — TSH 68 mIU/L (flagged) → congenital hypothyroidism suspected → levothyroxine protocol initiated; paediatric endocrine referral raised', color: '#E8614D' },
+  { type: 'dialysis', text: 'Dialysis session: 4-hour HD completed — Kt/V 1.42, ultrafiltration 2.1 L; AV fistula patent; no intra-dialytic hypotension; next session scheduled in 2 days', color: '#0AA98A' },
+  { type: 'aviation', text: 'Aviation medicine: Class 1 medical renewal completed — BP 128/82, spirometry FEV1 98%, no disqualifying conditions found; CAAZ certificate issued, valid 12 months', color: '#3B9EFF' },
+  { type: 'hbot',     text: 'HBOT session: Diabetic foot ulcer — 20th session completed at 2.4 ATA × 90 min; wound area reduced 38% vs baseline; granulation tissue positive', color: '#0AA98A' },
+  { type: 'prosth',   text: 'Prosthetics: BKA patient — K3 level confirmed; transtibial prosthesis fitted; 6-minute walk test 310 m; physiotherapy referral issued for gait training', color: '#3B9EFF' },
+  { type: 'epds',     text: 'Perinatal mental health: EPDS score 14 at 6-week postnatal visit (threshold exceeded) — maternal depression likely; urgent psychiatry referral raised; safeguarding flag set', color: '#E8614D' },
+  { type: 'nicufu',   text: 'NICU follow-up: Corrected age 12 months — Bayley cognitive 95 (average), language 88 (slightly below); neurology referral raised; next visit at corrected 18 months', color: '#3B9EFF' },
+  { type: 'transport',text: 'Patient transport: Inter-facility transfer — NICU patient to central hospital; vehicle dispatched (BAS-441Z), paramedic on board; handover document pre-populated', color: '#0AA98A' },
+  { type: 'aesthetics',text: 'Aesthetics CDSS: Fitzpatrick type IV — fractional CO₂ contraindication flagged (high PIH risk); clinician switched to MNRF microneedling; consent recorded', color: '#3B9EFF' },
+  { type: 'paedcard', text: 'Paediatric cardiology: VSD (large perimembranous) — PASP 52 mmHg — has_pulmonary_hypertension flagged → urgent paediatric cardiac surgery referral; SBE prophylaxis record created', color: '#E8614D' },
+  { type: 'oem',      text: 'OEM: Pre-employment FFD — BP 172/106, hypertension stage 2 → CDSS triggered "temporarily unfit" category; specialist review flag raised; certificate withheld pending cardiology clearance', color: '#E8614D' },
+  { type: 'oemsurveil',text: 'OEM surveillance: Silica dust exposure at quarry site — measured value 0.34 mg/m³ (OEL 0.05 mg/m³, exceeds_oel = true) → CDSS alert fired; respiratory protective equipment audit scheduled', color: '#3B9EFF' },
+  { type: 'oemrtw',   text: 'OEM RTW: Graded return-to-work plan signed off by employer — patient back to light duties week 1, half duties week 2, full duties week 3; CDSS job-demand match: 0 conflicts', color: '#0AA98A' },
 ];
 
 export default function LandingPage() {
@@ -756,7 +813,7 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="mt-7 max-w-2xl text-[1.05rem] leading-[1.9] text-[#7A9CBC]">
-                  Umoya is the clinical operating system built for Africa and the world. AI-first, offline-capable, and deeply human — 90+ clinical modules, 35+ AI capabilities, FHIR R4, DHIS2, SNOMED CT, and a multilingual mobile app in 8 languages. Designed for clinicians in Harare, Johannesburg, Nairobi, Lusaka, Maputo — and everywhere care cannot wait for a signal.
+                  Umoya is the clinical operating system built for Africa and the world. AI-first, offline-capable, and deeply human — 110+ clinical modules, 40+ AI capabilities, FHIR R4, DHIS2, SNOMED CT, and a multilingual mobile app in 8 languages. Designed for clinicians in Harare, Johannesburg, Nairobi, Lusaka, Maputo — and everywhere care cannot wait for a signal.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -778,7 +835,7 @@ export default function LandingPage() {
 
                 {/* Compliance badges */}
                 <div className="mt-8 flex flex-wrap gap-2">
-                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2 18-profile', 'LOINC', 'HIPAA-aware', 'HL7', 'X12 EDI', '90+ modules', '35+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS', 'MCAZ', 'AHFoZ tariffs', 'Inventory AI', 'WHO Partograph', 'Tracker sync', 'Benchmark pull-back'].map((tag) => (
+                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2 18-profile', 'LOINC', 'HIPAA-aware', 'HL7', 'X12 EDI', '110+ modules', '40+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS', 'MCAZ', 'AHFoZ tariffs', 'Inventory AI', 'WHO Partograph', 'CathLab AI', 'ICU + NICU', 'EPI / NBS', 'Occ. Medicine', 'Tracker sync', 'Benchmark pull-back'].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8FA8CC]"

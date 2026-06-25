@@ -62,6 +62,17 @@ const NicuDashboard      = lazy(() => import('./pages/NicuDashboard'));
 const WellBabyDashboard  = lazy(() => import('./pages/WellBabyDashboard'));
 const EpiDashboard       = lazy(() => import('./pages/EpiDashboard'));
 const NeonatalScreeningDashboard = lazy(() => import('./pages/NeonatalScreeningDashboard'));
+const DialysisDashboard = lazy(() => import('./pages/DialysisDashboard'));
+const AviationMedicineDashboard = lazy(() => import('./pages/AviationMedicineDashboard'));
+const HbotDashboard = lazy(() => import('./pages/HbotDashboard'));
+const ProstheticsDashboard = lazy(() => import('./pages/ProstheticsDashboard'));
+const PmhDashboard = lazy(() => import('./pages/PmhDashboard'));
+const NicuFollowupDashboard = lazy(() => import('./pages/NicuFollowupDashboard'));
+const TransportDashboard = lazy(() => import('./pages/TransportDashboard'));
+const AestheticsDashboard = lazy(() => import('./pages/AestheticsDashboard'));
+const PaedCardiologyDashboard = lazy(() => import('./pages/PaedCardiologyDashboard'));
+const OccupationalMedicineDashboard = lazy(() => import('./pages/OccupationalMedicineDashboard'));
+const OemSurveillanceDashboard = lazy(() => import('./pages/OemSurveillanceDashboard'));
 const PACUDashboard = lazy(() => import('./pages/PACUDashboard'));
 const MARDashboard = lazy(() => import('./pages/MARDashboard'));
 const BloodBankDashboard = lazy(() => import('./pages/BloodBankDashboard'));
@@ -868,6 +879,105 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="neonatal_screening">
                   <NeonatalScreeningDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 241: Dialysis */}
+            <Route
+              path="/ehr/:tenantSlug/dialysis"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="dialysis">
+                  <DialysisDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 242: Aviation Medicine */}
+            <Route
+              path="/ehr/:tenantSlug/aviation-medicine"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'admin']} moduleKey="aviation_medicine">
+                  <AviationMedicineDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 243: Hyperbaric Medicine */}
+            <Route
+              path="/ehr/:tenantSlug/hbot"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="hyperbaric">
+                  <HbotDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 244: Prosthetics & Rehabilitation */}
+            <Route
+              path="/ehr/:tenantSlug/prosthetics"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="prosthetics">
+                  <ProstheticsDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 245: Perinatal Mental Health */}
+            <Route
+              path="/ehr/:tenantSlug/perinatal-mental-health"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="perinatal_mental_health">
+                  <PmhDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 246: NICU Follow-up */}
+            <Route
+              path="/ehr/:tenantSlug/nicu-followup"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="nicu">
+                  <NicuFollowupDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 247: Patient Transport */}
+            <Route
+              path="/ehr/:tenantSlug/transport"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="patient_transport">
+                  <TransportDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 249: Paediatric Cardiology */}
+            <Route
+              path="/ehr/:tenantSlug/paed-cardiology"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="paediatric_cardiology">
+                  <PaedCardiologyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 230: Occupational Medicine */}
+            <Route
+              path="/ehr/:tenantSlug/occupational-medicine"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="occupational_medicine">
+                  <OccupationalMedicineDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 231: OEM Surveillance & RTW */}
+            <Route
+              path="/ehr/:tenantSlug/oem-surveillance"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="occupational_medicine">
+                  <OemSurveillanceDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 248: Aesthetics & Wellness */}
+            <Route
+              path="/ehr/:tenantSlug/aesthetics"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="aesthetics">
+                  <AestheticsDashboard />
                 </RoleProtectedRoute>
               }
             />
