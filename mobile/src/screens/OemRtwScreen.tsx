@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { CheckCircle, Clock } from 'lucide-react-native';
+import { Icon } from '../components/ui/Icon';
 import { api } from '../services/api';
 import { C, FONT, RADIUS, SHADOW } from '../design/tokens';
 
@@ -55,8 +55,8 @@ export default function OemRtwScreen({ route }: { route: any }) {
             )}
             <View style={s.signRow}>
               {item.employer_signed
-                ? <CheckCircle size={14} color={C.green} />
-                : <Clock size={14} color={C.textMuted} />
+                ? <Icon name="check-circle" size={14} color={C.green} />
+                : <Icon name="clock" size={14} color={C.textMuted} />
               }
               <Text style={[s.signText, { color: item.employer_signed ? C.green : C.textMuted }]}>
                 {item.employer_signed ? 'Employer signed' : 'Awaiting employer sign-off'}

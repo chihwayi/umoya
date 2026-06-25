@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Users, Building2, FileCheck, AlertTriangle } from 'lucide-react';
-import api from '../services/api';
+import { api } from '../services/api';
 
 interface Employer { id: string; name: string; industry_sector: string; is_active: boolean; }
 interface DashSummary { employers: { total: string; active: string }; recentEncounters: any[]; activeCertificates: any[]; }

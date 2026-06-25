@@ -61,6 +61,10 @@ export const ICONS = {
   'alert-triangle':'M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z M12 9v4 M12 17h.01',
   zap:            'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
   flask:          'M9 3h6m-5 0v6l-5 9a1 1 0 00.9 1.5h10.2a1 1 0 00.9-1.5L11 9V3',
+  // Occupational Medicine
+  briefcase:      'M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16',
+  clock:          'M12 22a10 10 0 100-20 10 10 0 000 20z M12 6v6l4 2',
+  'check-circle': 'M22 11.08V12a10 10 0 11-5.93-9.14 M22 4L12 14.01l-3-3',
 } as const;
 
 export type IconName = keyof typeof ICONS;

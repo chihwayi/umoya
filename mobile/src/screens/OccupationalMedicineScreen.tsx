@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   ActivityIndicator, ScrollView,
 } from 'react-native';
-import { Building2 } from 'lucide-react-native';
+import { Icon } from '../components/ui/Icon';
 import { api } from '../services/api';
 import { C, FONT, RADIUS, SHADOW } from '../design/tokens';
 
@@ -43,7 +43,7 @@ export default function OccupationalMedicineScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.card}>
             <View style={styles.cardRow}>
-              <Building2 size={18} color={C.teal} />
+              <Icon name="briefcase" size={18} color={C.teal} />
               <Text style={styles.cardTitle}>{item.name}</Text>
             </View>
             <Text style={styles.cardSub}>{item.industry_sector ?? 'General industry'}</Text>

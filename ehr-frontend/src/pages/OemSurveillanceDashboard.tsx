@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Clock, CheckCircle } from 'lucide-react';
-import api from '../services/api';
+import { api } from '../services/api';
 
 interface OverdueItem {
   id: string;
