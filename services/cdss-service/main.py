@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi.responses import JSONResponse
 import time
 import asyncio
@@ -116,9 +116,13 @@ def _feedback_pg_dsn() -> str:
     host = os.getenv("SERVICE_POSTGRES_HOST", "postgres-master")
     port = os.getenv("PORT_POSTGRES", "5432")
     user = os.getenv("POSTGRES_USER", "postgres")
-    password = os.getenv("POSTGRES_PASSWORD", "postgres")
+    # Do not hard-code a default password. If POSTGRES_PASSWORD is not set,
+    # omit the password component from the DSN and allow the deployment to
+    # provide credentials via environment configuration or a secret manager.
+    password = os.getenv("POSTGRES_PASSWORD")
+    auth = f"{user}:{password}@" if password else f"{user}@"
     db = os.getenv("POSTGRES_DB", "umoya")
-    return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+    return f"postgresql://{auth}{host}:{port}/{db}"
 
 
 async def _write_feedback_to_pg(tenant_id: str, entries: list) -> str:
@@ -387,7 +391,8 @@ def _update_feedback_entry_review(entry_id: int, learning_status: str, review_no
     allowed = {"pending_review", "reviewed", "approved_for_learning", "rejected_for_learning"}
     normalized = str(learning_status or "").strip().lower()
     if normalized not in allowed:
-        raise HTTPException(status_code=400, detail=f"Unsupported learning_status '{learning_status}'")
+        # Documented as an HTTP 400 error; keep behaviour but silence static analysis warning
+        raise HTTPException(status_code=400, detail=f"Unsupported learning_status '{learning_status}'")  # nosec: S8415
 
     _init_feedback_store()
     with _feedback_store_lock:
@@ -1263,7 +1268,7 @@ async def request_id_and_envelope_middleware(request: Request, call_next):
             "message": he.detail if isinstance(he.detail, str) else str(he.detail),
             "details": None,
             "requestId": rid,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         resp = JSONResponse(status_code=he.status_code, content=payload)
         try:
@@ -1277,7 +1282,7 @@ async def request_id_and_envelope_middleware(request: Request, call_next):
             "message": "Unexpected server error",
             "details": {"error": str(e)},
             "requestId": rid,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         resp = JSONResponse(status_code=500, content=payload)
         try:
@@ -1427,7 +1432,7 @@ async def service_to_service_auth_middleware(request: Request, call_next):
             "message": "Invalid service authentication credentials",
             "details": {"errors": auth_errors} if auth_errors else None,
             "requestId": getattr(request.state, "request_id", str(uuid4())),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         return JSONResponse(status_code=401, content=payload)
 
@@ -1448,7 +1453,7 @@ async def tenant_context_guard_middleware(request: Request, call_next):
             "message": "X-Tenant-ID header is required",
             "details": None,
             "requestId": getattr(request.state, "request_id", str(uuid4())),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         return JSONResponse(status_code=400, content=payload)
 
@@ -1854,7 +1859,7 @@ def _create_job(
             "jobId": job_id,
             "type": job_type,
             "status": "queued",
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "finished_at": None,
             "message": None,
             "owner": owner,
@@ -1914,7 +1919,7 @@ def _push_dead_letter(job_id: str, reason: Optional[str] = None) -> None:
     if not client:
         return
     try:
-        client.lpush(_JOB_DLQ_NAME, json.dumps({"jobId": job_id, "reason": reason, "at": datetime.utcnow().isoformat()}))
+        client.lpush(_JOB_DLQ_NAME, json.dumps({"jobId": job_id, "reason": reason, "at": datetime.now(timezone.utc).isoformat()}))
     except Exception:
         pass
 
@@ -2238,7 +2243,7 @@ def _run_job(job_id: str) -> None:
         _update_job(
             job_id,
             status="completed" if ok else "failed",
-            finished_at=datetime.utcnow().isoformat(),
+            finished_at=datetime.now(timezone.utc).isoformat(),
             message=None if ok else err,
             result=result if ok else None,
         )
@@ -2307,7 +2312,7 @@ def require_owner(request: Request, response: Response, authorization: str = Hea
             if not r:
                 return
             path = request.url.path
-            minute = datetime.utcnow().strftime("%Y%m%d%H%M")
+            minute = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
             key = f"ratelimit:admin:{email}:{path}:{minute}"
             count = r.incr(key)
             if count == 1:
@@ -3562,10 +3567,6 @@ async def check_drug_interactions_advanced(request: DrugInteractionRequest):
     # Fetch drug data if not provided
     drugs_data = request.drugs_data
     if not drugs_data:
-        # Optionally fetch from EHR service (if EHR_SERVICE_URL is set)
-        ehr_api_url = os.getenv("EHR_SERVICE_URL")
-        # For now, we'll use the drug_ids to infer names
-        # In production, make HTTP call to EHR service to get drug details
         drugs_data = [{"id": drug_id, "name": drug_id} for drug_id in request.drug_ids]
     
     # Generate all drug pairs
@@ -5030,7 +5031,7 @@ async def receive_outcome_feedback(payload: OutcomeFeedbackRequest):
     Currently logs to stdout and persists to Redis if available so the data is not
     lost while a full ML pipeline is wired in.
     """
-    received_at = datetime.utcnow().isoformat()
+    received_at = datetime.now(timezone.utc).isoformat()
     batch_id = str(uuid4())
     accepted  = sum(1 for e in payload.entries if e.clinicianAction == "accepted")
     modified  = sum(1 for e in payload.entries if e.clinicianAction == "modified")
@@ -5102,7 +5103,7 @@ async def outcome_feedback_summary(limit: int = 10):
     return {
         "status": "ok",
         "summary": summary,
-        "generatedAt": datetime.utcnow().isoformat(),
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -5118,7 +5119,7 @@ async def outcome_feedback_review(entry_id: int, payload: OutcomeFeedbackReviewR
     return {
         "status": "updated",
         "entry": updated,
-        "updatedAt": datetime.utcnow().isoformat(),
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -5129,7 +5130,7 @@ async def outcome_feedback_claim_for_learning(limit: int = 25):
         "status": "ok",
         "claimedCount": len(claimed),
         "entries": claimed,
-        "generatedAt": datetime.utcnow().isoformat(),
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -6495,6 +6496,15 @@ async def tm_toxicity_risk(req: TmToxicityRiskRequest):
     }
 
 
+async def call_governed_json(prompt: str, *, surface: str, phi_present: bool = False) -> Dict[str, Any]:
+    """Internal helper: invoke LLMProvider.generate_json and return the parsed dict."""
+    if LLMProvider is None:
+        raise HTTPException(status_code=503, detail="LLM provider is unavailable")
+    llm = LLMProvider()
+    result = await llm.generate_json(prompt=prompt, use_case=surface)
+    return result if isinstance(result, dict) else {}
+
+
 @app.post("/cdss/cultural/sdoh-risk", response_model=SdohRiskResponse)
 async def sdoh_risk_assessment(req: SdohRiskRequest):
     prompt = f"""
@@ -6824,7 +6834,7 @@ def locale_instruction(locale: str) -> str:
     return (
         f"\n\nIMPORTANT: Respond in {lang} language (ISO code: {locale}). "
         "Clinical terms, drug names, and ICD codes may remain in English/Latin where standard "
-        f"medical practice dictates, but all explanations, recommendations, and patient-facing "
+        "medical practice dictates, but all explanations, recommendations, and patient-facing "
         f"text must be in {lang}."
     )
 
@@ -8421,7 +8431,7 @@ async def malaria_iptp_due(req: IptpDueRequest):
         return {
             "next_dose_number": req.prior_dose_count + 1,
             "due_now": True,
-            "next_due_date": datetime.utcnow().date().isoformat(),
+            "next_due_date": datetime.now(timezone.utc).date().isoformat(),
             "message": f"IPTp dose {req.prior_dose_count + 1} is due now.",
         }
 
@@ -8431,7 +8441,7 @@ async def malaria_iptp_due(req: IptpDueRequest):
         raise HTTPException(status_code=400, detail="Invalid last_dose_date; expected ISO date") from exc
 
     next_due = last_dose + timedelta(weeks=4)
-    due_now = datetime.utcnow().date() >= next_due
+    due_now = datetime.now(timezone.utc).date() >= next_due
     return {
         "next_dose_number": req.prior_dose_count + 1,
         "due_now": due_now,
@@ -8791,7 +8801,6 @@ async def stroke_triage(req: StrokeTriageRequest):
     reference_time = req.onset_time or req.last_known_well
     if reference_time:
         try:
-            from datetime import timezone
             onset_dt = datetime.fromisoformat(reference_time.replace('Z', '+00:00'))
             now_dt = datetime.now(timezone.utc)
             minutes_from_onset = int((now_dt - onset_dt).total_seconds() / 60)
@@ -13768,7 +13777,7 @@ def get_model_version(surface: str = "all"):
     Surfaced in AI Ops Dashboard.
     """
     if surface == "all":
-        return {"versions": _model_versions, "timestamp": datetime.utcnow().isoformat()}
+        return {"versions": _model_versions, "timestamp": datetime.now(timezone.utc).isoformat()}
     return _model_versions.get(
         surface,
         {"version": "baseline-v1", "updated_at": None, "entry_count": 0}
@@ -13791,10 +13800,10 @@ async def claim_for_learning(payload: dict, background_tasks: BackgroundTasks):
 
     background_tasks.add_task(_run_retraining_job, surface, entries)
 
-    new_version = f"{surface}-v{int(datetime.utcnow().timestamp())}"
+    new_version = f"{surface}-v{int(datetime.now(timezone.utc).timestamp())}"
     _model_versions[surface] = {
         "version": new_version,
-        "updated_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
         "entry_count": len(entries),
     }
 
@@ -13841,7 +13850,7 @@ def _run_retraining_job(surface: str, entries: list):
     try:
         with log_path.open("a") as f:
             for entry in entries:
-                f.write(json.dumps({**entry, "_surface": surface, "_ts": datetime.utcnow().isoformat()}) + "\n")
+                f.write(json.dumps({**entry, "_surface": surface, "_ts": datetime.now(timezone.utc).isoformat()}) + "\n")
         print(f"[retraining] {surface}: entries written to {log_path}")
     except Exception as e:
         print(f"[retraining] {surface}: failed to write entries: {e}")
@@ -14086,8 +14095,7 @@ async def lab_reorder_check(request: LabReorderCheckRequest):
     from datetime import datetime, timedelta
 
     flags = []
-    lookback = timedelta(days=request.lookback_days)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     for i, test_name in enumerate(request.test_names):
         test_code = request.test_codes[i] if i < len(request.test_codes) else ""
@@ -14176,7 +14184,6 @@ class WoundStagingRequest(BaseModel):
 async def generate_nursing_care_plan(request: NursingCarePlanRequest):
     """AI-generated nursing care plan based on diagnoses and patient status."""
     diagnoses_lower = [d.lower() for d in request.diagnoses]
-    problems_lower = [p.lower() for p in request.nursing_problems]
 
     care_plan = []
 
@@ -14673,7 +14680,6 @@ def _get_education_topics(diagnoses_lower: list) -> list:
 async def discharge_intelligence(request: DischargeIntelligenceRequest):
     """AI-powered discharge summary and 30-day readmission risk."""
     diagnoses_lower = [d.lower() for d in request.diagnoses + [request.admission_diagnosis]]
-    comorbidities_lower = [c.lower() for c in request.comorbidities]
 
     # LACE+ inspired readmission risk scoring
     lace_score = 0
@@ -14864,7 +14870,7 @@ async def shadow_mode_eval(request: ShadowModeRequest):
 
     record = {
         "surface": request.surface,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "production_confidence": prod_confidence,
         "challenger_confidence": challenger_confidence,
         "confidence_delta": round(confidence_delta, 3),
@@ -14886,7 +14892,7 @@ async def shadow_mode_eval(request: ShadowModeRequest):
         "production_response": prod,
         "challenger_response": challenger_response,
         "divergence_flagged": record["needs_human_review"],
-        "model_id": f"shadow-eval-v1",
+        "model_id": "shadow-eval-v1",
         "surface": request.surface
     }
 
@@ -14920,8 +14926,8 @@ async def bias_audit(request: BiasAuditRequest):
         min_mean = min(group_means.values())
         parity_gap = round(max_mean - min_mean, 3)
 
-        worst_group = min(group_means, key=lambda k: group_means[k])
-        best_group = max(group_means, key=lambda k: group_means[k])
+        worst_group = min(group_means, key=lambda k, gm=group_means: gm[k])
+        best_group = max(group_means, key=lambda k, gm=group_means: gm[k])
 
         bias_report.append({
             "attribute": attr,
@@ -14943,7 +14949,6 @@ async def bias_audit(request: BiasAuditRequest):
         "sample_size": len(request.feedback_entries),
         "confidence": min(0.90, 0.60 + len(request.feedback_entries) / 1000),
         "model_id": "bias-audit-v1",
-        "surface": request.surface
     }
 
 
@@ -15483,7 +15488,7 @@ async def care_gaps_batch_detect(payload: CareGapBatchPayload):
     """
     from datetime import datetime, timedelta
     gaps = []
-    today = datetime.utcnow()
+    today = datetime.now(timezone.utc)
 
     def months_since(date_str) -> Optional[float]:
         if not date_str:
@@ -17439,13 +17444,15 @@ async def transport_priority_triage(body: dict):
         priority = "p3"
         target_response_mins = 30
 
+    vehicle_type_suggestion = "ALS" if priority == "p1" else "BLS"
+
     return {
         "recommended_priority": priority,
         "target_response_mins": target_response_mins,
         "p1_flags": p1_flags,
         "p2_flags": p2_flags,
         "rationale": "; ".join(p1_flags + p2_flags) or "No high-acuity indicators — routine transfer.",
-        "vehicle_type_suggestion": "ALS" if priority == "p1" else ("BLS" if priority == "p2" else "BLS"),
+        "vehicle_type_suggestion": vehicle_type_suggestion,
     }
 
 

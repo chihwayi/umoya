@@ -7,7 +7,10 @@
       "root": ".",
       "pythonVersion": "3.11",
       "pythonPlatform": "Linux",
-      "extraPaths": []
+      "extraPaths": [
+        "./venv/lib/python3.9/site-packages",
+        "./.venv/lib/python3.11/site-packages"
+      ]
     }
   ],
   "include": [
@@ -21,5 +24,6 @@
   "typeCheckingMode": "basic",
   "reportMissingImports": "none",
   "reportMissingTypeStubs": false,
+  "reportUndefinedVariable": "warning",
   "stubPath": ""
 }

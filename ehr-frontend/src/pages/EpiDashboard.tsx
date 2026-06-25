@@ -80,6 +80,17 @@ export default function EpiDashboard() {
   const thisMonth = new Date().toISOString().slice(0, 7);
   const thisCoverage = coverage.filter(c => c.month?.startsWith(thisMonth));
 
+  let coldResultMessage = '';
+  if (coldResult) {
+    if (coldResult.error) {
+      coldResultMessage = coldResult.error;
+    } else if (coldResult.alert) {
+      coldResultMessage = `⚠ ${coldResult.alert}`;
+    } else {
+      coldResultMessage = `✓ Logged ${coldResult.temp_celsius}°C for ${coldResult.fridge_id} — within safe range.`;
+    }
+  }
+
   return (
     <div style={s.container}>
       <h1 style={s.heading}>EPI — Immunisation Management</h1>
@@ -152,7 +163,16 @@ export default function EpiDashboard() {
               {schedule.map(row => {
                 const complete = Number(row.doses_remaining) === 0;
                 const partial  = Number(row.doses_given) > 0 && !complete;
-                const statusColor = complete ? STATUS_COLOR.complete : partial ? STATUS_COLOR.partial : STATUS_COLOR.pending;
+                let statusColor = STATUS_COLOR.pending;
+                if (complete) {
+                  statusColor = STATUS_COLOR.complete;
+                } else if (partial) {
+                  statusColor = STATUS_COLOR.partial;
+                }
+                // determine status label without nested ternary
+                let statusLabel = 'Pending';
+                if (complete) statusLabel = '✓ Complete';
+                else if (partial) statusLabel = 'Partial';
                 return (
                   <tr key={row.antigen_code}>
                     <td style={{ ...s.td, fontFamily: 'monospace', color: '#0AA98A', fontWeight: 700 }}>{row.antigen_code}</td>
@@ -162,7 +182,7 @@ export default function EpiDashboard() {
                     <td style={{ ...s.td, color: Number(row.doses_remaining) > 0 ? '#C62828' : '#1B6B3A', fontWeight: 700 }}>{row.doses_remaining}</td>
                     <td style={s.td}>
                       <span style={{ background: `${statusColor}22`, color: statusColor, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>
-                        {complete ? '✓ Complete' : partial ? 'Partial' : 'Pending'}
+                        {statusLabel}
                       </span>
                     </td>
                   </tr>
@@ -178,26 +198,22 @@ export default function EpiDashboard() {
         <h2 style={s.sectionTitle}>Log Cold Chain Temperature</h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
-            <label style={s.label}>Fridge ID</label>
-            <input style={s.input} placeholder="FRIDGE-01" value={coldForm.fridgeId} onChange={e => setColdForm(f => ({ ...f, fridgeId: e.target.value }))} />
+            <label htmlFor="cold-fridge-id" style={s.label}>Fridge ID</label>
+            <input id="cold-fridge-id" style={s.input} placeholder="FRIDGE-01" value={coldForm.fridgeId} onChange={e => setColdForm(f => ({ ...f, fridgeId: e.target.value }))} />
           </div>
           <div>
-            <label style={s.label}>Temp (°C)</label>
-            <input style={s.input} type="number" step="0.1" placeholder="4.2" value={coldForm.tempCelsius} onChange={e => setColdForm(f => ({ ...f, tempCelsius: e.target.value }))} />
+            <label htmlFor="cold-temp-celsius" style={s.label}>Temp (°C)</label>
+            <input id="cold-temp-celsius" style={s.input} type="number" step="0.1" placeholder="4.2" value={coldForm.tempCelsius} onChange={e => setColdForm(f => ({ ...f, tempCelsius: e.target.value }))} />
           </div>
           <div>
-            <label style={s.label}>Notes</label>
-            <input style={s.input} placeholder="Optional" value={coldForm.notes} onChange={e => setColdForm(f => ({ ...f, notes: e.target.value }))} />
+            <label htmlFor="cold-notes" style={s.label}>Notes</label>
+            <input id="cold-notes" style={s.input} placeholder="Optional" value={coldForm.notes} onChange={e => setColdForm(f => ({ ...f, notes: e.target.value }))} />
           </div>
           <button style={s.btn} onClick={submitColdChain}>Log</button>
         </div>
         {coldResult && (
           <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: coldResult.is_excursion ? '#FFEBEE' : '#E8F5E9', color: coldResult.is_excursion ? '#C62828' : '#1B6B3A', fontSize: 13 }}>
-            {coldResult.error
-              ? coldResult.error
-              : coldResult.alert
-                ? `⚠ ${coldResult.alert}`
-                : `✓ Logged ${coldResult.temp_celsius}°C for ${coldResult.fridge_id} — within safe range.`}
+            {coldResultMessage}
           </div>
         )}
       </section>

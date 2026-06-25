@@ -28,17 +28,25 @@ def evaluate_jaundice(
     above_exchange = total_bilirubin_umol_l >= exchange_threshold
     above_photo    = total_bilirubin_umol_l >= photo_threshold
 
+    if above_exchange:
+        recommendation = "URGENT: Exchange transfusion threshold met. Escalate immediately."
+        urgency = "critical"
+    elif above_photo:
+        recommendation = (
+            "Start phototherapy — TSB above threshold for gestational age and hours of life."
+        )
+        urgency = "high"
+    else:
+        recommendation = (
+            "Monitor. TSB below phototherapy threshold. Repeat TSB as clinically indicated."
+        )
+        urgency = "routine"
+
     return {
         "photo_threshold":              photo_threshold,
         "exchange_threshold":           exchange_threshold,
         "above_phototherapy_threshold": above_photo,
         "above_exchange_threshold":     above_exchange,
-        "recommendation": (
-            "URGENT: Exchange transfusion threshold met. Escalate immediately."
-            if above_exchange else
-            "Start phototherapy — TSB above threshold for gestational age and hours of life."
-            if above_photo else
-            "Monitor. TSB below phototherapy threshold. Repeat TSB as clinically indicated."
-        ),
-        "urgency": "critical" if above_exchange else "high" if above_photo else "routine",
+        "recommendation":               recommendation,
+        "urgency":                      urgency,
     }
