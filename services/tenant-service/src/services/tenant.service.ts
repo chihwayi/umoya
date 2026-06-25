@@ -117,6 +117,12 @@ const ALL_MODULE_KEYS = [
   'infection_control',
   'revenue_cycle',
   'population_health',
+  'cathlab',
+  'intensive_care',
+  'nicu',
+  'well_baby_clinic',
+  'immunisation',
+  'neonatal_screening',
 ] as const;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;

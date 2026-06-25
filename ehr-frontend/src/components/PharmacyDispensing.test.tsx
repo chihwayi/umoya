@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PharmacyDispensing from './PharmacyDispensing';
 import { pharmacyApi } from '../services/api';
@@ -109,40 +109,33 @@ describe('PharmacyDispensing', () => {
   });
 
   it('requires pharmacist acknowledgment before dispensing a plan with AI review signals', async () => {
-    await act(async () => {
-      render(<PharmacyDispensing />);
-    });
+    render(<PharmacyDispensing />);
 
     await waitFor(() => {
-      expect(screen.queryByText('Amoxicillin')).not.toBeNull();
+      expect(screen.getByText('Amoxicillin')).toBeTruthy();
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByText('Amoxicillin').closest('.cursor-pointer') as Element);
-    });
+    fireEvent.click(screen.getByText('Amoxicillin'));
 
     await waitFor(() => {
       expect(pharmacyApi.prepareDispensePlan).toHaveBeenCalledWith({ prescriptionId: 'rx-1' }, 'token', 'kids-clinic');
-      expect(screen.queryByText(/AI Dispense Review/i)).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/AI Dispense Review/i)).toBeTruthy();
     });
 
     const dispenseButton = screen.getByRole('button', { name: /Dispense Prescription/i });
     expect((dispenseButton as HTMLButtonElement).disabled).toBe(true);
 
-    const acknowledgementCheckbox = screen
-      .getByText(/I reviewed the reconciliation, substitution, and stewardship guidance/i)
-      .closest('label')
-      ?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const acknowledgementCheckbox = screen.getByRole('checkbox', {
+      name: /I reviewed the reconciliation, substitution, and stewardship guidance/i,
+    }) as HTMLInputElement;
 
-    await act(async () => {
-      fireEvent.click(acknowledgementCheckbox);
-    });
+    fireEvent.click(acknowledgementCheckbox);
 
     expect((dispenseButton as HTMLButtonElement).disabled).toBe(false);
 
-    await act(async () => {
-      fireEvent.click(dispenseButton);
-    });
+    fireEvent.click(dispenseButton);
 
     await waitFor(() => {
       expect(pharmacyApi.dispensePrescription).toHaveBeenCalledWith(

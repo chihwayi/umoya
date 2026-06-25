@@ -261,6 +261,22 @@ import { CdssHealthController } from './controllers/cdss-health.controller';
 import { EducationPersonalizationController } from './controllers/education-personalization.controller';
 import { ProactiveRiskController } from './controllers/proactive-risk.controller';
 import { ProactiveAiController } from './controllers/proactive-ai.controller';
+import { CathLabController } from './controllers/cathlab.controller';
+import { CathLabService } from './services/cathlab.service';
+import { CathLabAiController } from './controllers/cathlab-ai.controller';
+import { CathLabAiService } from './services/cathlab-ai.service';
+import { IcuAiController } from './controllers/icu-ai.controller';
+import { IcuAiService } from './services/icu-ai.service';
+import { NicuController } from './controllers/nicu.controller';
+import { NicuService } from './services/nicu.service';
+import { NicuAdvancedController } from './controllers/nicu-advanced.controller';
+import { NicuAdvancedService } from './services/nicu-advanced.service';
+import { WellBabyController } from './controllers/well-baby.controller';
+import { WellBabyService } from './services/well-baby.service';
+import { ImmunisationController } from './controllers/immunisation.controller';
+import { ImmunisationService } from './services/immunisation.service';
+import { NeonatalScreeningController } from './controllers/neonatal-screening.controller';
+import { NeonatalScreeningService } from './services/neonatal-screening.service';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
 
@@ -871,6 +887,14 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalLlmController,
     CdssNlpController,
     StoreroomController,
+    CathLabController,
+    CathLabAiController,
+    IcuAiController,
+    NicuController,
+    NicuAdvancedController,
+    WellBabyController,
+    ImmunisationController,
+    NeonatalScreeningController,
   ],
   providers: [
     NotificationCenterService,
@@ -1210,6 +1234,14 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     BreachDetectionService,
     BackupService,
     PotrazNotificationService,
+    CathLabService,
+    CathLabAiService,
+    IcuAiService,
+    NicuService,
+    NicuAdvancedService,
+    WellBabyService,
+    ImmunisationService,
+    NeonatalScreeningService,
     MfaGuard,
     {
       provide: APP_GUARD,

@@ -1,95 +1,127 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { IcuService } from '../services/icu.service';
 
+@UseGuards(JwtAuthGuard)
 @Controller('icu')
 export class IcuController {
-  constructor(private readonly svc: IcuService) {}
+  constructor(private readonly icu: IcuService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
+  @Get('census')
+  getCensus(@Req() req: any, @Query('icuType') icuType?: string) {
+    return this.icu.getCensus(req.tenantDb, icuType);
   }
 
-  @Post('patient/:patientId/admission')
-  addAdmission(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addAdmission(this.tenant(h), { ...dto, patientId });
+  @Post('admissions')
+  admit(
+    @Req() req: any,
+    @Body() body: {
+      patientId: string;
+      encounterId?: string;
+      icuType?: string;
+      bedCode: string;
+      diagnosis?: string;
+      ventilatorRequired?: boolean;
+      isolationRequired?: boolean;
+      isolationType?: string;
+    },
+  ) {
+    return this.icu.admitPatient(req.tenantDb, req.user.id, body);
   }
 
-  @Get('patient/:patientId/admission')
-  getAdmissions(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getAdmissions(this.tenant(h), patientId);
+  @Patch('admissions/:id/discharge')
+  discharge(@Req() req: any, @Param('id') id: string, @Body() body: { destination?: string }) {
+    return this.icu.dischargePatient(req.tenantDb, id, body.destination);
   }
 
-  @Patch('admission/:id')
-  updateAdmission(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateAdmission(this.tenant(h), id, dto);
+  @Post('admissions/:id/vitals')
+  chartVitals(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.icu.chartVitals(req.tenantDb, req.user.id, id, body);
   }
 
-  @Post('patient/:patientId/sofa')
-  addSofa(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addSofa(this.tenant(h), { ...dto, patientId });
+  @Get('admissions/:id/vitals')
+  getVitals(@Req() req: any, @Param('id') id: string, @Query('hours') hours?: string) {
+    return this.icu.getVitals(req.tenantDb, id, Number(hours ?? 24));
   }
 
-  @Get('patient/:patientId/sofa')
-  getSofa(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getSofaScores(this.tenant(h), patientId);
+  @Post('admissions/:id/ventilator')
+  recordVentilator(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.icu.recordVentilatorSettings(req.tenantDb, req.user.id, id, body);
   }
 
-  @Post('patient/:patientId/vent')
-  addVent(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addVentSettings(this.tenant(h), { ...dto, patientId });
+  @Get('admissions/:id/ventilator')
+  getVentilatorHistory(@Req() req: any, @Param('id') id: string) {
+    return this.icu.getVentilatorHistory(req.tenantDb, id);
   }
 
-  @Get('patient/:patientId/vent')
-  getVent(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getVentSettings(this.tenant(h), patientId);
+  @Get('admissions/:id/ventilator-alarms')
+  getVentilatorAlarms(@Req() req: any, @Param('id') id: string) {
+    return this.icu.getActiveVentilatorAlarms(req.tenantDb, id);
   }
 
-  @Post('patient/:patientId/sedation')
-  addSedation(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addSedation(this.tenant(h), { ...dto, patientId });
+  @Post('admissions/:id/fluid-balance')
+  upsertFluidBalance(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.icu.upsertFluidBalance(req.tenantDb, req.user.id, id, body);
   }
 
-  @Get('patient/:patientId/sedation')
-  getSedation(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getSedation(this.tenant(h), patientId);
+  @Get('admissions/:id/fluid-balance')
+  getFluidBalance(@Req() req: any, @Param('id') id: string) {
+    return this.icu.getFluidBalance(req.tenantDb, id);
   }
 
-  @Post('patient/:patientId/line')
-  addLine(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addLine(this.tenant(h), { ...dto, patientId });
+  @Post('admissions/:id/infusions')
+  startInfusion(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { drugName: string; concentration?: string; rateMlHr?: number; doseMcgKgMin?: number; rationale?: string },
+  ) {
+    return this.icu.startInfusion(req.tenantDb, req.user.id, id, body);
   }
 
-  @Get('patient/:patientId/line')
-  getLines(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getLines(this.tenant(h), patientId);
+  @Patch('infusions/:infusionId/stop')
+  stopInfusion(@Req() req: any, @Param('infusionId') infusionId: string) {
+    return this.icu.stopInfusion(req.tenantDb, infusionId);
   }
 
-  @Patch('line/:id')
-  updateLine(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateLine(this.tenant(h), id, dto);
+  @Get('admissions/:id/infusions')
+  getActiveInfusions(@Req() req: any, @Param('id') id: string) {
+    return this.icu.getActiveInfusions(req.tenantDb, id);
   }
 
-  @Post('patient/:patientId/vasopressor')
-  addVasopressor(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addVasopressor(this.tenant(h), { ...dto, patientId });
+  @Post('admissions/:id/daily-goals')
+  saveDailyGoals(@Req() req: any, @Param('id') id: string, @Body() body: any) {
+    return this.icu.saveDailyGoals(req.tenantDb, req.user.id, id, body);
   }
 
-  @Get('patient/:patientId/vasopressor')
-  getVasopressors(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getVasopressors(this.tenant(h), patientId);
+  @Get('admissions/:id/daily-goals')
+  getDailyGoals(@Req() req: any, @Param('id') id: string) {
+    return this.icu.getDailyGoals(req.tenantDb, id);
   }
 
-  @Patch('vasopressor/:id')
-  updateVasopressor(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateVasopressor(this.tenant(h), id, dto);
+  @Post('admissions/:id/scores')
+  recordScore(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: {
+      sofaResp?: number;
+      sofaCoag?: number;
+      sofaLiver?: number;
+      sofaCardio?: number;
+      sofaCns?: number;
+      sofaRenal?: number;
+      apache2Score?: number;
+    },
+  ) {
+    return this.icu.recordScore(req.tenantDb, req.user.id, id, body);
   }
 
-  @Post('cdss/sofa/calculate')
-  cdssSofa(@Body() body: any) { return this.svc.calculateSofa(body); }
+  @Get('admissions/:id/scores')
+  getScores(@Req() req: any, @Param('id') id: string) {
+    return this.icu.getScores(req.tenantDb, id);
+  }
 
-  @Post('cdss/vent/protocol')
-  cdssVent(@Body() body: any) { return this.svc.ventProtocol(body); }
-
-  @Post('cdss/sedation/assess')
-  cdssSedation(@Body() body: any) { return this.svc.assessSedation(body); }
+  @Get('dashboard')
+  getDashboard(@Req() req: any) {
+    return this.icu.getDashboard(req.tenantDb);
+  }
 }

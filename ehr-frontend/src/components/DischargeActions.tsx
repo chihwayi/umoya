@@ -12,7 +12,7 @@ export function DischargeActions({ encounterId, alreadyFinalized }: Props) {
   const [count, setCount] = useState(0);
 
   async function handleFinalise() {
-    if (!confirm("This will send all discharge documents to the patient's app. Proceed?")) return;
+    if (!window.confirm("This will send all discharge documents to the patient's app. Proceed?")) return;
     setLoading(true);
     try {
       const { data } = await api.post(`/encounters/${encounterId}/discharge/finalise`);

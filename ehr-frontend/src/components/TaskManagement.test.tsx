@@ -1,4 +1,4 @@
-import React, { act } from 'react';
+import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import TaskManagement from './TaskManagement';
 import { ehrApi } from '../services/api';
@@ -54,15 +54,13 @@ describe('TaskManagement', () => {
       },
     ];
 
-    await act(async () => {
-      render(
-        <TaskManagement
-          currentUser={{ id: 'nurse-1' }}
-          appointments={appointments as any}
-          onTaskCountsChange={onTaskCountsChange}
-        />,
-      );
-    });
+    render(
+      <TaskManagement
+        currentUser={{ id: 'nurse-1' }}
+        appointments={appointments as any}
+        onTaskCountsChange={onTaskCountsChange}
+      />,
+    );
 
     await waitFor(() => {
       expect(onTaskCountsChange).toHaveBeenCalled();
@@ -93,18 +91,16 @@ describe('TaskManagement', () => {
       },
     });
 
-    await act(async () => {
-      render(
-        <TaskManagement
-          currentUser={{ id: 'nurse-1' }}
-          appointments={[] as any}
-          onTaskCountsChange={onTaskCountsChange}
-        />,
-      );
-    });
+    render(
+      <TaskManagement
+        currentUser={{ id: 'nurse-1' }}
+        appointments={[] as any}
+        onTaskCountsChange={onTaskCountsChange}
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.queryByText('CLINICAL ESCALATION')).not.toBeNull();
+      expect(screen.getByText('CLINICAL ESCALATION')).toBeTruthy();
     });
 
     await waitFor(() => {
@@ -139,42 +135,34 @@ describe('TaskManagement', () => {
       },
     });
 
-    await act(async () => {
-      render(
-        <TaskManagement
-          currentUser={{ id: 'nurse-1' }}
-          appointments={[] as any}
-        />,
-      );
-    });
+    render(
+      <TaskManagement
+        currentUser={{ id: 'nurse-1' }}
+        appointments={[] as any}
+      />,
+    );
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Start' })).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Start' })).toBeTruthy();
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /toggle task details for escalate low oxygen saturation/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /toggle task details for escalate low oxygen saturation/i }));
 
     await waitFor(() => {
-      expect(screen.queryByText(/Remote monitoring linked alert/i)).not.toBeNull();
+      expect(screen.getByText(/Remote monitoring linked alert/i)).toBeTruthy();
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Start' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
 
     await waitFor(() => {
       expect(ehrApi.acknowledgeClinicalEscalation).toHaveBeenCalledWith('esc-1', 'token', 'kids-clinic');
     });
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /Complete/i })).not.toBeNull();
+      expect(screen.getByRole('button', { name: /Complete/i })).toBeTruthy();
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Complete/i }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Complete/i }));
 
     await waitFor(() => {
       expect(ehrApi.completeClinicalEscalation).toHaveBeenCalledWith(

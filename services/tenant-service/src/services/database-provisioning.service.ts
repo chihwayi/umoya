@@ -5323,6 +5323,1176 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_partograph_entry_time ON partograph_entries(entry_time)`,
         ],
       },
+      {
+        id: 'sprint232_cathlab_core',
+        label: 'Sprint 232 — CathLab: procedure records, coronary anatomy, hemodynamics, STEMI D2B',
+        version: '2026.06.23.0',
+        description: 'Cardiac catheterisation lab tables: cases, lesions per vessel, hemodynamic data, post-procedure monitoring, STEMI activation log',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS cathlab_cases (
+            id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id           UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            encounter_id         UUID REFERENCES encounters(id),
+            procedure_type       TEXT NOT NULL CHECK (procedure_type IN (
+                                   'diagnostic_angiography','pci_stenting','ptca_balloon',
+                                   'pacemaker_implant','ep_study','iabp_insertion','other')),
+            indication           TEXT,
+            priority             TEXT NOT NULL DEFAULT 'elective' CHECK (priority IN ('elective','urgent','stemi_primary_pci','emergency')),
+            stemi_activation_at  TIMESTAMPTZ,
+            door_to_balloon_mins INTEGER,
+            scheduled_at         TIMESTAMPTZ,
+            started_at           TIMESTAMPTZ,
+            ended_at             TIMESTAMPTZ,
+            access_site          TEXT CHECK (access_site IN ('radial_right','radial_left','femoral_right','femoral_left')),
+            contrast_volume_ml   SMALLINT,
+            fluoroscopy_time_mins NUMERIC(5,1),
+            referring_cardiologist_id UUID REFERENCES users(id),
+            operator_id          UUID REFERENCES users(id),
+            timi_flow_pre        SMALLINT CHECK (timi_flow_pre BETWEEN 0 AND 3),
+            timi_flow_post       SMALLINT CHECK (timi_flow_post BETWEEN 0 AND 3),
+            complications        JSONB NOT NULL DEFAULT '[]'::jsonb,
+            outcome              TEXT CHECK (outcome IN ('success','partial_success','aborted','patient_death')),
+            notes                TEXT,
+            status               TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled','in_progress','completed','cancelled')),
+            created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cathlab_cases_patient ON cathlab_cases(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_cathlab_cases_priority ON cathlab_cases(priority)`,
+          `CREATE INDEX IF NOT EXISTS idx_cathlab_cases_status ON cathlab_cases(status)`,
+          `CREATE INDEX IF NOT EXISTS idx_cathlab_cases_scheduled ON cathlab_cases(scheduled_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_cathlab_cases_stemi ON cathlab_cases(stemi_activation_at) WHERE stemi_activation_at IS NOT NULL`,
+
+          `CREATE TABLE IF NOT EXISTS cathlab_lesions (
+            id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            case_id                   UUID NOT NULL REFERENCES cathlab_cases(id) ON DELETE CASCADE,
+            vessel                    TEXT NOT NULL CHECK (vessel IN (
+                                        'lad','lcx','rca','diagonal_1','diagonal_2',
+                                        'om1','om2','pda','plv','lmca','graft_svg','graft_lima','other')),
+            stenosis_percent          SMALLINT CHECK (stenosis_percent BETWEEN 0 AND 100),
+            lesion_length_mm          SMALLINT,
+            is_calcified              BOOLEAN DEFAULT FALSE,
+            is_bifurcation            BOOLEAN DEFAULT FALSE,
+            is_ostial                 BOOLEAN DEFAULT FALSE,
+            is_chronic_total_occlusion BOOLEAN DEFAULT FALSE,
+            intervention_done         BOOLEAN DEFAULT FALSE,
+            stent_type                TEXT CHECK (stent_type IN ('des','bms','drug_coated_balloon','none')),
+            stent_brand               TEXT,
+            stent_diameter_mm         NUMERIC(4,2),
+            stent_length_mm           SMALLINT,
+            ivus_done                 BOOLEAN DEFAULT FALSE,
+            oct_done                  BOOLEAN DEFAULT FALSE,
+            ffr_value                 NUMERIC(4,3),
+            notes                     TEXT,
+            created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cathlab_lesions_case ON cathlab_lesions(case_id)`,
+
+          `CREATE TABLE IF NOT EXISTS cathlab_hemodynamics (
+            id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            case_id                   UUID NOT NULL REFERENCES cathlab_cases(id) ON DELETE CASCADE,
+            measured_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            aortic_pressure_systolic  SMALLINT,
+            aortic_pressure_diastolic SMALLINT,
+            lvedp                     SMALLINT,
+            map                       SMALLINT,
+            heart_rate                SMALLINT,
+            spo2                      SMALLINT,
+            ffr_pullback              NUMERIC(4,3),
+            notes                     TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cathlab_hemo_case ON cathlab_hemodynamics(case_id)`,
+
+          `CREATE TABLE IF NOT EXISTS cathlab_post_procedure (
+            id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            case_id               UUID NOT NULL REFERENCES cathlab_cases(id) ON DELETE CASCADE,
+            sheath_removal_at     TIMESTAMPTZ,
+            vascular_complication TEXT,
+            post_troponin_result  NUMERIC(8,4),
+            post_ecg_result       TEXT,
+            discharge_medications JSONB NOT NULL DEFAULT '[]'::jsonb,
+            dapt_duration_months  SMALLINT,
+            discharge_at          TIMESTAMPTZ,
+            follow_up_date        DATE,
+            notes                 TEXT,
+            created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cathlab_post_case ON cathlab_post_procedure(case_id)`,
+
+          `CREATE TABLE IF NOT EXISTS stemi_activations (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id        UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            cathlab_case_id   UUID REFERENCES cathlab_cases(id),
+            activated_by      UUID REFERENCES users(id),
+            activation_source TEXT CHECK (activation_source IN ('emergency_ecg','ambulance','clinic_ecg','self_referral')),
+            ecg_at            TIMESTAMPTZ,
+            door_in_at        TIMESTAMPTZ,
+            cath_lab_ready_at TIMESTAMPTZ,
+            balloon_at        TIMESTAMPTZ,
+            d2b_mins          INTEGER GENERATED ALWAYS AS (
+                                EXTRACT(EPOCH FROM (balloon_at - door_in_at)) / 60
+                              ) STORED,
+            outcome_target_met BOOLEAN GENERATED ALWAYS AS (
+                                EXTRACT(EPOCH FROM (balloon_at - door_in_at)) / 60 <= 90
+                              ) STORED,
+            notes             TEXT,
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_stemi_patient ON stemi_activations(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_stemi_activation_source ON stemi_activations(activation_source)`,
+
+          `CREATE OR REPLACE VIEW cathlab_d2b_metrics AS
+            SELECT
+              DATE_TRUNC('month', door_in_at) AS month,
+              COUNT(*) AS total_stemis,
+              COUNT(*) FILTER (WHERE outcome_target_met) AS met_target,
+              ROUND(AVG(d2b_mins)) AS avg_d2b_mins,
+              ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY d2b_mins)) AS median_d2b_mins
+            FROM stemi_activations
+            WHERE balloon_at IS NOT NULL
+            GROUP BY DATE_TRUNC('month', door_in_at)
+            ORDER BY month DESC`,
+
+          `CREATE OR REPLACE TRIGGER trg_cathlab_cases_updated_at
+            BEFORE UPDATE ON cathlab_cases
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+        ],
+      },
+      {
+        id: 'sprint233_cathlab_ai',
+        label: 'Sprint 233 — CathLab AI: ECG STEMI alerts, contrast risk, DAPT scoring, SYNTAX complexity',
+        version: '2026.06.23.0',
+        description: 'cathlab_ecg_interpretations, cathlab_contrast_risk, cathlab_dapt_recommendations, cathlab_syntax_scores, cathlab_quality_metrics view',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS cathlab_ecg_interpretations (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            case_id         UUID NOT NULL REFERENCES cathlab_cases(id) ON DELETE CASCADE,
+            patient_id      UUID NOT NULL REFERENCES patients(id),
+            ecg_timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            leads_affected  JSONB NOT NULL DEFAULT '[]'::jsonb,
+            max_st_elev_mm  NUMERIC(4,2),
+            territory       TEXT CHECK (territory IN ('anterior','inferior','lateral','posterior','rvmi','diffuse','none')),
+            sgarbossa_score SMALLINT,
+            ai_impression   TEXT,
+            ai_confidence   NUMERIC(4,2),
+            clinician_confirmed BOOLEAN,
+            reviewed_by     UUID REFERENCES users(id),
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ecg_case ON cathlab_ecg_interpretations(case_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_ecg_patient ON cathlab_ecg_interpretations(patient_id)`,
+
+          `CREATE TABLE IF NOT EXISTS cathlab_contrast_risk (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            case_id         UUID NOT NULL REFERENCES cathlab_cases(id) ON DELETE CASCADE,
+            patient_id      UUID NOT NULL REFERENCES patients(id),
+            hypotension     BOOLEAN NOT NULL DEFAULT FALSE,
+            iabp_use        BOOLEAN NOT NULL DEFAULT FALSE,
+            chf_present     BOOLEAN NOT NULL DEFAULT FALSE,
+            age_gt_75       BOOLEAN NOT NULL DEFAULT FALSE,
+            anaemia         BOOLEAN NOT NULL DEFAULT FALSE,
+            diabetes        BOOLEAN NOT NULL DEFAULT FALSE,
+            contrast_volume_ml  NUMERIC(6,1),
+            creatinine_umol_l   NUMERIC(7,2),
+            egfr_ml_min         NUMERIC(6,2),
+            mehran_score    SMALLINT GENERATED ALWAYS AS (
+                              (CASE WHEN hypotension THEN 5 ELSE 0 END)
+                              + (CASE WHEN iabp_use THEN 5 ELSE 0 END)
+                              + (CASE WHEN chf_present THEN 5 ELSE 0 END)
+                              + (CASE WHEN age_gt_75 THEN 4 ELSE 0 END)
+                              + (CASE WHEN anaemia THEN 3 ELSE 0 END)
+                              + (CASE WHEN diabetes THEN 3 ELSE 0 END)
+                            ) STORED,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_contrast_risk_case ON cathlab_contrast_risk(case_id)`,
+
+          `CREATE TABLE IF NOT EXISTS cathlab_dapt_recommendations (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            case_id           UUID NOT NULL REFERENCES cathlab_cases(id) ON DELETE CASCADE,
+            patient_id        UUID NOT NULL REFERENCES patients(id),
+            stent_type        TEXT NOT NULL CHECK (stent_type IN ('des','bms','balloon_only','cabg')),
+            indication        TEXT NOT NULL CHECK (indication IN ('acs','stable_cad')),
+            dapt_score        SMALLINT,
+            bleeding_risk_high BOOLEAN NOT NULL DEFAULT FALSE,
+            recommended_agent TEXT,
+            recommended_duration_months SMALLINT,
+            interaction_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+            created_by        UUID REFERENCES users(id),
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_dapt_case ON cathlab_dapt_recommendations(case_id)`,
+
+          `CREATE TABLE IF NOT EXISTS cathlab_syntax_scores (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            case_id         UUID NOT NULL REFERENCES cathlab_cases(id) ON DELETE CASCADE,
+            syntax_score    NUMERIC(5,1) NOT NULL,
+            syntax_ii_score NUMERIC(5,1),
+            complexity_tier TEXT GENERATED ALWAYS AS (
+                              CASE WHEN syntax_score <= 22 THEN 'low'
+                                   WHEN syntax_score <= 32 THEN 'intermediate'
+                                   ELSE 'high' END
+                            ) STORED,
+            recommended_strategy TEXT GENERATED ALWAYS AS (
+                              CASE WHEN syntax_score <= 22 THEN 'pci_preferred'
+                                   WHEN syntax_score <= 32 THEN 'heart_team_discussion'
+                                   ELSE 'cabg_preferred' END
+                            ) STORED,
+            assessed_by     UUID REFERENCES users(id),
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_syntax_case ON cathlab_syntax_scores(case_id)`,
+
+          `CREATE OR REPLACE VIEW cathlab_quality_metrics AS
+            SELECT
+              DATE_TRUNC('month', cc.procedure_date)::date AS month,
+              COUNT(*)                         AS total_cases,
+              AVG(cl.contrast_volume_ml)       AS avg_contrast_ml,
+              COUNT(cs.id)                     AS syntax_documented,
+              AVG(cs.syntax_score)             AS avg_syntax_score,
+              COUNT(CASE WHEN cs.complexity_tier='high' THEN 1 END) AS high_complexity_cases
+            FROM cathlab_cases cc
+            LEFT JOIN cathlab_contrast_risk cl ON cl.case_id = cc.id
+            LEFT JOIN cathlab_syntax_scores cs ON cs.case_id = cc.id
+            GROUP BY DATE_TRUNC('month', cc.procedure_date)
+            ORDER BY month DESC`,
+        ],
+      },
+      {
+        id: 'sprint234_icu_core',
+        label: 'Sprint 234 — ICU Core: admissions, vitals, ventilator, fluid balance, infusions, daily goals, SOFA/APACHE scoring',
+        version: '2026.06.23.0',
+        description: 'Dedicated ICU management tables: icu_admissions, icu_vitals (high-freq), icu_ventilator_settings, icu_fluid_balance, icu_infusions, icu_daily_goals, icu_scores',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS icu_admissions (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            encounter_id     UUID REFERENCES encounters(id),
+            icu_type         TEXT NOT NULL DEFAULT 'general' CHECK (icu_type IN ('general','surgical','medical','neonatal','hdu')),
+            bed_code         TEXT NOT NULL,
+            admission_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            discharge_at     TIMESTAMPTZ,
+            admission_diagnosis TEXT,
+            admission_apache2_score SMALLINT,
+            admission_sofa_score SMALLINT,
+            isolation_required BOOLEAN NOT NULL DEFAULT FALSE,
+            isolation_type   TEXT,
+            ventilator_required BOOLEAN NOT NULL DEFAULT FALSE,
+            admitted_by      UUID REFERENCES users(id),
+            status           TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','discharged','transferred','deceased')),
+            discharge_destination TEXT,
+            los_days         NUMERIC(6,1) GENERATED ALWAYS AS (
+                               EXTRACT(EPOCH FROM (COALESCE(discharge_at, NOW()) - admission_at)) / 86400
+                             ) STORED,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_admissions_patient ON icu_admissions(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_admissions_status ON icu_admissions(status)`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_admissions_icu_type ON icu_admissions(icu_type)`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_admissions_bed ON icu_admissions(bed_code) WHERE status = 'active'`,
+
+          `CREATE TABLE IF NOT EXISTS icu_vitals (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            charted_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            hr               SMALLINT,
+            bp_systolic      SMALLINT,
+            bp_diastolic     SMALLINT,
+            map              SMALLINT,
+            cvp              SMALLINT,
+            spo2             SMALLINT,
+            rr               SMALLINT,
+            temp             NUMERIC(4,1),
+            gcs_eye          SMALLINT CHECK (gcs_eye BETWEEN 1 AND 4),
+            gcs_verbal       SMALLINT CHECK (gcs_verbal BETWEEN 1 AND 5),
+            gcs_motor        SMALLINT CHECK (gcs_motor BETWEEN 1 AND 6),
+            urine_output_ml  SMALLINT,
+            etco2            SMALLINT,
+            charted_by       UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_vitals_admission ON icu_vitals(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_vitals_time ON icu_vitals(charted_at DESC)`,
+
+          `CREATE TABLE IF NOT EXISTS icu_ventilator_settings (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            recorded_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            mode             TEXT CHECK (mode IN ('vc_ac','pc_ac','simv','cpap','psv','bipap','hfov','ncpap','nhfnc','spontaneous')),
+            fio2             NUMERIC(4,2) CHECK (fio2 BETWEEN 0.21 AND 1.0),
+            peep             SMALLINT,
+            tidal_volume_ml  SMALLINT,
+            rate             SMALLINT,
+            ps_above_peep    SMALLINT,
+            plateau_pressure SMALLINT,
+            driving_pressure SMALLINT GENERATED ALWAYS AS (plateau_pressure - peep) STORED,
+            compliance_ml_cmH2O NUMERIC(5,1),
+            pip              SMALLINT,
+            i_e_ratio        TEXT,
+            pf_ratio         SMALLINT,
+            is_alarm_driving_pressure BOOLEAN GENERATED ALWAYS AS (plateau_pressure - peep > 15) STORED,
+            is_alarm_plateau BOOLEAN GENERATED ALWAYS AS (plateau_pressure > 30) STORED,
+            recorded_by      UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_vent_admission ON icu_ventilator_settings(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_vent_alarms ON icu_ventilator_settings(admission_id) WHERE is_alarm_driving_pressure = TRUE OR is_alarm_plateau = TRUE`,
+
+          `CREATE TABLE IF NOT EXISTS icu_fluid_balance (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            balance_date     DATE NOT NULL DEFAULT CURRENT_DATE,
+            iv_fluids_ml     INTEGER NOT NULL DEFAULT 0,
+            medications_ml   INTEGER NOT NULL DEFAULT 0,
+            enteral_ml       INTEGER NOT NULL DEFAULT 0,
+            oral_ml          INTEGER NOT NULL DEFAULT 0,
+            blood_products_ml INTEGER NOT NULL DEFAULT 0,
+            urine_out_ml     INTEGER NOT NULL DEFAULT 0,
+            drain_out_ml     INTEGER NOT NULL DEFAULT 0,
+            ng_out_ml        INTEGER NOT NULL DEFAULT 0,
+            stool_out_ml     INTEGER NOT NULL DEFAULT 0,
+            insensible_ml    INTEGER NOT NULL DEFAULT 0,
+            net_balance_ml   INTEGER GENERATED ALWAYS AS (
+                               (iv_fluids_ml + medications_ml + enteral_ml + oral_ml + blood_products_ml)
+                               - (urine_out_ml + drain_out_ml + ng_out_ml + stool_out_ml + insensible_ml)
+                             ) STORED,
+            recorded_by      UUID REFERENCES users(id),
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_icu_fluid_uniq ON icu_fluid_balance(admission_id, balance_date)`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_fluid_admission ON icu_fluid_balance(admission_id)`,
+
+          `CREATE TABLE IF NOT EXISTS icu_infusions (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            drug_name        TEXT NOT NULL,
+            concentration    TEXT,
+            rate_ml_hr       NUMERIC(6,2),
+            dose_mcg_kg_min  NUMERIC(6,3),
+            started_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            stopped_at       TIMESTAMPTZ,
+            rationale        TEXT,
+            ordered_by       UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_infusions_admission ON icu_infusions(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_infusions_active ON icu_infusions(admission_id) WHERE stopped_at IS NULL`,
+
+          `CREATE TABLE IF NOT EXISTS icu_daily_goals (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            goal_date        DATE NOT NULL DEFAULT CURRENT_DATE,
+            dvt_prophylaxis  BOOLEAN,
+            stress_ulcer_prx BOOLEAN,
+            hob_elevation_30 BOOLEAN,
+            oral_care_done   BOOLEAN,
+            spontaneous_breathing_trial BOOLEAN,
+            cam_icu_result   TEXT CHECK (cam_icu_result IN ('positive','negative','unable_to_assess')),
+            rass_target      SMALLINT CHECK (rass_target BETWEEN -5 AND 4),
+            rass_actual      SMALLINT CHECK (rass_actual BETWEEN -5 AND 4),
+            central_line_days SMALLINT,
+            foley_days       SMALLINT,
+            ett_days         SMALLINT,
+            nutrition_goal_kcal INTEGER,
+            nutrition_delivered_kcal INTEGER,
+            goals_met        BOOLEAN,
+            notes            TEXT,
+            completed_by     UUID REFERENCES users(id),
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_icu_goals_uniq ON icu_daily_goals(admission_id, goal_date)`,
+
+          `CREATE TABLE IF NOT EXISTS icu_scores (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            scored_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            sofa_resp        SMALLINT,
+            sofa_coag        SMALLINT,
+            sofa_liver       SMALLINT,
+            sofa_cardio      SMALLINT,
+            sofa_cns         SMALLINT,
+            sofa_renal       SMALLINT,
+            sofa_total       SMALLINT GENERATED ALWAYS AS (
+                               COALESCE(sofa_resp,0)+COALESCE(sofa_coag,0)+COALESCE(sofa_liver,0)+
+                               COALESCE(sofa_cardio,0)+COALESCE(sofa_cns,0)+COALESCE(sofa_renal,0)
+                             ) STORED,
+            apache2_score    SMALLINT,
+            predicted_mortality_pct NUMERIC(5,2),
+            scored_by        UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_scores_admission ON icu_scores(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_icu_scores_time ON icu_scores(scored_at DESC)`,
+
+          `CREATE OR REPLACE FUNCTION trg_icu_admissions_updated_at_fn()
+            RETURNS TRIGGER LANGUAGE plpgsql AS $$
+            BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+            $$`,
+          `DROP TRIGGER IF EXISTS trg_icu_admissions_updated_at ON icu_admissions`,
+          `CREATE TRIGGER trg_icu_admissions_updated_at
+            BEFORE UPDATE ON icu_admissions
+            FOR EACH ROW EXECUTE FUNCTION trg_icu_admissions_updated_at_fn()`,
+
+          `CREATE OR REPLACE FUNCTION trg_icu_fluid_updated_at_fn()
+            RETURNS TRIGGER LANGUAGE plpgsql AS $$
+            BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+            $$`,
+          `DROP TRIGGER IF EXISTS trg_icu_fluid_updated_at ON icu_fluid_balance`,
+          `CREATE TRIGGER trg_icu_fluid_updated_at
+            BEFORE UPDATE ON icu_fluid_balance
+            FOR EACH ROW EXECUTE FUNCTION trg_icu_fluid_updated_at_fn()`,
+        ],
+      },
+      {
+        id: 'sprint235_icu_ai_quality',
+        label: 'Sprint 235 — ICU AI: SOFA alerts, vent safety, VAP/CAUTI bundles, handover, fluid balance warnings',
+        version: '2026.06.24.0',
+        description: 'icu_sofa_delta_alerts, icu_vent_safety_checks, icu_care_bundles, icu_handover_notes, icu_fluid_48h_summary',
+        statements: () => [
+          // ── SOFA Delta Alerts ──────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS icu_sofa_delta_alerts (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            patient_id       UUID NOT NULL REFERENCES patients(id),
+            score_now        SMALLINT NOT NULL,
+            score_24h_ago    SMALLINT NOT NULL,
+            delta            SMALLINT GENERATED ALWAYS AS (score_now - score_24h_ago) STORED,
+            is_deteriorating BOOLEAN GENERATED ALWAYS AS (score_now - score_24h_ago >= 2) STORED,
+            alert_severity   TEXT GENERATED ALWAYS AS (
+                               CASE WHEN score_now - score_24h_ago >= 4 THEN 'critical'
+                                    WHEN score_now - score_24h_ago >= 2 THEN 'high'
+                                    ELSE 'stable' END
+                             ) STORED,
+            acknowledged     BOOLEAN NOT NULL DEFAULT FALSE,
+            acknowledged_by  UUID REFERENCES users(id),
+            acknowledged_at  TIMESTAMPTZ,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_sofa_alert_admission ON icu_sofa_delta_alerts(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_sofa_alert_deteriorating ON icu_sofa_delta_alerts(is_deteriorating, created_at DESC) WHERE is_deteriorating = TRUE`,
+
+          // ── Ventilator Safety Checks ───────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS icu_vent_safety_checks (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            vent_setting_id  UUID REFERENCES icu_ventilator_settings(id),
+            patient_ibw_kg   NUMERIC(5,2),
+            tv_ml_per_kg_ibw NUMERIC(5,2),
+            plateau_safe     BOOLEAN,
+            driving_safe     BOOLEAN,
+            tv_safe          BOOLEAN,
+            overall_safe     BOOLEAN GENERATED ALWAYS AS (
+                               COALESCE(plateau_safe, TRUE) AND COALESCE(driving_safe, TRUE) AND COALESCE(tv_safe, TRUE)
+                             ) STORED,
+            violations       JSONB NOT NULL DEFAULT '[]'::jsonb,
+            checked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_vent_safety_admission ON icu_vent_safety_checks(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_vent_safety_unsafe ON icu_vent_safety_checks(overall_safe) WHERE overall_safe = FALSE`,
+
+          // ── VAP / CAUTI Care Bundle Documentation ─────────────────────────
+          `CREATE TABLE IF NOT EXISTS icu_care_bundles (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id     UUID NOT NULL REFERENCES icu_admissions(id) ON DELETE CASCADE,
+            bundle_date      DATE NOT NULL DEFAULT CURRENT_DATE,
+            bundle_type      TEXT NOT NULL CHECK (bundle_type IN ('vap','cauti','ssc','clabsi','dvt')),
+            items            JSONB NOT NULL DEFAULT '[]'::jsonb,
+            compliant_count  SMALLINT,
+            total_items      SMALLINT,
+            compliance_pct   NUMERIC(5,2) GENERATED ALWAYS AS (
+                               CASE WHEN total_items > 0
+                                    THEN ROUND(compliant_count::numeric / total_items * 100, 2)
+                                    ELSE NULL END
+                             ) STORED,
+            documented_by    UUID REFERENCES users(id),
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_care_bundle_day ON icu_care_bundles(admission_id, bundle_date, bundle_type)`,
+          `CREATE INDEX IF NOT EXISTS idx_care_bundle_type ON icu_care_bundles(bundle_type, bundle_date DESC)`,
+
+          // ── ICU Handover Notes ─────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS icu_handover_notes (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            handover_date    DATE NOT NULL DEFAULT CURRENT_DATE,
+            shift            TEXT NOT NULL CHECK (shift IN ('morning','afternoon','night')),
+            generated_by     UUID REFERENCES users(id),
+            is_ai_generated  BOOLEAN NOT NULL DEFAULT FALSE,
+            patient_count    SMALLINT,
+            critical_count   SMALLINT,
+            summary_text     TEXT NOT NULL,
+            key_actions      JSONB NOT NULL DEFAULT '[]'::jsonb,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_handover_shift ON icu_handover_notes(handover_date, shift)`,
+
+          // ── 48h Fluid Balance View ─────────────────────────────────────────
+          `CREATE OR REPLACE VIEW icu_fluid_48h_summary AS
+            SELECT
+              admission_id,
+              SUM(net_balance_ml)  AS cumulative_48h_ml,
+              COUNT(*)             AS balance_days_recorded,
+              MAX(balance_date)    AS last_balance_date
+            FROM icu_fluid_balance
+            WHERE balance_date >= CURRENT_DATE - INTERVAL '2 days'
+            GROUP BY admission_id`,
+        ],
+      },
+      {
+        id: 'sprint236_nicu_core',
+        label: 'Sprint 236 — NICU Core: admissions, incubator, phototherapy, KMC, neonatal vitals',
+        version: '2026.06.23.0',
+        description: 'Neonatal ICU tables: nicu_admissions (birth/GA data), nicu_incubator_settings, nicu_vitals, nicu_phototherapy_sessions (Bhutani), nicu_kmc_sessions',
+        statements: () => [
+          // ── NICU Admissions ────────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_admissions (
+            id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id              UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            delivery_id             UUID,
+            mother_patient_id       UUID REFERENCES patients(id),
+            admission_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            discharge_at            TIMESTAMPTZ,
+            gestational_age_weeks   NUMERIC(4,1) NOT NULL,
+            birth_weight_grams      SMALLINT NOT NULL,
+            birth_length_cm         NUMERIC(4,1),
+            head_circumference_cm   NUMERIC(4,1),
+            apgar_1min              SMALLINT CHECK (apgar_1min BETWEEN 0 AND 10),
+            apgar_5min              SMALLINT CHECK (apgar_5min BETWEEN 0 AND 10),
+            apgar_10min             SMALLINT CHECK (apgar_10min BETWEEN 0 AND 10),
+            delivery_type           TEXT CHECK (delivery_type IN ('svd','lscs','instrumental','breech')),
+            admission_reason        TEXT NOT NULL,
+            primary_diagnosis       TEXT,
+            incubator_code          TEXT,
+            is_premature            BOOLEAN GENERATED ALWAYS AS (gestational_age_weeks < 37) STORED,
+            is_vlbw                 BOOLEAN GENERATED ALWAYS AS (birth_weight_grams < 1500) STORED,
+            is_elbw                 BOOLEAN GENERATED ALWAYS AS (birth_weight_grams < 1000) STORED,
+            hiv_exposed             BOOLEAN NOT NULL DEFAULT FALSE,
+            resuscitation_required  BOOLEAN NOT NULL DEFAULT FALSE,
+            status                  TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','discharged','transferred','deceased')),
+            discharge_weight_grams  SMALLINT,
+            los_days                NUMERIC(6,1) GENERATED ALWAYS AS (
+                                      EXTRACT(EPOCH FROM (COALESCE(discharge_at, NOW()) - admission_at)) / 86400
+                                    ) STORED,
+            admitted_by             UUID REFERENCES users(id),
+            created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_adm_patient   ON nicu_admissions(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_adm_status    ON nicu_admissions(status)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_adm_mother    ON nicu_admissions(mother_patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_adm_premature ON nicu_admissions(is_premature) WHERE is_premature = TRUE`,
+
+          // ── Incubator / Radiant Warmer Settings ───────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_incubator_settings (
+            id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id          UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            recorded_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            device_type           TEXT NOT NULL DEFAULT 'incubator' CHECK (device_type IN ('incubator','radiant_warmer','open_cot')),
+            set_temp_celsius      NUMERIC(4,1),
+            humidity_pct          SMALLINT,
+            skin_temp_celsius     NUMERIC(4,1),
+            axillary_temp_celsius NUMERIC(4,1),
+            notes                 TEXT,
+            recorded_by           UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_incubator_adm  ON nicu_incubator_settings(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_incubator_time ON nicu_incubator_settings(recorded_at DESC)`,
+
+          // ── Neonatal Vitals ────────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_vitals (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id    UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            charted_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            hr              SMALLINT,
+            rr              SMALLINT,
+            spo2            SMALLINT,
+            temperature     NUMERIC(4,1),
+            bp_systolic     SMALLINT,
+            weight_grams    SMALLINT,
+            blood_glucose   NUMERIC(5,2),
+            crt_seconds     NUMERIC(3,1),
+            color           TEXT CHECK (color IN ('pink','pale','cyanotic','mottled','jaundiced')),
+            tone            TEXT CHECK (tone IN ('normal','hypotonic','hypertonic')),
+            activity        TEXT CHECK (activity IN ('active','quiet','lethargic','unresponsive')),
+            apnoea_episodes SMALLINT,
+            charted_by      UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_vitals_adm  ON nicu_vitals(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_vitals_time ON nicu_vitals(charted_at DESC)`,
+
+          // ── Phototherapy / Jaundice Management ────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_phototherapy_sessions (
+            id                                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id                         UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            started_at                           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            ended_at                             TIMESTAMPTZ,
+            total_bilirubin                      NUMERIC(6,2) NOT NULL,
+            direct_bilirubin                     NUMERIC(6,2),
+            hours_of_life                        NUMERIC(6,1) NOT NULL,
+            phototherapy_type                    TEXT NOT NULL DEFAULT 'conventional' CHECK (phototherapy_type IN ('conventional','intensive_double','fibre_optic','led')),
+            eye_shields_applied                  BOOLEAN NOT NULL DEFAULT TRUE,
+            bilirubin_trend                      TEXT CHECK (bilirubin_trend IN ('rising','stable','falling')),
+            exchange_transfusion_threshold_reached BOOLEAN NOT NULL DEFAULT FALSE,
+            stopped_reason                       TEXT CHECK (stopped_reason IN ('target_met','exchange_required','clinician_decision','patient_transfer')),
+            notes                                TEXT,
+            ordered_by                           UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_photo_adm ON nicu_phototherapy_sessions(admission_id)`,
+
+          // ── Bilirubin / TSB readings ───────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_bilirubin_readings (
+            id                           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id                 UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            session_id                   UUID REFERENCES nicu_phototherapy_sessions(id),
+            measured_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            hours_of_life                NUMERIC(6,1) NOT NULL,
+            total_bilirubin              NUMERIC(6,2) NOT NULL,
+            method                       TEXT CHECK (method IN ('transcutaneous','serum_tsb')),
+            above_phototherapy_threshold BOOLEAN,
+            above_exchange_threshold     BOOLEAN,
+            recorded_by                  UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_bili_adm  ON nicu_bilirubin_readings(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_bili_time ON nicu_bilirubin_readings(measured_at DESC)`,
+
+          // ── Kangaroo Mother Care (KMC) Sessions ───────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_kmc_sessions (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id      UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            mother_patient_id UUID REFERENCES patients(id),
+            caregiver_name    TEXT,
+            started_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            ended_at          TIMESTAMPTZ,
+            duration_mins     INTEGER GENERATED ALWAYS AS (
+                                EXTRACT(EPOCH FROM (COALESCE(ended_at, NOW()) - started_at)) / 60
+                              ) STORED,
+            temp_during_kmc   NUMERIC(4,1),
+            fed_during_kmc    BOOLEAN DEFAULT FALSE,
+            notes             TEXT,
+            recorded_by       UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_kmc_adm    ON nicu_kmc_sessions(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_kmc_mother ON nicu_kmc_sessions(mother_patient_id)`,
+
+          // ── KMC cumulative daily summary view ─────────────────────────────
+          `CREATE OR REPLACE VIEW nicu_kmc_daily_summary AS
+            SELECT
+              admission_id,
+              DATE(started_at)                           AS kmc_date,
+              COUNT(*)                                   AS sessions,
+              ROUND(SUM(duration_mins)::numeric / 60, 1) AS total_hours
+            FROM nicu_kmc_sessions
+            WHERE ended_at IS NOT NULL
+            GROUP BY admission_id, DATE(started_at)`,
+
+          `CREATE OR REPLACE TRIGGER trg_nicu_admissions_updated_at
+            BEFORE UPDATE ON nicu_admissions
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+        ],
+      },
+      {
+        id: 'sprint237_nicu_advanced',
+        label: 'Sprint 237 — NICU Advanced: weight-based drug dosing, PN calculator, NBS/hearing/CCHD/ROP screening, NAS scoring',
+        version: '2026.06.23.0',
+        description: 'nicu_drug_formulary, nicu_drug_orders, nicu_pn_prescriptions, nicu_screening_results, nicu_nas_scores',
+        statements: () => [
+          // ── Neonatal Drug Formulary ───────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_drug_formulary (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            drug_name         TEXT NOT NULL UNIQUE,
+            drug_code         TEXT NOT NULL UNIQUE,
+            category          TEXT NOT NULL,
+            dose_mg_per_kg    NUMERIC(8,4) NOT NULL,
+            dose_max_mg       NUMERIC(8,2),
+            frequency         TEXT NOT NULL,
+            route             TEXT NOT NULL,
+            min_ga_weeks      SMALLINT,
+            max_dose_per_day_mg_per_kg NUMERIC(8,4),
+            toxicity_threshold_mg_per_kg NUMERIC(8,4),
+            monitoring_required TEXT,
+            is_active         BOOLEAN NOT NULL DEFAULT TRUE
+          )`,
+          `INSERT INTO nicu_drug_formulary (drug_name, drug_code, category, dose_mg_per_kg, frequency, route, min_ga_weeks, max_dose_per_day_mg_per_kg, toxicity_threshold_mg_per_kg, monitoring_required)
+           VALUES
+             ('Caffeine Citrate Loading','CAFF-LOAD','respiratory',20,'single_dose','oral_ng',28,20,30,'serum_caffeine_level'),
+             ('Caffeine Citrate Maintenance','CAFF-MAINT','respiratory',5,'every_24h','oral_ng',28,10,20,'serum_caffeine_level'),
+             ('Gentamicin','GENT','antibiotic',4,'every_36h','iv',28,4,5,'trough_and_peak'),
+             ('Ampicillin','AMPI','antibiotic',50,'every_12h','iv',NULL,200,NULL,NULL),
+             ('Phenobarbitone Loading','PHENO-LOAD','anticonvulsant',20,'single_dose','iv',NULL,20,40,'drug_level_24h'),
+             ('Phenobarbitone Maintenance','PHENO-MAINT','anticonvulsant',5,'every_24h','iv',NULL,8,15,'drug_level'),
+             ('Morphine','MORPH','analgesic_sedation',0.05,'every_4h_prn','iv',NULL,0.3,NULL,'pain_score_resp_rate'),
+             ('Surfactant (Poractant)','SURF-PORA','respiratory',200,'single_repeat_once','intratracheal',NULL,200,NULL,'SpO2_FiO2'),
+             ('Indomethacin Dose 1','INDO-D1','pda_closure',0.2,'single_dose','iv',NULL,0.2,NULL,'urine_output_creatinine'),
+             ('Vitamin K','VIT-K','prophylaxis',0.5,'single_dose','im',NULL,0.5,NULL,NULL)
+           ON CONFLICT DO NOTHING`,
+
+          // ── Neonatal Drug Orders ──────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_drug_orders (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id    UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            drug_code       TEXT NOT NULL,
+            weight_kg       NUMERIC(5,3) NOT NULL,
+            dose_calculated_mg NUMERIC(8,4) GENERATED ALWAYS AS (
+                                weight_kg * (
+                                  SELECT dose_mg_per_kg FROM nicu_drug_formulary WHERE drug_code = nicu_drug_orders.drug_code LIMIT 1
+                                )
+                              ) STORED,
+            exceeds_max     BOOLEAN,
+            near_toxicity   BOOLEAN,
+            ordered_by      UUID REFERENCES users(id),
+            ordered_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            administered_at TIMESTAMPTZ,
+            notes           TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_drug_orders_admission ON nicu_drug_orders(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_drug_orders_date ON nicu_drug_orders(ordered_at DESC)`,
+
+          // ── Neonatal PN Prescriptions ─────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_pn_prescriptions (
+            id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id          UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            prescription_date     DATE NOT NULL DEFAULT CURRENT_DATE,
+            weight_kg             NUMERIC(5,3) NOT NULL,
+            postnatal_day         SMALLINT NOT NULL,
+            gestational_age_weeks SMALLINT NOT NULL,
+            fluid_ml_per_kg_per_day NUMERIC(6,2) NOT NULL,
+            glucose_g_per_kg_per_day  NUMERIC(6,3),
+            amino_acid_g_per_kg_per_day NUMERIC(6,3),
+            lipid_g_per_kg_per_day    NUMERIC(6,3),
+            sodium_mmol_per_kg_per_day NUMERIC(6,3),
+            potassium_gir_mg_per_kg_per_min NUMERIC(6,3),
+            calcium_mmol_per_kg_per_day NUMERIC(6,3),
+            total_kcal_per_kg_per_day NUMERIC(7,2) GENERATED ALWAYS AS (
+                                        ROUND(
+                                          COALESCE(glucose_g_per_kg_per_day, 0) * 3.4
+                                          + COALESCE(amino_acid_g_per_kg_per_day, 0) * 4.0
+                                          + COALESCE(lipid_g_per_kg_per_day, 0) * 9.0,
+                                          2
+                                        )
+                                      ) STORED,
+            prescribed_by         UUID REFERENCES users(id),
+            created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_pn_admission ON nicu_pn_prescriptions(admission_id)`,
+
+          // ── Newborn Screening Results ─────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_screening_results (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id    UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            patient_id      UUID NOT NULL REFERENCES patients(id),
+            screening_type  TEXT NOT NULL CHECK (screening_type IN ('nbs_heel_prick','hearing_oae','cchd_pulse_ox','rop_referral','metabolic_screen')),
+            performed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            result_status   TEXT NOT NULL CHECK (result_status IN ('pass','refer','inconclusive','not_done','awaiting')),
+            result_details  JSONB NOT NULL DEFAULT '{}'::jsonb,
+            followup_required BOOLEAN GENERATED ALWAYS AS (result_status IN ('refer','inconclusive')) STORED,
+            referred_to     TEXT,
+            referred_at     DATE,
+            performed_by    UUID REFERENCES users(id),
+            notes           TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_screening_admission ON nicu_screening_results(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nicu_screening_followup ON nicu_screening_results(followup_required) WHERE followup_required = TRUE`,
+
+          // ── NAS (Neonatal Abstinence) Scores ─────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nicu_nas_scores (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id    UUID NOT NULL REFERENCES nicu_admissions(id) ON DELETE CASCADE,
+            scored_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            score_items     JSONB NOT NULL DEFAULT '{}'::jsonb,
+            total_score     SMALLINT NOT NULL,
+            requires_treatment BOOLEAN GENERATED ALWAYS AS (total_score >= 8) STORED,
+            treatment_escalation_needed BOOLEAN GENERATED ALWAYS AS (total_score >= 12) STORED,
+            scored_by       UUID REFERENCES users(id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nas_admission ON nicu_nas_scores(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nas_treatment ON nicu_nas_scores(requires_treatment) WHERE requires_treatment = TRUE`,
+        ],
+      },
+      {
+        id: 'sprint238_well_baby_clinic',
+        label: 'Sprint 238 — Well-Baby Clinic: WBC visits, WHO growth charts, ASQ-3 milestones, nutrition classification',
+        version: '2026.06.24.0',
+        description: 'wbc_visits (scheduled MNCH contacts), wbc_growth_points (WHO z-score), wbc_milestones (ASQ-3 domain scoring), wbc_nutrition_assessments, who_growth_references (seeded lookup)',
+        statements: () => [
+          // ── WHO Growth Reference Table ──────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS who_growth_references (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            indicator   TEXT NOT NULL CHECK (indicator IN ('wfa','lhfa','wfl','hcfa','bmifa')),
+            sex         TEXT NOT NULL CHECK (sex IN ('male','female')),
+            age_months  SMALLINT NOT NULL,
+            sd_neg3     NUMERIC(6,3),
+            sd_neg2     NUMERIC(6,3),
+            sd_neg1     NUMERIC(6,3),
+            median      NUMERIC(6,3),
+            sd_pos1     NUMERIC(6,3),
+            sd_pos2     NUMERIC(6,3),
+            sd_pos3     NUMERIC(6,3)
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_who_growth_ref_uniq
+            ON who_growth_references(indicator, sex, age_months)`,
+          `INSERT INTO who_growth_references (indicator, sex, age_months, sd_neg3, sd_neg2, sd_neg1, median, sd_pos1, sd_pos2, sd_pos3)
+           VALUES
+             ('wfa','male',0, 2.1,2.5,2.9,3.3,3.9,4.4,5.0),
+             ('wfa','male',1, 2.9,3.4,3.9,4.5,5.1,5.8,6.6),
+             ('wfa','male',2, 3.8,4.3,4.9,5.6,6.3,7.1,8.0),
+             ('wfa','male',3, 4.4,5.0,5.7,6.4,7.2,8.0,9.0),
+             ('wfa','male',4, 4.9,5.6,6.2,7.0,7.8,8.7,9.7),
+             ('wfa','male',5, 5.3,6.0,6.7,7.5,8.4,9.3,10.4),
+             ('wfa','male',6, 5.7,6.4,7.1,7.9,8.8,9.8,10.9),
+             ('wfa','male',9, 6.7,7.5,8.3,9.2,10.2,11.3,12.5),
+             ('wfa','male',12, 7.1,7.8,8.6,9.6,10.7,11.9,13.3),
+             ('wfa','male',15, 7.6,8.4,9.3,10.3,11.5,12.8,14.4),
+             ('wfa','male',18, 8.1,8.9,9.9,11.0,12.3,13.7,15.3),
+             ('wfa','male',21, 8.6,9.5,10.5,11.7,13.0,14.6,16.3),
+             ('wfa','male',24, 9.0,10.0,11.1,12.3,13.7,15.3,17.1),
+             ('wfa','male',36, 10.8,12.0,13.3,14.8,16.5,18.5,20.9),
+             ('wfa','male',48, 12.7,14.0,15.6,17.4,19.5,22.0,25.0),
+             ('wfa','male',60, 14.1,15.7,17.7,19.9,22.5,25.7,29.7),
+             ('wfa','female',0, 2.0,2.4,2.8,3.2,3.7,4.2,4.8),
+             ('wfa','female',1, 2.7,3.2,3.6,4.2,4.8,5.5,6.2),
+             ('wfa','female',2, 3.4,3.9,4.5,5.1,5.8,6.6,7.5),
+             ('wfa','female',3, 4.0,4.5,5.2,5.8,6.6,7.5,8.5),
+             ('wfa','female',4, 4.4,5.0,5.7,6.4,7.3,8.2,9.3),
+             ('wfa','female',5, 4.8,5.4,6.1,6.9,7.8,8.8,10.0),
+             ('wfa','female',6, 5.3,5.9,6.6,7.3,8.2,9.1,10.2),
+             ('wfa','female',9, 6.2,7.0,7.8,8.8,9.8,11.0,12.4),
+             ('wfa','female',12, 6.7,7.5,8.4,9.5,10.7,12.1,13.7),
+             ('wfa','female',15, 7.2,8.1,9.0,10.2,11.5,13.1,14.9),
+             ('wfa','female',18, 7.8,8.7,9.8,11.0,12.4,14.1,16.1),
+             ('wfa','female',21, 8.3,9.3,10.4,11.8,13.3,15.2,17.4),
+             ('wfa','female',24, 8.3,9.2,10.2,11.5,12.9,14.5,16.4),
+             ('wfa','female',36, 10.2,11.3,12.6,14.1,15.9,18.1,20.8),
+             ('wfa','female',48, 12.3,13.7,15.3,17.3,19.6,22.4,26.0),
+             ('wfa','female',60, 13.7,15.4,17.4,19.9,22.9,26.7,31.5)
+           ON CONFLICT DO NOTHING`,
+
+          // ── WBC Visit Schedule ─────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS wbc_visits (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            encounter_id     UUID REFERENCES encounters(id),
+            visit_type       TEXT NOT NULL CHECK (visit_type IN (
+                               'birth','6_weeks','10_weeks','14_weeks','6_months','9_months',
+                               '12_months','18_months','24_months','3_years','5_years','unscheduled')),
+            visit_date       DATE NOT NULL DEFAULT CURRENT_DATE,
+            age_months       NUMERIC(5,1),
+            weight_kg        NUMERIC(5,3),
+            length_cm        NUMERIC(5,1),
+            head_circ_cm     NUMERIC(5,1),
+            wfa_zscore       NUMERIC(5,2),
+            lhfa_zscore      NUMERIC(5,2),
+            wfl_zscore       NUMERIC(5,2),
+            hcfa_zscore      NUMERIC(5,2),
+            nutrition_status TEXT CHECK (nutrition_status IN ('normal','mild_wasting','mam','sam','overweight','obese')),
+            breastfeeding    TEXT CHECK (breastfeeding IN ('exclusive','mixed','formula_only','complementary','weaned','na')),
+            vitamin_a_given  BOOLEAN NOT NULL DEFAULT FALSE,
+            iron_given       BOOLEAN NOT NULL DEFAULT FALSE,
+            zinc_given       BOOLEAN NOT NULL DEFAULT FALSE,
+            deworming_given  BOOLEAN NOT NULL DEFAULT FALSE,
+            parental_concerns TEXT,
+            clinical_notes   TEXT,
+            next_visit_due   DATE,
+            clinician_id     UUID REFERENCES users(id),
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_wbc_visits_patient ON wbc_visits(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_wbc_visits_date ON wbc_visits(visit_date DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_wbc_visits_next_due ON wbc_visits(next_visit_due) WHERE next_visit_due IS NOT NULL`,
+
+          // ── Growth Time-Series ─────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS wbc_growth_points (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            visit_id         UUID REFERENCES wbc_visits(id) ON DELETE SET NULL,
+            measured_at      DATE NOT NULL DEFAULT CURRENT_DATE,
+            age_months       NUMERIC(5,1) NOT NULL,
+            weight_kg        NUMERIC(5,3),
+            length_cm        NUMERIC(5,1),
+            head_circ_cm     NUMERIC(5,1),
+            wfa_zscore       NUMERIC(5,2),
+            lhfa_zscore      NUMERIC(5,2),
+            sex              TEXT NOT NULL CHECK (sex IN ('male','female')),
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_wbc_growth_patient ON wbc_growth_points(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_wbc_growth_time ON wbc_growth_points(measured_at ASC)`,
+
+          // ── Developmental Milestones / ASQ-3 ──────────────────────────────
+          `CREATE TABLE IF NOT EXISTS wbc_milestones (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            visit_id         UUID REFERENCES wbc_visits(id) ON DELETE SET NULL,
+            screening_date   DATE NOT NULL DEFAULT CURRENT_DATE,
+            age_months       NUMERIC(5,1) NOT NULL,
+            tool             TEXT NOT NULL DEFAULT 'ASQ3' CHECK (tool IN ('ASQ3','clinical_observation','other')),
+            communication_score   SMALLINT,
+            gross_motor_score     SMALLINT,
+            fine_motor_score      SMALLINT,
+            problem_solving_score SMALLINT,
+            personal_social_score SMALLINT,
+            overall_result   TEXT CHECK (overall_result IN ('on_track','monitor','refer','urgent_refer')),
+            red_flags        JSONB NOT NULL DEFAULT '[]'::jsonb,
+            referral_made    BOOLEAN NOT NULL DEFAULT FALSE,
+            referral_type    TEXT,
+            clinician_id     UUID REFERENCES users(id),
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_wbc_milestones_patient ON wbc_milestones(patient_id)`,
+
+          // ── Nutrition Assessments (SAM/MAM) ───────────────────────────────
+          `CREATE TABLE IF NOT EXISTS wbc_nutrition_assessments (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            visit_id         UUID REFERENCES wbc_visits(id) ON DELETE SET NULL,
+            assessed_at      DATE NOT NULL DEFAULT CURRENT_DATE,
+            muac_cm          NUMERIC(4,1),
+            oedema           BOOLEAN NOT NULL DEFAULT FALSE,
+            classification   TEXT NOT NULL CHECK (classification IN ('normal','mild_wasting','mam','sam')),
+            appetite_test    TEXT CHECK (appetite_test IN ('pass','fail','not_done')),
+            enrolled_rutf    BOOLEAN NOT NULL DEFAULT FALSE,
+            target_weight_kg NUMERIC(5,3),
+            notes            TEXT,
+            clinician_id     UUID REFERENCES users(id),
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_wbc_nutrition_patient ON wbc_nutrition_assessments(patient_id)`,
+
+          `CREATE OR REPLACE TRIGGER trg_wbc_visits_updated_at
+            BEFORE UPDATE ON wbc_visits
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
+        ],
+      },
+      {
+        id: 'sprint239_epi_immunisation',
+        label: 'Sprint 239 — EPI/Immunisation: Zimbabwe EPI schedule, vaccination records, cold chain, AEFI, coverage reporting',
+        version: '2026.06.24.0',
+        description: 'vaccine_catalog (Zimbabwe EPI antigens), vaccination_records, cold_chain_logs, aefi_reports, epi_coverage_summary view',
+        statements: () => [
+          // ── Vaccine Catalog ────────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS vaccine_catalog (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            antigen_code     TEXT NOT NULL UNIQUE,
+            antigen_name     TEXT NOT NULL,
+            schedule_contacts JSONB NOT NULL DEFAULT '[]'::jsonb,
+            min_age_weeks    SMALLINT,
+            max_age_years    SMALLINT,
+            doses_required   SMALLINT NOT NULL DEFAULT 1,
+            interval_weeks   SMALLINT,
+            route            TEXT CHECK (route IN ('im','sc','oral','id','intranasal')),
+            site             TEXT,
+            storage_min_c    NUMERIC(4,1) NOT NULL DEFAULT 2.0,
+            storage_max_c    NUMERIC(4,1) NOT NULL DEFAULT 8.0,
+            is_live_vaccine  BOOLEAN NOT NULL DEFAULT FALSE,
+            is_active        BOOLEAN NOT NULL DEFAULT TRUE
+          )`,
+          `INSERT INTO vaccine_catalog (antigen_code, antigen_name, doses_required, schedule_contacts, min_age_weeks, route, site, is_live_vaccine)
+           VALUES
+             ('BCG','BCG (Bacillus Calmette-Guérin)',1,'["birth"]'::jsonb,0,'id','left_upper_arm',TRUE),
+             ('OPV0','OPV Birth Dose',1,'["birth"]'::jsonb,0,'oral',NULL,TRUE),
+             ('OPV1','OPV Dose 1',1,'["6_weeks"]'::jsonb,6,'oral',NULL,TRUE),
+             ('OPV2','OPV Dose 2',1,'["10_weeks"]'::jsonb,10,'oral',NULL,TRUE),
+             ('OPV3','OPV Dose 3',1,'["14_weeks"]'::jsonb,14,'oral',NULL,TRUE),
+             ('IPV','IPV (Injectable Polio)',1,'["14_weeks"]'::jsonb,14,'im','right_thigh',FALSE),
+             ('PENTA1','Pentavalent (DPT-HepB-Hib) Dose 1',1,'["6_weeks"]'::jsonb,6,'im','left_thigh',FALSE),
+             ('PENTA2','Pentavalent Dose 2',1,'["10_weeks"]'::jsonb,10,'im','left_thigh',FALSE),
+             ('PENTA3','Pentavalent Dose 3',1,'["14_weeks"]'::jsonb,14,'im','left_thigh',FALSE),
+             ('PCV1','PCV10 Dose 1',1,'["6_weeks"]'::jsonb,6,'im','right_thigh',FALSE),
+             ('PCV2','PCV10 Dose 2',1,'["10_weeks"]'::jsonb,10,'im','right_thigh',FALSE),
+             ('PCV3','PCV10 Dose 3',1,'["14_weeks"]'::jsonb,14,'im','right_thigh',FALSE),
+             ('ROTA1','Rotavirus Dose 1',1,'["6_weeks"]'::jsonb,6,'oral',NULL,TRUE),
+             ('ROTA2','Rotavirus Dose 2',1,'["10_weeks"]'::jsonb,10,'oral',NULL,TRUE),
+             ('MR1','Measles-Rubella Dose 1',1,'["9_months"]'::jsonb,36,'sc','left_upper_arm',TRUE),
+             ('MR2','Measles-Rubella Dose 2',1,'["18_months"]'::jsonb,72,'sc','left_upper_arm',TRUE),
+             ('YF','Yellow Fever',1,'["9_months"]'::jsonb,36,'sc','right_upper_arm',TRUE),
+             ('HPV1','HPV Dose 1 (girls 10yr)',1,'["10_years"]'::jsonb,520,'im','left_upper_arm',FALSE),
+             ('HPV2','HPV Dose 2 (girls, 6m later)',1,'["10_years_6m"]'::jsonb,546,'im','left_upper_arm',FALSE)
+           ON CONFLICT DO NOTHING`,
+
+          // ── Vaccination Records ────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS vaccination_records (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            antigen_code     TEXT NOT NULL,
+            dose_number      SMALLINT NOT NULL DEFAULT 1,
+            given_at         DATE NOT NULL DEFAULT CURRENT_DATE,
+            age_at_dose_weeks SMALLINT,
+            lot_number       TEXT,
+            expiry_date      DATE,
+            site_given       TEXT,
+            administered_by  UUID REFERENCES users(id),
+            batch_verified   BOOLEAN NOT NULL DEFAULT FALSE,
+            notes            TEXT,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_vacc_records_uniq ON vaccination_records(patient_id, antigen_code, dose_number)`,
+          `CREATE INDEX IF NOT EXISTS idx_vacc_records_patient ON vaccination_records(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_vacc_records_antigen ON vaccination_records(antigen_code)`,
+          `CREATE INDEX IF NOT EXISTS idx_vacc_records_date ON vaccination_records(given_at DESC)`,
+
+          // ── Cold Chain Temperature Log ─────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS cold_chain_logs (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            fridge_id        TEXT NOT NULL,
+            recorded_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            temp_celsius     NUMERIC(4,1) NOT NULL,
+            recorded_by      UUID REFERENCES users(id),
+            is_excursion     BOOLEAN GENERATED ALWAYS AS (temp_celsius < 2.0 OR temp_celsius > 8.0) STORED,
+            excursion_type   TEXT GENERATED ALWAYS AS (
+                               CASE WHEN temp_celsius < 2.0 THEN 'freeze_risk'
+                                    WHEN temp_celsius > 8.0 THEN 'heat_excursion'
+                                    ELSE NULL END
+                             ) STORED,
+            notes            TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cold_chain_fridge ON cold_chain_logs(fridge_id, recorded_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_cold_chain_excursion ON cold_chain_logs(is_excursion) WHERE is_excursion = TRUE`,
+
+          // ── AEFI Reports ───────────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS aefi_reports (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+            vaccination_id   UUID REFERENCES vaccination_records(id),
+            antigen_code     TEXT NOT NULL,
+            onset_date       DATE NOT NULL,
+            reported_date    DATE NOT NULL DEFAULT CURRENT_DATE,
+            classification   TEXT NOT NULL CHECK (classification IN ('minor','moderate','severe','death')),
+            aefi_type        TEXT NOT NULL,
+            description      TEXT NOT NULL,
+            outcome          TEXT CHECK (outcome IN ('recovered','recovering','unknown','permanent_disability','death')),
+            reported_to_epi  BOOLEAN NOT NULL DEFAULT FALSE,
+            reported_by      UUID REFERENCES users(id),
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_aefi_patient ON aefi_reports(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_aefi_antigen ON aefi_reports(antigen_code)`,
+          `CREATE INDEX IF NOT EXISTS idx_aefi_classification ON aefi_reports(classification)`,
+
+          // ── EPI Coverage View ──────────────────────────────────────────────
+          `CREATE OR REPLACE VIEW epi_coverage_summary AS
+            SELECT
+              antigen_code,
+              COUNT(DISTINCT patient_id) AS vaccinated_count,
+              DATE_TRUNC('month', given_at) AS month
+            FROM vaccination_records
+            GROUP BY antigen_code, DATE_TRUNC('month', given_at)
+            ORDER BY month DESC, antigen_code`,
+        ],
+      },
+      {
+        id: 'sprint240_neonatal_screening',
+        label: 'Sprint 240 — Neonatal Screening: NBS heel prick, hearing OAE, CCHD pulse-ox, bilirubin nomogram, coverage dashboard',
+        version: '2026.06.24.0',
+        description: 'nbs_batches, nbs_samples, hearing_screening_records, cchd_screening_records, neo_screening_coverage view',
+        statements: () => [
+          // ── NBS Batch Registration ─────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nbs_batches (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            batch_ref        TEXT NOT NULL UNIQUE,
+            dispatched_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            lab_name         TEXT NOT NULL DEFAULT 'NSSA / MOHCC NBS Laboratory',
+            sample_count     SMALLINT NOT NULL DEFAULT 0,
+            results_received BOOLEAN NOT NULL DEFAULT FALSE,
+            received_at      TIMESTAMPTZ,
+            created_by       UUID REFERENCES users(id)
+          )`,
+
+          // ── NBS Samples ────────────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS nbs_samples (
+            id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            batch_id                UUID NOT NULL REFERENCES nbs_batches(id) ON DELETE CASCADE,
+            patient_id              UUID NOT NULL REFERENCES patients(id),
+            admission_id            UUID REFERENCES nicu_admissions(id),
+            collected_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            collected_by            UUID REFERENCES users(id),
+            age_at_collection_hours SMALLINT,
+            card_number             TEXT NOT NULL UNIQUE,
+            tsh_result              NUMERIC(8,3),
+            tsh_unit                TEXT DEFAULT 'mIU/L',
+            tsh_abnormal            BOOLEAN GENERATED ALWAYS AS (tsh_result IS NOT NULL AND tsh_result > 10.0) STORED,
+            pku_result              NUMERIC(8,3),
+            pku_abnormal            BOOLEAN GENERATED ALWAYS AS (pku_result IS NOT NULL AND pku_result > 120.0) STORED,
+            g6pd_result             TEXT CHECK (g6pd_result IN ('normal','deficient','intermediate',NULL)),
+            scd_result              TEXT,
+            scd_abnormal            BOOLEAN,
+            result_status           TEXT NOT NULL DEFAULT 'pending' CHECK (result_status IN ('pending','normal','abnormal','unsatisfactory','repeat_required')),
+            any_abnormal            BOOLEAN GENERATED ALWAYS AS (
+                                      COALESCE(tsh_result IS NOT NULL AND tsh_result > 10.0, FALSE)
+                                      OR COALESCE(pku_result IS NOT NULL AND pku_result > 120.0, FALSE)
+                                      OR g6pd_result = 'deficient'
+                                      OR COALESCE(scd_abnormal, FALSE)
+                                    ) STORED,
+            notified                BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nbs_batch ON nbs_samples(batch_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nbs_patient ON nbs_samples(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nbs_abnormal ON nbs_samples(any_abnormal) WHERE any_abnormal = TRUE`,
+
+          // ── Hearing Screening ──────────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS hearing_screening_records (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id       UUID NOT NULL REFERENCES patients(id),
+            screened_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            method           TEXT NOT NULL DEFAULT 'aoae' CHECK (method IN ('aoae','aabr','abr')),
+            left_ear_result  TEXT NOT NULL CHECK (left_ear_result IN ('pass','refer','incomplete')),
+            right_ear_result TEXT NOT NULL CHECK (right_ear_result IN ('pass','refer','incomplete')),
+            overall_result   TEXT GENERATED ALWAYS AS (
+                               CASE WHEN left_ear_result = 'pass' AND right_ear_result = 'pass' THEN 'bilateral_pass'
+                                    WHEN left_ear_result = 'refer' AND right_ear_result = 'refer' THEN 'bilateral_refer'
+                                    WHEN left_ear_result = 'refer' OR right_ear_result = 'refer' THEN 'unilateral_refer'
+                                    ELSE 'incomplete' END
+                             ) STORED,
+            requires_abr     BOOLEAN GENERATED ALWAYS AS (
+                               left_ear_result = 'refer' OR right_ear_result = 'refer'
+                             ) STORED,
+            abr_scheduled    BOOLEAN NOT NULL DEFAULT FALSE,
+            screened_by      UUID REFERENCES users(id),
+            notes            TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_hearing_patient ON hearing_screening_records(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_hearing_abr ON hearing_screening_records(requires_abr) WHERE requires_abr = TRUE`,
+
+          // ── CCHD Pulse-Ox Screening ────────────────────────────────────────
+          `CREATE TABLE IF NOT EXISTS cchd_screening_records (
+            id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id           UUID NOT NULL REFERENCES patients(id),
+            screened_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            age_at_screen_hours  SMALLINT NOT NULL,
+            attempt_number       SMALLINT NOT NULL DEFAULT 1,
+            right_hand_spo2      NUMERIC(4,1),
+            foot_spo2            NUMERIC(4,1),
+            differential         NUMERIC(4,1) GENERATED ALWAYS AS (
+                                   CASE WHEN right_hand_spo2 IS NOT NULL AND foot_spo2 IS NOT NULL
+                                        THEN ABS(right_hand_spo2 - foot_spo2) ELSE NULL END
+                                 ) STORED,
+            screen_result        TEXT GENERATED ALWAYS AS (
+                                   CASE WHEN right_hand_spo2 >= 95 AND foot_spo2 >= 95
+                                             AND ABS(right_hand_spo2 - foot_spo2) <= 3 THEN 'pass'
+                                        WHEN right_hand_spo2 < 90 OR foot_spo2 < 90 THEN 'fail_urgent'
+                                        ELSE 'fail_repeat' END
+                                 ) STORED,
+            screened_by          UUID REFERENCES users(id),
+            notes                TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cchd_patient ON cchd_screening_records(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_cchd_fail ON cchd_screening_records(screen_result) WHERE screen_result IN ('fail_urgent','fail_repeat')`,
+
+          // ── Screening Coverage View ────────────────────────────────────────
+          `CREATE OR REPLACE VIEW neo_screening_coverage AS
+            SELECT
+              DATE_TRUNC('month', p.created_at)::date AS month,
+              COUNT(DISTINCT p.id)                    AS newborns_registered,
+              COUNT(DISTINCT ns.patient_id)           AS nbs_completed,
+              COUNT(DISTINCT hs.patient_id)           AS hearing_completed,
+              COUNT(DISTINCT cs.patient_id)           AS cchd_completed,
+              ROUND(COUNT(DISTINCT ns.patient_id)::numeric / NULLIF(COUNT(DISTINCT p.id), 0) * 100, 1) AS nbs_coverage_pct
+            FROM patients p
+            LEFT JOIN nbs_samples ns ON ns.patient_id = p.id
+            LEFT JOIN hearing_screening_records hs ON hs.patient_id = p.id
+            LEFT JOIN cchd_screening_records cs ON cs.patient_id = p.id
+            WHERE p.date_of_birth >= NOW() - INTERVAL '1 year'
+            GROUP BY DATE_TRUNC('month', p.created_at)
+            ORDER BY month DESC`,
+        ],
+      },
     ];
   }
 

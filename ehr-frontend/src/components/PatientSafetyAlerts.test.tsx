@@ -50,13 +50,13 @@ describe('PatientSafetyAlerts', () => {
       />,
     );
 
-    expect(screen.queryByText('Escalate NEWS2 deterioration')).not.toBeNull();
+    expect(screen.getByText('Escalate NEWS2 deterioration')).toBeTruthy();
     // Counts surface in the header stats.
     expect(screen.getAllByText('1').length).toBeGreaterThan(0);
 
     // Trust-summary detail reveals on expansion.
     fireEvent.click(screen.getByText('Escalate NEWS2 deterioration'));
-    expect(screen.queryByText(/Rule-backed safety escalation/i)).not.toBeNull();
+    expect(screen.getByText(/Rule-backed safety escalation/i)).toBeTruthy();
   });
 
   it('invokes onAcknowledge with the alert id when Acknowledge is clicked', () => {

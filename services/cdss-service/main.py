@@ -28,6 +28,8 @@ import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 from fastapi import UploadFile, File, Form
 from drug_interactions import DrugInteractionAnalyzer
+from nicu import evaluate_jaundice
+from well_baby import evaluate_milestones, classify_nutrition_risk
 from clinical_guidelines import ClinicalGuidelinesEngine
 from dhis2_tracker import router as dhis2_tracker_router
 from sormas_client import router as sormas_router
@@ -16691,6 +16693,427 @@ async def ncid_validate_id(req: NcidValidateRequest):
     )
 
 
+
+
+# ── CathLab AI CDSS endpoints ─────────────────────────────────────────────────
+
+@app.post("/cathlab/cdss/stemi-ecg")
+async def interpret_stemi_ecg(body: dict):
+    """
+    Detect STEMI territory from ECG lead ST values.
+    body: { leads: { I, II, III, aVR, aVF, aVL, V1..V6 } (all float, mm elevation) }
+    """
+    leads = body.get("leads", {})
+    threshold = 1.0
+
+    territory = "none"
+    max_st = max((abs(v) for v in leads.values()), default=0)
+
+    ant = [leads.get(f"V{i}", 0) for i in range(1, 5)]
+    inf = [leads.get("II", 0), leads.get("III", 0), leads.get("aVF", 0)]
+    lat = [leads.get("I", 0), leads.get("aVL", 0), leads.get("V5", 0), leads.get("V6", 0)]
+
+    if any(v >= threshold for v in ant[:2]):
+        territory = "anterior"
+    elif all(v >= threshold for v in inf):
+        territory = "inferior"
+    elif any(v >= threshold for v in lat):
+        territory = "lateral"
+    elif leads.get("V1", 0) >= threshold and leads.get("V2", 0) >= threshold:
+        territory = "posterior"
+
+    sgarbossa = 0
+    if leads.get("I", 0) >= 1 or leads.get("aVL", 0) >= 1:
+        sgarbossa += 5
+    if leads.get("V5", 0) >= 1 or leads.get("V6", 0) >= 1:
+        sgarbossa += 5
+    if leads.get("V1", 0) <= -1 or leads.get("V2", 0) <= -1:
+        sgarbossa += 2
+
+    stemi_equivalent = territory != "none" or sgarbossa >= 3
+    return {
+        "territory": territory,
+        "max_st_mm": round(max_st, 2),
+        "sgarbossa_score": sgarbossa,
+        "stemi_equivalent": stemi_equivalent,
+        "recommendation": (
+            "ACTIVATE STEMI PROTOCOL — cathlab notification NOW"
+            if stemi_equivalent
+            else "No acute STEMI pattern detected. Serial ECGs if clinical suspicion."
+        ),
+    }
+
+
+@app.post("/cathlab/cdss/drug-interaction")
+async def check_dapt_interactions(body: dict):
+    """
+    Check for major interactions between a P2Y12 agent and current medications.
+    body: { p2y12_agent: str, current_medications: list[str] }
+    """
+    agent = body.get("p2y12_agent", "")
+    meds = [m.lower() for m in body.get("current_medications", [])]
+    flags = []
+
+    if "ticagrelor" in agent:
+        if any("simvastatin" in m or "lovastatin" in m for m in meds):
+            flags.append({
+                "severity": "major",
+                "message": "Ticagrelor + simvastatin: increased statin myopathy risk. Dose-cap simvastatin 40 mg.",
+            })
+        if any("ketoconazole" in m or "itraconazole" in m or "clarithromycin" in m for m in meds):
+            flags.append({
+                "severity": "contraindicated",
+                "message": "Strong CYP3A4 inhibitor + ticagrelor: markedly elevated ticagrelor levels. Contraindicated.",
+            })
+        if any("rifampicin" in m or "carbamazepine" in m or "phenytoin" in m for m in meds):
+            flags.append({
+                "severity": "major",
+                "message": "Strong CYP3A4 inducer + ticagrelor: reduced antiplatelet effect. Consider clopidogrel.",
+            })
+
+    if "clopidogrel" in agent:
+        if any("omeprazole" in m or "esomeprazole" in m for m in meds):
+            flags.append({
+                "severity": "moderate",
+                "message": "Omeprazole/esomeprazole reduces clopidogrel efficacy via CYP2C19. Prefer pantoprazole if PPI needed.",
+            })
+        if any("fluoxetine" in m or "fluvoxamine" in m for m in meds):
+            flags.append({
+                "severity": "moderate",
+                "message": "CYP2C19 inhibitor may reduce clopidogrel activation. Monitor clinical response.",
+            })
+
+    return {"flags": flags, "interaction_count": len(flags)}
+
+
+# ── Sprint 235: ICU AI CDSS Endpoints ─────────────────────────────────────
+
+@app.post("/icu/cdss/vent-safety")
+async def check_ventilator_safety(body: dict):
+    """
+    Validate current ventilator settings against ARDSnet lung-protective thresholds.
+    body: {
+      tidal_volume_ml: float,
+      plateau_pressure_cmh2o: float,
+      peep_cmh2o: float,
+      fio2: float,
+      patient_height_cm: float,
+      sex: str   # 'male' or 'female' for Devine IBW formula
+    }
+    """
+    h   = body.get("patient_height_cm", 170)
+    sex = body.get("sex", "male")
+    # Devine formula for Ideal Body Weight
+    ibw = (50.0 if sex == "male" else 45.5) + 0.91 * (h - 152.4)
+    ibw = max(ibw, 30.0)
+
+    tv      = body.get("tidal_volume_ml", 500)
+    plateau = body.get("plateau_pressure_cmh2o", 0)
+    peep    = body.get("peep_cmh2o", 5)
+    driving = plateau - peep
+    tv_per_kg = tv / ibw
+
+    violations = []
+    if tv_per_kg > 6:
+        violations.append({
+            "severity": "critical",
+            "param": "tidal_volume",
+            "message": f"TV {tv_per_kg:.1f} ml/kg IBW exceeds ARDSnet 6 ml/kg. Reduce to {ibw*6:.0f} ml.",
+        })
+    elif tv_per_kg > 8:
+        violations.append({
+            "severity": "warning",
+            "param": "tidal_volume",
+            "message": f"TV {tv_per_kg:.1f} ml/kg IBW > 8 ml/kg. Consider reduction if ARDS risk.",
+        })
+    if plateau > 30:
+        violations.append({
+            "severity": "critical",
+            "param": "plateau_pressure",
+            "message": f"Plateau {plateau} cmH₂O exceeds 30 cmH₂O. Reduce TV or adjust PEEP.",
+        })
+    if driving > 15:
+        violations.append({
+            "severity": "critical",
+            "param": "driving_pressure",
+            "message": f"Driving pressure {driving:.0f} cmH₂O exceeds 15 cmH₂O (mortality risk). Increase PEEP or reduce TV.",
+        })
+
+    return {
+        "ibw_kg":          round(ibw, 1),
+        "tv_per_kg_ibw":   round(tv_per_kg, 2),
+        "driving_pressure": round(driving, 1),
+        "lung_protective":  len(violations) == 0,
+        "violations":       violations,
+    }
+
+
+@app.post("/icu/cdss/sofa-trend")
+async def sofa_trend_analysis(body: dict):
+    """
+    Analyse SOFA score trend for early sepsis deterioration.
+    body: { scores: list[{ timestamp: str, score: int }] }
+    """
+    scores = body.get("scores", [])
+    if len(scores) < 2:
+        return {"trend": "insufficient_data", "recommendation": "Need at least 2 SOFA readings to trend."}
+
+    latest   = scores[-1]["score"]
+    earliest = scores[0]["score"]
+    delta    = latest - earliest
+    peak     = max(s["score"] for s in scores)
+
+    if delta >= 4:
+        trend = "rapidly_deteriorating"
+        rec   = ("CRITICAL: SOFA increased ≥4 points. Immediate senior review. Sepsis-3 organ dysfunction. "
+                 "Consider early resuscitation escalation.")
+    elif delta >= 2:
+        trend = "deteriorating"
+        rec   = ("WARNING: SOFA increased ≥2 points (Sepsis-3 criterion met). "
+                 "Review source control, fluid balance, vasopressor needs.")
+    elif delta <= -2:
+        trend = "improving"
+        rec   = "SOFA improving. Continue current management. Daily reassessment."
+    else:
+        trend = "stable"
+        rec   = "SOFA stable. Monitor as per protocol."
+
+    return {
+        "trend":         trend,
+        "delta":         delta,
+        "latest_sofa":   latest,
+        "peak_sofa":     peak,
+        "recommendation": rec,
+    }
+
+
+@app.post("/nicu/cdss/jaundice-eval")
+async def nicu_jaundice_eval(body: dict):
+    return evaluate_jaundice(
+        total_bilirubin_umol_l=body["total_bilirubin"],
+        hours_of_life=body["hours_of_life"],
+        gestation_weeks=body.get("gestation_weeks", 38),
+    )
+
+
+# ── S237: NICU Advanced CDSS endpoints ────────────────────────────────────────
+
+NAS_ITEM_SCORES = {
+    "high_pitched_cry": 3, "continuous_high_pitched_cry": 2,
+    "sleeps_less_than_1h": 3, "sleeps_less_than_2h": 2, "sleeps_less_than_3h": 1,
+    "hyperactive_moro": 2, "markedly_hyperactive_moro": 3,
+    "mild_tremor_undisturbed": 1, "mod_severe_tremor_undisturbed": 2,
+    "mild_tremor_disturbed": 1, "mod_severe_tremor_disturbed": 2,
+    "increased_muscle_tone": 2,
+    "excoriation": 1,
+    "myoclonic_jerks": 3,
+    "generalized_convulsions": 5,
+    "sweating": 1, "fever_less_38_5": 1, "fever_38_5_plus": 2,
+    "frequent_yawning": 1, "mottling": 1, "stuffy_nose": 1,
+    "sneezing": 1, "nasal_flaring": 2, "respiratory_rate_gt_60": 1,
+    "poor_feeding": 2, "regurgitation": 2, "projectile_vomiting": 3,
+    "loose_stools": 2, "watery_stools": 3,
+}
+
+@app.post("/nicu/cdss/nas-score")
+async def compute_nas_score(body: dict):
+    """Compute NAS (Modified Finnegan) score from item dict."""
+    items = body.get("items", {})
+    total = sum(NAS_ITEM_SCORES.get(k, 0) for k, v in items.items() if v)
+
+    if total >= 12:
+        severity = "severe"
+        treatment = "Escalate morphine dose. Consider adding clonidine. Urgent senior review."
+    elif total >= 8:
+        severity = "moderate"
+        treatment = "Initiate morphine per NAS protocol. Supportive care: swaddle, dim lights, non-nutritive sucking."
+    elif total >= 4:
+        severity = "mild"
+        treatment = "Intensive supportive care: rooming-in, breastfeeding if possible. Rescore in 4 hours."
+    else:
+        severity = "normal"
+        treatment = "No treatment required. Routine NAS monitoring."
+
+    return {
+        "total_score": total,
+        "severity": severity,
+        "requires_treatment": total >= 8,
+        "treatment_escalation": total >= 12,
+        "recommendation": treatment,
+    }
+
+
+@app.post("/nicu/cdss/pn-adequacy")
+async def check_pn_adequacy(body: dict):
+    """Check if a PN prescription meets ESPGHAN 2018 targets for given GA and postnatal day."""
+    pnd = body.get("postnatal_day", 1)
+    ga = body.get("ga_weeks", 36)
+    premature = ga < 37
+    vlbw = ga < 30
+
+    targets = {
+        "fluid_min": 80 if premature else 60,
+        "aa_min": 2.5 if vlbw else 1.5,
+        "lipid_min": 1.0 if pnd <= 1 else 2.0,
+        "glucose_min": 7.0 if vlbw else 5.0,
+    }
+
+    alerts = []
+    if body.get("amino_acid_g_per_kg", 0) < targets["aa_min"]:
+        alerts.append(f"Amino acid {body.get('amino_acid_g_per_kg', 0)} g/kg/day below minimum {targets['aa_min']} g/kg/day for day {pnd} GA {ga}w.")
+    if body.get("lipid_g_per_kg", 0) < targets["lipid_min"]:
+        alerts.append(f"Lipid {body.get('lipid_g_per_kg', 0)} g/kg/day below minimum {targets['lipid_min']} g/kg/day for day {pnd}.")
+    if body.get("fluid_ml_per_kg", 0) < targets["fluid_min"]:
+        alerts.append(f"Fluid {body.get('fluid_ml_per_kg', 0)} ml/kg/day below minimum {targets['fluid_min']} ml/kg/day.")
+
+    return {"adequate": len(alerts) == 0, "alerts": alerts, "targets": targets}
+
+
+@app.post("/well-baby/cdss/milestone-eval")
+async def well_baby_milestone_eval(body: dict):
+    """Evaluate ASQ-3 milestone scores against age-specific cutoffs."""
+    age_months = body.get("age_months")
+    scores = body.get("scores", {})
+    if age_months is None:
+        raise HTTPException(status_code=422, detail="age_months is required")
+    return evaluate_milestones(float(age_months), scores)
+
+
+@app.post("/well-baby/cdss/nutrition-risk")
+async def well_baby_nutrition_risk(body: dict):
+    """Classify nutritional status and return WHO/CMAM management guidance."""
+    return classify_nutrition_risk(
+        wfa_zscore=body.get("wfa_zscore"),
+        muac_cm=body.get("muac_cm"),
+        oedema=bool(body.get("oedema", False)),
+    )
+
+
+# ── Sprint 239: EPI/Immunisation CDSS ─────────────────────────────────────────
+
+# Zimbabwe EPI live-vaccine contraindication rules
+_EPI_CONTRAINDICATIONS: dict = {
+    "BCG":   [{"condition": "hiv_positive_symptomatic", "severity": "absolute", "reason": "BCG is contraindicated in symptomatic HIV — risk of disseminated BCG disease."},
+               {"condition": "severe_immunodeficiency", "severity": "absolute", "reason": "Live vaccine — contraindicated with SCID or severe combined immunodeficiency."}],
+    "OPV0":  [{"condition": "immunodeficiency", "severity": "absolute", "reason": "Oral polio (live) contraindicated in known immunodeficiency — use IPV."}],
+    "OPV1":  [{"condition": "immunodeficiency", "severity": "absolute", "reason": "Oral polio (live) contraindicated in known immunodeficiency — use IPV."}],
+    "OPV2":  [{"condition": "immunodeficiency", "severity": "absolute", "reason": "Oral polio (live) contraindicated in known immunodeficiency — use IPV."}],
+    "OPV3":  [{"condition": "immunodeficiency", "severity": "absolute", "reason": "Oral polio (live) contraindicated in known immunodeficiency — use IPV."}],
+    "ROTA1": [{"condition": "intussusception_history", "severity": "absolute", "reason": "Rotavirus vaccine contraindicated with prior intussusception history."},
+               {"condition": "severe_gastrointestinal_disease", "severity": "precaution", "reason": "Delay until acute GI illness resolves."},
+               {"condition": "age_over_24_weeks_first_dose", "severity": "absolute", "reason": "First rotavirus dose must not be given after 24 weeks of age."}],
+    "ROTA2": [{"condition": "intussusception_history", "severity": "absolute", "reason": "Rotavirus vaccine contraindicated with prior intussusception history."}],
+    "MR1":   [{"condition": "anaphylaxis_to_neomycin", "severity": "absolute", "reason": "MR contains neomycin — anaphylaxis history is an absolute contraindication."},
+               {"condition": "severe_immunodeficiency", "severity": "absolute", "reason": "Live attenuated vaccine — contraindicated in severe immunodeficiency."},
+               {"condition": "pregnancy", "severity": "absolute", "reason": "MR is a live vaccine — avoid in pregnancy."},
+               {"condition": "recent_blood_product", "severity": "precaution", "reason": "Delay MR ≥3 months after IVIG/blood products (may blunt immune response)."}],
+    "MR2":   [{"condition": "anaphylaxis_to_neomycin", "severity": "absolute", "reason": "MR contains neomycin — anaphylaxis history is an absolute contraindication."},
+               {"condition": "severe_immunodeficiency", "severity": "absolute", "reason": "Live attenuated vaccine — contraindicated in severe immunodeficiency."},
+               {"condition": "pregnancy", "severity": "absolute", "reason": "MR is a live vaccine — avoid in pregnancy."}],
+    "YF":    [{"condition": "age_under_6_months", "severity": "absolute", "reason": "Yellow fever vaccine contraindicated under 6 months (encephalitis risk)."},
+               {"condition": "thymus_disorder", "severity": "absolute", "reason": "Thymus disease (thymoma, myasthenia gravis) — YF is contraindicated."},
+               {"condition": "severe_immunodeficiency", "severity": "absolute", "reason": "Live vaccine — contraindicated in severe immunodeficiency."},
+               {"condition": "pregnancy", "severity": "precaution", "reason": "Use only if travel to endemic area unavoidable; weigh risk vs benefit."}],
+    "HPV1":  [{"condition": "pregnancy", "severity": "precaution", "reason": "Delay HPV vaccine until after delivery (precautionary; not teratogenic)."},
+               {"condition": "anaphylaxis_to_yeast", "severity": "absolute", "reason": "HPV vaccine produced in yeast; anaphylaxis to yeast is a contraindication."}],
+    "HPV2":  [{"condition": "pregnancy", "severity": "precaution", "reason": "Delay HPV vaccine until after delivery."},
+               {"condition": "anaphylaxis_to_yeast", "severity": "absolute", "reason": "HPV vaccine produced in yeast; anaphylaxis to yeast is a contraindication."}],
+}
+
+_UNIVERSAL_PRECAUTIONS = [
+    {"condition": "acute_febrile_illness", "severity": "precaution",
+     "reason": "Defer all vaccines until acute febrile illness resolves (temperature ≥38.5°C). Minor illness or low-grade fever is NOT a contraindication."},
+    {"condition": "anaphylaxis_to_previous_dose", "severity": "absolute",
+     "reason": "Anaphylaxis to a prior dose of the same vaccine is an absolute contraindication to re-vaccination."},
+]
+
+
+@app.post("/immunisation/cdss/contraindication-check")
+async def immunisation_contraindication_check(body: dict):
+    """
+    Check EPI vaccine contraindications for a given patient condition profile.
+
+    Body:
+      antigen_codes: list[str]   — EPI antigen codes to check (e.g. ["BCG","MR1"])
+      conditions:    list[str]   — patient conditions (e.g. ["hiv_positive_symptomatic","pregnancy"])
+
+    Returns: per-antigen contraindication assessment with severity and guidance.
+    """
+    antigen_codes: list = body.get("antigen_codes", [])
+    conditions: list = [c.lower().strip() for c in body.get("conditions", [])]
+
+    if not antigen_codes:
+        raise HTTPException(status_code=422, detail="antigen_codes must be a non-empty list.")
+
+    results = []
+    for code in antigen_codes:
+        antigen_rules = _EPI_CONTRAINDICATIONS.get(code.upper(), [])
+        all_rules = antigen_rules + _UNIVERSAL_PRECAUTIONS
+        triggered = [r for r in all_rules if r["condition"] in conditions]
+
+        absolute = [r for r in triggered if r["severity"] == "absolute"]
+        precautions = [r for r in triggered if r["severity"] == "precaution"]
+
+        if absolute:
+            status = "CONTRAINDICATED"
+        elif precautions:
+            status = "PRECAUTION"
+        else:
+            status = "SAFE_TO_GIVE"
+
+        results.append({
+            "antigen_code": code.upper(),
+            "status": status,
+            "absolute_contraindications": absolute,
+            "precautions": precautions,
+            "guidance": (
+                "DO NOT administer — absolute contraindication present. Document reason and counsel caregiver."
+                if absolute else
+                "Administer with caution — review precautions with clinician before vaccinating."
+                if precautions else
+                "No contraindications identified for listed conditions. Safe to administer per EPI schedule."
+            ),
+        })
+
+    has_absolute = any(r["status"] == "CONTRAINDICATED" for r in results)
+    return {
+        "results": results,
+        "summary": "CONTRAINDICATED" if has_absolute else ("PRECAUTIONS_NOTED" if any(r["status"] == "PRECAUTION" for r in results) else "ALL_SAFE"),
+        "evaluated_conditions": conditions,
+    }
+
+
+@app.post("/neonatal-screening/cdss/cchd-algorithm")
+async def cchd_algorithm(body: dict):
+    """
+    AAP 2011 CCHD pulse-oximetry 3-attempt algorithm.
+    body: { right_hand_spo2: float, foot_spo2: float, attempt_number: int }
+    """
+    rh = float(body.get("right_hand_spo2", 0))
+    foot = float(body.get("foot_spo2", 0))
+    attempt = int(body.get("attempt_number", 1))
+    diff = abs(rh - foot)
+
+    if rh < 90 or foot < 90:
+        return {
+            "result": "fail_urgent",
+            "action": "URGENT EVALUATION — SpO₂ below 90%. Immediate cardiorespiratory assessment.",
+            "repeat": False,
+        }
+    if rh >= 95 and foot >= 95 and diff <= 3:
+        return {"result": "pass", "action": "CCHD screen PASSED.", "repeat": False}
+    if attempt >= 3:
+        return {
+            "result": "fail_final",
+            "action": "3 failed attempts. Echocardiography and paediatric cardiology evaluation required.",
+            "repeat": False,
+        }
+    return {
+        "result": "fail_repeat",
+        "action": f"Attempt {attempt} failed. Repeat in 1 hour.",
+        "repeat": True,
+        "next_attempt": attempt + 1,
+    }
 
 
 if __name__ == "__main__":

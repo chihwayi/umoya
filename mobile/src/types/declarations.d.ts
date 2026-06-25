@@ -29,6 +29,48 @@ declare module 'expo-av' {
   export { Audio };
 }
 
+declare module 'lucide-react-native' {
+  import { FC } from 'react';
+  import { SvgProps } from 'react-native-svg';
+  interface IconProps extends SvgProps {
+    size?: number;
+    color?: string;
+    strokeWidth?: number;
+  }
+  type Icon = FC<IconProps>;
+  export const Activity: Icon;
+  export const AlertTriangle: Icon;
+  export const AlertCircle: Icon;
+  export const Baby: Icon;
+  export const Bell: Icon;
+  export const Brain: Icon;
+  export const CheckCircle: Icon;
+  export const ChevronDown: Icon;
+  export const ChevronRight: Icon;
+  export const Clock: Icon;
+  export const Droplet: Icon;
+  export const Ear: Icon;
+  export const FileText: Icon;
+  export const FlaskConical: Icon;
+  export const Heart: Icon;
+  export const HeartPulse: Icon;
+  export const Info: Icon;
+  export const Microscope: Icon;
+  export const Package: Icon;
+  export const Plus: Icon;
+  export const RefreshCw: Icon;
+  export const Search: Icon;
+  export const Shield: Icon;
+  export const Stethoscope: Icon;
+  export const Thermometer: Icon;
+  export const TrendingDown: Icon;
+  export const TrendingUp: Icon;
+  export const User: Icon;
+  export const Users: Icon;
+  export const XCircle: Icon;
+  export const Zap: Icon;
+}
+
 declare module 'socket.io-client' {
   export interface Socket {
     on(event: string, listener: (...args: any[]) => void): this;

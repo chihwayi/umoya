@@ -98,22 +98,28 @@ describe('ImagingReportComposer', () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /Generate AI Draft/i })).not.toBeNull();
+      expect(screen.getByRole('button', { name: /Generate AI Draft/i })).toBeTruthy();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Generate AI Draft/i }));
 
     await waitFor(() => {
       expect(ehrApi.generateImagingReportDraft).toHaveBeenCalledWith('kids-clinic', 'token', 'study-1');
-      expect(screen.queryByText(/Governed AI Report Draft/i)).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Governed AI Report Draft/i)).toBeTruthy();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Apply AI Draft/i }));
 
     await waitFor(() => {
-      expect(screen.queryByDisplayValue(/Right lower lobe consolidation with high AI confidence./i)).not.toBeNull();
-      expect(screen.queryByDisplayValue(/Findings are concerning for focal pneumonia./i)).not.toBeNull();
-      expect(screen.queryByDisplayValue(/Correlate clinically and consider short-interval follow-up chest imaging./i)).not.toBeNull();
+      expect(screen.getByDisplayValue(/Right lower lobe consolidation with high AI confidence./i)).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByDisplayValue(/Findings are concerning for focal pneumonia./i)).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByDisplayValue(/Correlate clinically and consider short-interval follow-up chest imaging./i)).toBeTruthy();
     });
   });
 
@@ -170,7 +176,9 @@ describe('ImagingReportComposer', () => {
         'disc-1',
         { review_status: 'resolved' },
       );
-      expect(screen.queryByText(/Workflow: resolved/i)).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Workflow: resolved/i)).toBeTruthy();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Complete/i }));
@@ -181,7 +189,9 @@ describe('ImagingReportComposer', () => {
         'token',
         'follow-1',
       );
-      expect(screen.queryByText(/Status: completed/i)).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Status: completed/i)).toBeTruthy();
     });
   });
 });

@@ -54,6 +54,14 @@ const EDDashboard = lazy(() => import('./pages/EDDashboard'));
 const BedManagementDashboard = lazy(() => import('./pages/BedManagementDashboard'));
 const AdmittedPatientPage = lazy(() => import('./pages/AdmittedPatientPage'));
 const ORDashboard = lazy(() => import('./pages/ORDashboard'));
+const CathLabDashboard = lazy(() => import('./pages/CathLabDashboard'));
+const CathLabAiPanel = lazy(() => import('./pages/CathLabAiPanel'));
+const IcuDashboard   = lazy(() => import('./pages/IcuDashboard'));
+const IcuAiDashboard = lazy(() => import('./pages/IcuAiDashboard'));
+const NicuDashboard      = lazy(() => import('./pages/NicuDashboard'));
+const WellBabyDashboard  = lazy(() => import('./pages/WellBabyDashboard'));
+const EpiDashboard       = lazy(() => import('./pages/EpiDashboard'));
+const NeonatalScreeningDashboard = lazy(() => import('./pages/NeonatalScreeningDashboard'));
 const PACUDashboard = lazy(() => import('./pages/PACUDashboard'));
 const MARDashboard = lazy(() => import('./pages/MARDashboard'));
 const BloodBankDashboard = lazy(() => import('./pages/BloodBankDashboard'));
@@ -788,6 +796,78 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="operating_room">
                   <ORDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 232: Cardiac Catheterisation Lab */}
+            <Route
+              path="/ehr/:tenantSlug/cathlab"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="cathlab">
+                  <CathLabDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 233: CathLab AI */}
+            <Route
+              path="/ehr/:tenantSlug/cathlab/ai/:caseId"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="cathlab">
+                  <CathLabAiPanel />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 234: ICU Management */}
+            <Route
+              path="/ehr/:tenantSlug/icu"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="intensive_care">
+                  <IcuDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 235: ICU AI Safety & Quality */}
+            <Route
+              path="/ehr/:tenantSlug/icu/ai"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="intensive_care">
+                  <IcuAiDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 236: NICU Core */}
+            <Route
+              path="/ehr/:tenantSlug/nicu"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="nicu">
+                  <NicuDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 238: Well-Baby Clinic */}
+            <Route
+              path="/ehr/:tenantSlug/well-baby"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="well_baby_clinic">
+                  <WellBabyDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 239: EPI/Immunisation */}
+            <Route
+              path="/ehr/:tenantSlug/epi"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="immunisation">
+                  <EpiDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 240: Neonatal Screening */}
+            <Route
+              path="/ehr/:tenantSlug/neonatal-screening"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="neonatal_screening">
+                  <NeonatalScreeningDashboard />
                 </RoleProtectedRoute>
               }
             />

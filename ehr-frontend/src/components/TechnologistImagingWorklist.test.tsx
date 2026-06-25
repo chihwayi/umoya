@@ -86,8 +86,10 @@ describe('TechnologistImagingWorklist', () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByText(/Chest X-Ray/i)).not.toBeNull();
-      expect(screen.queryByRole('button', { name: /AI Protocol/i })).not.toBeNull();
+      expect(screen.getByText(/Chest X-Ray/i)).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /AI Protocol/i })).toBeTruthy();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /AI Protocol/i }));
@@ -98,13 +100,19 @@ describe('TechnologistImagingWorklist', () => {
         'token',
         'order-1',
       );
-      expect(screen.queryByText(/AI Protocol Review/i)).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/AI Protocol Review/i)).toBeTruthy();
+    });
+    await waitFor(() => {
       expect(
-        screen.queryByText(/Patient already has a similar imaging order in the last 30 days./i),
-      ).not.toBeNull();
+        screen.getByText(/Patient already has a similar imaging order in the last 30 days./i),
+      ).toBeTruthy();
+    });
+    await waitFor(() => {
       expect(
-        screen.queryByText(/Chest radiograph is appropriate first-line imaging for persistent cough./i),
-      ).not.toBeNull();
+        screen.getByText(/Chest radiograph is appropriate first-line imaging for persistent cough./i),
+      ).toBeTruthy();
     });
   });
 });

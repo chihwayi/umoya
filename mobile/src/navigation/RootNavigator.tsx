@@ -17,6 +17,16 @@ import { DoctorPostVisitScreen } from "../components/doctor/DoctorPostVisitScree
 import { DoctorAIScreen } from "../components/doctor/DoctorAIScreen";
 import { DoctorMessagesScreen }    from "../components/doctor/DoctorMessagesScreen";
 import { DoctorEscalationScreen }  from "../components/doctor/DoctorEscalationScreen";
+import CathLabScreen from "../screens/CathLabScreen";
+import CathLabAiScreen from "../screens/CathLabAiScreen";
+import IcuBedScreen from "../screens/IcuBedScreen";
+import IcuAlertsScreen from "../screens/IcuAlertsScreen";
+import NicuAdmissionScreen from "../screens/NicuAdmissionScreen";
+import NicuKmcScreen from "../screens/NicuKmcScreen";
+import NicuDrugDoseScreen from "../screens/NicuDrugDoseScreen";
+import WellBabyScreen from "../screens/WellBabyScreen";
+import VaccinationCardScreen from "../screens/VaccinationCardScreen";
+import NeonatalScreeningScreen from "../screens/NeonatalScreeningScreen";
 
 import { NurseShiftScreen }  from "../components/nurse/NurseShiftScreen";
 import { NurseVitalsScreen } from "../components/nurse/NurseVitalsScreen";
@@ -41,7 +51,8 @@ import { PatientEducationScreen } from "../components/patient/PatientEducationSc
 import { EducationCourseScreen } from "../components/patient/EducationCourseScreen";
 import { PatientFamilyAccessScreen } from "../components/patient/PatientFamilyAccessScreen";
 
-const Stack  = createNativeStackNavigator();
+const Stack       = createNativeStackNavigator();
+const DoctorStack = createNativeStackNavigator();
 const PatientStack = createNativeStackNavigator();
 const DoctorTabs  = createBottomTabNavigator();
 const NurseTabs   = createBottomTabNavigator();
@@ -55,7 +66,7 @@ const DOCTOR_TABS = [
   { icon: "brain"     as const, label: "AI"        },
 ];
 
-const DoctorNavigator = () => (
+const DoctorTabs_ = () => (
   <DoctorTabs.Navigator
     tabBar={(props) => <CustomTabBar {...props} accent={C.teal} tabs={DOCTOR_TABS} />}
     screenOptions={{ headerShown: false }}
@@ -66,6 +77,22 @@ const DoctorNavigator = () => (
     <DoctorTabs.Screen name="DMessages"    component={DoctorMessagesScreen}   />
     <DoctorTabs.Screen name="DAI"          component={DoctorAIScreen}         />
   </DoctorTabs.Navigator>
+);
+
+const DoctorNavigator = () => (
+  <DoctorStack.Navigator screenOptions={{ headerShown: false }}>
+    <DoctorStack.Screen name="DoctorTabs" component={DoctorTabs_} />
+    <DoctorStack.Screen name="CathLab" component={CathLabScreen} options={{ title: 'Cath Lab', headerShown: true }} />
+    <DoctorStack.Screen name="CathLabAi" component={CathLabAiScreen} options={{ title: 'CathLab AI Summary', headerShown: true }} />
+    <DoctorStack.Screen name="IcuBed"    component={IcuBedScreen}     options={{ title: 'ICU Census',   headerShown: true }} />
+    <DoctorStack.Screen name="IcuAlerts"   component={IcuAlertsScreen}      options={{ title: 'ICU Alerts',   headerShown: true }} />
+    <DoctorStack.Screen name="NicuCensus"   component={NicuAdmissionScreen}  options={{ title: 'NICU',             headerShown: true }} />
+    <DoctorStack.Screen name="NicuKmc"     component={NicuKmcScreen}        options={{ title: 'KMC Session',      headerShown: true }} />
+    <DoctorStack.Screen name="NicuDrugDose" component={NicuDrugDoseScreen} options={{ title: 'NICU Drug Dosing', headerShown: true }} />
+    <DoctorStack.Screen name="WellBaby" component={WellBabyScreen} options={{ title: 'Well-Baby', headerShown: true }} />
+    <DoctorStack.Screen name="VaccinationCard" component={VaccinationCardScreen} options={{ title: 'Vaccination Card', headerShown: true }} />
+    <DoctorStack.Screen name="NeonatalScreening" component={NeonatalScreeningScreen} options={{ title: 'Newborn Screening', headerShown: true }} />
+  </DoctorStack.Navigator>
 );
 
 const NURSE_TABS = [
