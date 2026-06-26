@@ -26,11 +26,13 @@ describe('DatimMerService', () => {
         .mockResolvedValueOnce([{ date_of_birth: '2000-01-01', gender: 'female' }])
         .mockResolvedValueOnce([{ patient_id: 'p1', date_of_birth: '2000-01-01', gender: 'female' }])
         .mockResolvedValueOnce([{ patient_id: 'p1', date_of_birth: '2000-01-01', gender: 'female', viral_load: 200 }])
-        .mockResolvedValueOnce([{ date_of_birth: '2000-01-01', gender: 'female', test_result: 'positive' }]),
+        .mockResolvedValueOnce([{ date_of_birth: '2000-01-01', gender: 'female', test_result: 'positive' }])
+        .mockResolvedValueOnce([]) // TX_ML
+        .mockResolvedValueOnce([]), // TX_RTT
       getRepository: jest.fn(),
     };
     const tenantService = { getTenantDatabase: jest.fn(async () => db) };
-    const service = new DatimMerService(tenantService as any);
+    const service = new DatimMerService(tenantService as any, null as any);
 
     const preview = await service.previewIndicators('tenant-a', '202604');
 
@@ -66,14 +68,16 @@ describe('DatimMerService', () => {
         .mockResolvedValueOnce([{ date_of_birth: '2000-01-01', gender: 'female' }])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ date_of_birth: '2000-01-01', gender: 'female', test_result: 'positive' }]),
+        .mockResolvedValueOnce([{ date_of_birth: '2000-01-01', gender: 'female', test_result: 'positive' }])
+        .mockResolvedValueOnce([]) // TX_ML
+        .mockResolvedValueOnce([]), // TX_RTT
       getRepository: jest.fn((entity) => {
         if (entity.name === 'DatimSubmission') return submissionRepo;
         return mappingRepo;
       }),
     };
     const tenantService = { getTenantDatabase: jest.fn(async () => db) };
-    const service = new DatimMerService(tenantService as any);
+    const service = new DatimMerService(tenantService as any, null as any);
 
     const result = await service.submitToDatim('tenant-a', '202604', 'OU-1');
 
