@@ -387,6 +387,7 @@ import { SdgIndicatorTarget } from '../analytics/entities/sdg-indicator-target.e
 import { NcidRegistration } from '../entities/ncid-registration.entity';
 import { NcidDuplicateFlag } from '../entities/ncid-duplicate-flag.entity';
 import { NcidProgrammeLinkage } from '../entities/ncid-programme-linkage.entity';
+import { Dhis2ProgrammeSubscription } from '../entities/dhis2-programme-subscription.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -993,6 +994,7 @@ export class TenantService {
         NcidRegistration,
         NcidDuplicateFlag,
         NcidProgrammeLinkage,
+        Dhis2ProgrammeSubscription,
       ],
       logging: false,
     });

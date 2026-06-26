@@ -13,6 +13,11 @@ export class DatimMerController {
     return this.datimMerService.previewIndicators(req.tenantId, period);
   }
 
+  @Get('anomaly-narrative/:period')
+  generateAnomalyNarrative(@Param('period') period: string, @Request() req: RequestWithTenant) {
+    return this.datimMerService.generateAnomalyNarrative(req.tenantId, period);
+  }
+
   @Post('submit/:period')
   submitToDatim(
     @Param('period') period: string,

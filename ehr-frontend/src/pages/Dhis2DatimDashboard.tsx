@@ -14,6 +14,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
+  Bell,
+  BellRing,
+  Trash2,
+  Sparkles,
 } from 'lucide-react';
 import {
   Bar,
@@ -27,7 +31,7 @@ import {
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 
-type TabKey = 'tracker' | 'datim' | 'mappings' | 'aggregate' | 'benchmarks';
+type TabKey = 'tracker' | 'datim' | 'mappings' | 'aggregate' | 'benchmarks' | 'subscriptions';
 
 interface Dhis2DatimDashboardProps {
   tenantSlug?: string;
@@ -59,6 +63,24 @@ interface MappingRow {
   datimCocUid: string;
   periodType: string;
   notes: string | null;
+}
+
+interface ProgrammeSubscription {
+  id: string;
+  indicatorCode: string;
+  indicatorName: string;
+  thresholdOperator: string;
+  thresholdValue: number;
+  alertEnabled: boolean;
+  lastValue: number | null;
+  lastCheckedAt: string | null;
+  lastAlertedAt: string | null;
+}
+
+interface AnomalyNarrative {
+  narrative: string;
+  anomalies: Array<{ indicator: string; current: number; previous: number; pctChange: number }>;
+  model: string | null;
 }
 
 const authHeaders = (token: string, tenantSlug: string) => ({
@@ -165,6 +187,22 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
   } | null>(null);
   const [benchmarkLoading, setBenchmarkLoading] = useState(false);
 
+  // ── Anomaly narrative state ──────────────────────────────────────────────
+  const [narrativeData, setNarrativeData] = useState<AnomalyNarrative | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+
+  // ── Programme subscriptions state ────────────────────────────────────────
+  const [subscriptions, setSubscriptions] = useState<ProgrammeSubscription[]>([]);
+  const [subscriptionForm, setSubscriptionForm] = useState({
+    indicatorCode: '',
+    indicatorName: '',
+    thresholdOperator: 'above',
+    thresholdValue: '0',
+    alertEnabled: true,
+  });
+  const [checkResults, setCheckResults] = useState<Array<{ indicatorCode: string; value: number; breached: boolean }>>([]);
+  const [checkLoading, setCheckLoading] = useState(false);
+
   const [hivEnrollmentForm, setHivEnrollmentForm] = useState({
     patientId: '',
     trackedEntityUid: '',
@@ -233,17 +271,37 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
     setMappings(Array.isArray(data) ? data : []);
   }, [ehrHeaders, tenantSlug, token]);
 
+  const loadSubscriptions = useCallback(async () => {
+    if (!tenantSlug || !token) return;
+    const { data } = await ehrAxios.get('/dhis2/programme-subscriptions', { headers: ehrHeaders });
+    setSubscriptions(Array.isArray(data) ? data : []);
+  }, [ehrHeaders, tenantSlug, token]);
+
+  const fetchAnomalyNarrative = useCallback(async (period: string) => {
+    if (!tenantSlug || !token || !period) return;
+    setNarrativeLoading(true);
+    setNarrativeData(null);
+    try {
+      const { data } = await ehrAxios.get(`/datim/anomaly-narrative/${encodeURIComponent(period)}`, { headers: ehrHeaders });
+      setNarrativeData(data);
+    } catch {
+      // narrative is non-critical — fail silently
+    } finally {
+      setNarrativeLoading(false);
+    }
+  }, [ehrHeaders, tenantSlug, token]);
+
   const refreshAll = useCallback(async () => {
     if (!tenantSlug || !token) return;
     setLoading(true);
     try {
-      await Promise.all([loadDatimSubmissions(), loadMappings()]);
+      await Promise.all([loadDatimSubmissions(), loadMappings(), loadSubscriptions()]);
     } catch (error: any) {
       showError('Refresh failed', apiError(error, 'Unable to load DHIS2 / DATIM data.'));
     } finally {
       setLoading(false);
     }
-  }, [loadDatimSubmissions, loadMappings, showError, tenantSlug, token]);
+  }, [loadDatimSubmissions, loadMappings, loadSubscriptions, showError, tenantSlug, token]);
 
   useEffect(() => {
     void refreshAll();
@@ -449,6 +507,48 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
     }
   };
 
+  const handleUpsertSubscription = async () => {
+    try {
+      await ehrAxios.post('/dhis2/programme-subscriptions', {
+        indicatorCode: subscriptionForm.indicatorCode,
+        indicatorName: subscriptionForm.indicatorName,
+        thresholdOperator: subscriptionForm.thresholdOperator,
+        thresholdValue: Number(subscriptionForm.thresholdValue),
+        alertEnabled: subscriptionForm.alertEnabled,
+      }, { headers: ehrHeaders });
+      await loadSubscriptions();
+      setSubscriptionForm({ indicatorCode: '', indicatorName: '', thresholdOperator: 'above', thresholdValue: '0', alertEnabled: true });
+      showSuccess('Subscription saved', 'Programme indicator subscription has been created or updated.');
+    } catch (error: any) {
+      showError('Save failed', apiError(error, 'Unable to save subscription.'));
+    }
+  };
+
+  const handleDeleteSubscription = async (id: string) => {
+    try {
+      await ehrAxios.delete(`/dhis2/programme-subscriptions/${id}`, { headers: ehrHeaders });
+      await loadSubscriptions();
+      showSuccess('Deleted', 'Subscription removed.');
+    } catch (error: any) {
+      showError('Delete failed', apiError(error, 'Unable to delete subscription.'));
+    }
+  };
+
+  const handleCheckSubscriptions = async () => {
+    setCheckLoading(true);
+    setCheckResults([]);
+    try {
+      const { data } = await ehrAxios.post('/dhis2/programme-subscriptions/check', {}, { headers: ehrHeaders });
+      setCheckResults(Array.isArray(data) ? data : []);
+      await loadSubscriptions();
+      showSuccess('Check complete', `Checked ${Array.isArray(data) ? data.length : 0} indicator(s) against DHIS2.`);
+    } catch (error: any) {
+      showError('Check failed', apiError(error, 'Unable to check indicators.'));
+    } finally {
+      setCheckLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -464,7 +564,7 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
             </button>
             <div>
               <h1 className="text-2xl font-semibold text-white">DHIS2 Tracker + DATIM</h1>
-              <p className="text-sm text-slate-400">Individual TEI enrollment, stage events, and MER 2.x submission workflow.</p>
+              <p className="text-sm text-slate-400">Individual TEI enrollment, stage events, and DATIM MER 3.0 submission workflow.</p>
             </div>
           </div>
           <button
@@ -490,6 +590,7 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
             <TabButton active={tab === 'mappings'} icon={<GitMerge className="h-4 w-4" />} label="Indicator Mappings" onClick={() => setTab('mappings')} />
             <TabButton active={tab === 'aggregate'} icon={<Activity className="h-4 w-4" />} label="Aggregate Reports" onClick={() => setTab('aggregate')} />
             <TabButton active={tab === 'benchmarks'} icon={<TrendingUp className="h-4 w-4" />} label="Facility Benchmarks" onClick={() => { setTab('benchmarks'); loadBenchmarks(); }} />
+            <TabButton active={tab === 'subscriptions'} icon={<Bell className="h-4 w-4" />} label="Subscriptions" onClick={() => setTab('subscriptions')} />
           </div>
 
           {tab === 'tracker' && (
@@ -663,7 +764,7 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
             <div className="space-y-6">
               <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <h2 className="text-sm font-semibold text-white">Preview and Submit DATIM MER</h2>
+                  <h2 className="text-sm font-semibold text-white">Preview and Submit DATIM MER 3.0</h2>
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     <label className="space-y-1 text-xs text-slate-400">
                       <span>Period</span>
@@ -694,12 +795,44 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
                     </button>
                     <button
                       type="button"
+                      onClick={() => void fetchAnomalyNarrative(datimForm.period)}
+                      disabled={narrativeLoading}
+                      className="inline-flex items-center gap-2 rounded-xl border border-violet-700 bg-violet-500/10 px-4 py-2 text-sm text-violet-200 hover:bg-violet-500/20 disabled:opacity-50"
+                    >
+                      {narrativeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      AI Narrative
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => void handleSubmitDatim()}
                       className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
                     >
                       Submit to DATIM
                     </button>
                   </div>
+
+                  {narrativeData && (
+                    <div className="mt-4 rounded-2xl border border-violet-800 bg-violet-950/40 p-4">
+                      <div className="mb-2 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-violet-400" />
+                        <span className="text-xs font-semibold text-violet-300">Anomaly Narrative</span>
+                        {narrativeData.model && (
+                          <span className="rounded-full bg-violet-800/50 px-2 py-0.5 text-xs text-violet-400">{narrativeData.model}</span>
+                        )}
+                      </div>
+                      <p className="text-sm leading-relaxed text-slate-200">{narrativeData.narrative}</p>
+                      {narrativeData.anomalies.length > 0 && (
+                        <div className="mt-3 grid gap-1">
+                          {narrativeData.anomalies.map((a) => (
+                            <div key={a.indicator} className="flex items-center justify-between rounded-lg bg-slate-900/60 px-3 py-1.5 text-xs">
+                              <span className="font-medium text-slate-300">{a.indicator}</span>
+                              <span className="text-slate-400">{a.current} <span className={a.pctChange >= 0 ? 'text-emerald-400' : 'text-red-400'}>{a.pctChange >= 0 ? `+${a.pctChange}%` : `${a.pctChange}%`}</span> vs {a.previous}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800">
                     <table className="min-w-full divide-y divide-slate-800 text-sm">
@@ -1077,6 +1210,146 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
                   <p className="text-sm">Click "Pull from DHIS2" to load your facility's performance indicators.</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {tab === 'subscriptions' && (
+            <div className="space-y-6">
+              {/* Add / Edit form */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h2 className="text-sm font-semibold text-white">Subscribe to Programme Indicator</h2>
+                <p className="mt-1 text-xs text-slate-400">
+                  Enter a DHIS2 programme indicator code. The system will poll DHIS2 periodically and surface an alert when the value crosses your threshold.
+                </p>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {[
+                    ['Indicator Code', subscriptionForm.indicatorCode, 'indicatorCode', 'e.g. TX_CURR_HIV'],
+                    ['Indicator Name', subscriptionForm.indicatorName, 'indicatorName', 'Display name'],
+                    ['Threshold Value', subscriptionForm.thresholdValue, 'thresholdValue', '0'],
+                  ].map(([label, value, key, placeholder]) => (
+                    <label key={key} className="space-y-1 text-xs text-slate-400">
+                      <span>{label}</span>
+                      <input
+                        value={String(value)}
+                        placeholder={placeholder}
+                        onChange={(e) => setSubscriptionForm((s) => ({ ...s, [key]: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-cyan-600"
+                      />
+                    </label>
+                  ))}
+                  <label className="space-y-1 text-xs text-slate-400">
+                    <span>Threshold Operator</span>
+                    <select
+                      value={subscriptionForm.thresholdOperator}
+                      onChange={(e) => setSubscriptionForm((s) => ({ ...s, thresholdOperator: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-cyan-600"
+                    >
+                      <option value="above">Above</option>
+                      <option value="below">Below</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="alertEnabled"
+                    checked={subscriptionForm.alertEnabled}
+                    onChange={(e) => setSubscriptionForm((s) => ({ ...s, alertEnabled: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <label htmlFor="alertEnabled" className="text-xs text-slate-400">Alert enabled</label>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleUpsertSubscription()}
+                    className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+                  >
+                    Save Subscription
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCheckSubscriptions()}
+                    disabled={checkLoading}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:text-white disabled:opacity-50"
+                  >
+                    {checkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <BellRing className="h-4 w-4" />}
+                    Check Now
+                  </button>
+                </div>
+              </div>
+
+              {/* Check results */}
+              {checkResults.length > 0 && (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-white">Latest Check Results</h3>
+                  <div className="space-y-2">
+                    {checkResults.map((r) => (
+                      <div key={r.indicatorCode} className={`flex items-center justify-between rounded-xl border px-4 py-2 text-sm ${r.breached ? 'border-red-800 bg-red-950/30' : 'border-slate-800 bg-slate-900'}`}>
+                        <span className="font-medium text-slate-200">{r.indicatorCode}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-slate-400">{r.value.toLocaleString()}</span>
+                          {r.breached
+                            ? <span className="flex items-center gap-1 text-red-400"><AlertTriangle className="h-4 w-4" /> Threshold breached</span>
+                            : <span className="flex items-center gap-1 text-emerald-400"><CheckCircle2 className="h-4 w-4" /> Within threshold</span>
+                          }
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Subscriptions list */}
+              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
+                <table className="min-w-full divide-y divide-slate-800 text-sm">
+                  <thead className="bg-slate-900 text-slate-300">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Indicator</th>
+                      <th className="px-3 py-2 text-left font-medium">Threshold</th>
+                      <th className="px-3 py-2 text-left font-medium">Last Value</th>
+                      <th className="px-3 py-2 text-left font-medium">Last Checked</th>
+                      <th className="px-3 py-2 text-left font-medium">Alerts</th>
+                      <th className="px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800 bg-slate-950 text-slate-200">
+                    {subscriptions.map((sub) => (
+                      <tr key={sub.id}>
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{sub.indicatorCode}</div>
+                          <div className="text-xs text-slate-500">{sub.indicatorName}</div>
+                        </td>
+                        <td className="px-3 py-2">{sub.thresholdOperator} {sub.thresholdValue.toLocaleString()}</td>
+                        <td className="px-3 py-2">{sub.lastValue !== null ? sub.lastValue.toLocaleString() : '—'}</td>
+                        <td className="px-3 py-2">{sub.lastCheckedAt ? new Date(sub.lastCheckedAt).toLocaleString() : '—'}</td>
+                        <td className="px-3 py-2">
+                          {sub.alertEnabled
+                            ? <span className="inline-flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="h-3 w-3" /> On</span>
+                            : <span className="text-xs text-slate-500">Off</span>
+                          }
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteSubscription(sub.id)}
+                            className="rounded-lg p-1 text-slate-600 hover:text-red-400"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {!subscriptions.length && (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                          No subscriptions yet. Add one above to start monitoring DHIS2 programme indicators.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

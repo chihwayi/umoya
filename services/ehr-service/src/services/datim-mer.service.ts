@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import axios from 'axios';
 import { TenantService } from './tenant.service';
 import { DatimIndicatorMapping } from '../entities/datim-indicator-mapping.entity';
 import { DatimSubmission } from '../entities/datim-submission.entity';
+import { ClinicalLlmService } from './clinical-llm.service';
 
 type DatimRow = {
   indicator: string;
@@ -19,7 +20,10 @@ type PeriodWindow = {
 
 @Injectable()
 export class DatimMerService {
-  constructor(private readonly tenantService: TenantService) {}
+  constructor(
+    private readonly tenantService: TenantService,
+    @Optional() private readonly llm: ClinicalLlmService,
+  ) {}
 
   private parsePeriod(period: string): PeriodWindow {
     if (/^\d{6}$/.test(period)) {
@@ -182,7 +186,58 @@ export class DatimMerService {
       }
     }
 
+    // MER v3: TX_ML — patients active at period start who had a treatment interruption during the period
+    const txMlRows = await db.query(
+      `SELECT p.date_of_birth, p.gender, COALESCE(e.enrollment_status, 'active') AS status
+       FROM hiv_care_enrollments e
+       INNER JOIN patients p ON p.id = e.patient_id
+       WHERE e.art_start_date IS NOT NULL
+         AND e.art_start_date < $1::date
+         AND (
+           (e.transfer_out_date >= $1::date AND e.transfer_out_date <= $2::date)
+           OR (
+             COALESCE(e.enrollment_status, 'active') IN ('ltfu', 'deceased', 'discontinued', 'stopped')
+             AND e.updated_at >= $1::timestamp
+             AND e.updated_at <= $2::timestamp + INTERVAL '1 day'
+           )
+         )`,
+      [window.startDate, window.endDate],
+    );
+    for (const row of txMlRows) {
+      this.increment(counts, 'TX_ML', this.disaggregate(row.gender, row.date_of_birth, window.endDate));
+    }
+
+    // MER v3: TX_RTT — patients who had missed pickups and restarted ART during the period
+    const txRttRows = await db.query(
+      `SELECT p.date_of_birth, p.gender
+       FROM hiv_care_enrollments e
+       INNER JOIN patients p ON p.id = e.patient_id
+       WHERE e.art_restart_date >= $1::date
+         AND e.art_restart_date <= $2::date`,
+      [window.startDate, window.endDate],
+    );
+    for (const row of txRttRows) {
+      this.increment(counts, 'TX_RTT', this.disaggregate(row.gender, row.date_of_birth, window.endDate));
+    }
+
     return this.flatten(counts);
+  }
+
+  private previousPeriod(period: string): string {
+    if (/^\d{6}$/.test(period)) {
+      const year = Number(period.slice(0, 4));
+      const month = Number(period.slice(4, 6));
+      const prev = new Date(Date.UTC(year, month - 2, 1));
+      return `${prev.getUTCFullYear()}${String(prev.getUTCMonth() + 1).padStart(2, '0')}`;
+    }
+    const quarterlyMatch = period.match(/^(\d{4})Q([1-4])$/);
+    if (quarterlyMatch) {
+      const year = Number(quarterlyMatch[1]);
+      const quarter = Number(quarterlyMatch[2]);
+      if (quarter === 1) return `${year - 1}Q4`;
+      return `${year}Q${quarter - 1}`;
+    }
+    throw new Error(`Cannot compute previous period for: ${period}`);
   }
 
   async previewIndicators(tenantId: string, period: string): Promise<any> {
@@ -287,5 +342,73 @@ export class DatimMerService {
   async getIndicatorMappings(tenantId: string): Promise<DatimIndicatorMapping[]> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     return db.getRepository(DatimIndicatorMapping).find({ order: { merIndicator: 'ASC', disaggregate: 'ASC' } });
+  }
+
+  async generateAnomalyNarrative(tenantId: string, period: string): Promise<{ narrative: string; anomalies: any[]; model: string | null }> {
+    const [current, prevPeriod] = await Promise.all([
+      this.computeIndicators(tenantId, period),
+      this.computeIndicators(tenantId, this.previousPeriod(period)).catch(() => [] as DatimRow[]),
+    ]);
+
+    const prevIndex = new Map(prevPeriod.map((r) => [`${r.indicator}::${r.disaggregate}`, r.value]));
+
+    // Aggregate totals per indicator for easier comparison
+    const totals = new Map<string, number>();
+    for (const r of current) {
+      totals.set(r.indicator, (totals.get(r.indicator) ?? 0) + r.value);
+    }
+    const prevTotals = new Map<string, number>();
+    for (const r of prevPeriod) {
+      prevTotals.set(r.indicator, (prevTotals.get(r.indicator) ?? 0) + r.value);
+    }
+
+    const anomalies: Array<{ indicator: string; current: number; previous: number; pctChange: number }> = [];
+    for (const [indicator, curr] of totals.entries()) {
+      const prev = prevTotals.get(indicator) ?? 0;
+      if (prev === 0 && curr === 0) continue;
+      const pctChange = prev === 0 ? 100 : Math.round(((curr - prev) / prev) * 100);
+      if (Math.abs(pctChange) >= 10 || prev === 0) {
+        anomalies.push({ indicator, current: curr, previous: prev, pctChange });
+      }
+    }
+    anomalies.sort((a, b) => Math.abs(b.pctChange) - Math.abs(a.pctChange));
+
+    if (!this.llm?.isConfigured() || anomalies.length === 0) {
+      const lines = anomalies.map((a) => {
+        const dir = a.pctChange >= 0 ? `up ${a.pctChange}%` : `down ${Math.abs(a.pctChange)}%`;
+        return `• ${a.indicator}: ${a.current} (${dir} vs previous period, was ${a.previous})`;
+      });
+      return {
+        narrative: lines.length
+          ? `Indicator summary vs previous period:\n${lines.join('\n')}`
+          : 'No significant changes detected compared to the previous reporting period.',
+        anomalies,
+        model: null,
+      };
+    }
+
+    const bulletList = anomalies
+      .slice(0, 10)
+      .map((a) => {
+        const dir = a.pctChange >= 0 ? `increased by ${a.pctChange}%` : `decreased by ${Math.abs(a.pctChange)}%`;
+        return `- ${a.indicator}: ${a.current} (${dir} vs previous period of ${a.previous})`;
+      })
+      .join('\n');
+
+    const prompt =
+      `You are a public health data analyst reviewing PEPFAR MER indicator data for a healthcare facility.\n` +
+      `The following indicators changed significantly compared to the previous reporting period (${this.previousPeriod(period)} → ${period}):\n\n` +
+      `${bulletList}\n\n` +
+      `Write a concise plain-language narrative (3–5 sentences) for a clinician reviewing these indicators before submitting to DATIM. ` +
+      `Highlight the most concerning changes, suggest likely causes, and recommend any immediate follow-up actions. ` +
+      `Be specific to HIV/TB programme management. Do not add headers or bullet points — write as continuous prose.`;
+
+    const result = await this.llm.generate(prompt, { context: 'datim_anomaly_narrative', maxTokens: 400, temperature: 0.3 });
+
+    return {
+      narrative: result?.text ?? anomalies.map((a) => `${a.indicator}: ${a.current} (${a.pctChange >= 0 ? '+' : ''}${a.pctChange}% vs ${a.previous})`).join('; '),
+      anomalies,
+      model: result?.model ?? null,
+    };
   }
 }

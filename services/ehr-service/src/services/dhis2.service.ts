@@ -4,6 +4,7 @@ import axios, { AxiosInstance } from 'axios';
 import { env } from '@umoya/config';
 import { Patient } from '../entities/patient.entity';
 import { TenantDhis2Config, TenantService } from './tenant.service';
+import { Dhis2ProgrammeSubscription } from '../entities/dhis2-programme-subscription.entity';
 
 interface Dhis2RuntimeConfig {
   baseUrl: string;
@@ -4146,6 +4147,107 @@ export class Dhis2Service {
         };
       }),
     };
+  }
+
+  // ─── Programme Indicator Subscriptions ───────────────────────────────────────
+
+  async getProgrammeSubscriptions(tenantDb: DataSource): Promise<Dhis2ProgrammeSubscription[]> {
+    await this.ensureProgrammeSubscriptionTable(tenantDb);
+    return tenantDb.getRepository(Dhis2ProgrammeSubscription).find({ order: { createdAt: 'DESC' } });
+  }
+
+  async upsertProgrammeSubscription(tenantDb: DataSource, body: {
+    indicatorCode: string;
+    indicatorName: string;
+    thresholdOperator?: string;
+    thresholdValue: number;
+    alertEnabled?: boolean;
+  }): Promise<Dhis2ProgrammeSubscription> {
+    await this.ensureProgrammeSubscriptionTable(tenantDb);
+    const repo = tenantDb.getRepository(Dhis2ProgrammeSubscription);
+    const existing = await repo.findOne({ where: { indicatorCode: body.indicatorCode } });
+    if (existing) {
+      await repo.update(existing.id, {
+        indicatorName: body.indicatorName,
+        thresholdOperator: body.thresholdOperator ?? existing.thresholdOperator,
+        thresholdValue: body.thresholdValue,
+        alertEnabled: body.alertEnabled ?? existing.alertEnabled,
+      });
+      return repo.findOne({ where: { id: existing.id } }) as Promise<Dhis2ProgrammeSubscription>;
+    }
+    const created = repo.create({
+      indicatorCode: body.indicatorCode,
+      indicatorName: body.indicatorName,
+      thresholdOperator: body.thresholdOperator ?? 'above',
+      thresholdValue: body.thresholdValue,
+      alertEnabled: body.alertEnabled ?? true,
+    });
+    return repo.save(created);
+  }
+
+  async deleteProgrammeSubscription(tenantDb: DataSource, id: string): Promise<void> {
+    await this.ensureProgrammeSubscriptionTable(tenantDb);
+    await tenantDb.getRepository(Dhis2ProgrammeSubscription).delete(id);
+  }
+
+  async checkProgrammeSubscriptions(tenantDb: DataSource, tenantId?: string): Promise<Array<{ indicatorCode: string; value: number; breached: boolean }>> {
+    await this.ensureProgrammeSubscriptionTable(tenantDb);
+    const repo = tenantDb.getRepository(Dhis2ProgrammeSubscription);
+    const active = await repo.find({ where: { alertEnabled: true } });
+    if (active.length === 0) return [];
+
+    const context = await this.resolveContext(tenantId);
+    const baseUrl = context.config?.baseUrl;
+    const client = context.client;
+    if (!baseUrl || !client) return [];
+
+    const results: Array<{ indicatorCode: string; value: number; breached: boolean }> = [];
+    const now = new Date();
+    const period = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+    for (const sub of active) {
+      try {
+        const url = `${baseUrl}/api/analytics.json?dimension=dx:${encodeURIComponent(sub.indicatorCode)}&dimension=pe:${period}&dimension=ou:${encodeURIComponent(context.config?.orgUnitId ?? 'USER_ORGUNIT')}&skipMeta=true`;
+        const resp = await client.get(url);
+        const rows: any[][] = resp.data?.rows ?? [];
+        const value = rows.length > 0 ? Number(rows[0][2]) : 0;
+
+        const breached =
+          sub.thresholdOperator === 'below'
+            ? value < sub.thresholdValue
+            : value > sub.thresholdValue;
+
+        await repo.update(sub.id, {
+          lastValue: value,
+          lastCheckedAt: now,
+          ...(breached ? { lastAlertedAt: now } : {}),
+        });
+
+        results.push({ indicatorCode: sub.indicatorCode, value, breached });
+      } catch {
+        // tolerate per-indicator fetch errors
+      }
+    }
+
+    return results;
+  }
+
+  private async ensureProgrammeSubscriptionTable(tenantDb: DataSource): Promise<void> {
+    await tenantDb.query(`
+      CREATE TABLE IF NOT EXISTS dhis2_programme_subscriptions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        indicator_code VARCHAR(100) NOT NULL UNIQUE,
+        indicator_name VARCHAR(255) NOT NULL,
+        threshold_operator VARCHAR(10) NOT NULL DEFAULT 'above',
+        threshold_value FLOAT NOT NULL,
+        alert_enabled BOOLEAN NOT NULL DEFAULT true,
+        last_value FLOAT,
+        last_checked_at TIMESTAMPTZ,
+        last_alerted_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
   }
 
 }

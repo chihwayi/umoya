@@ -272,11 +272,25 @@ Umoya implements the deepest DHIS2 integration of any open-source EHR. Every cli
 - DHIS2 expression syntax (`#{UID}`) parsed and evaluated against submitted values; rules referencing absent data elements are skipped with a warning
 - Violations shown in the Aggregate Reports tab UI — green "✓ All rules passed" or yellow warning cards per rule
 
-### Planned (Next)
+### MER 3.0 Indicators
 
-- Automated anomaly narrative — LLM-generated plain-language commentary before submission ("HIV LTFU is 23% above last quarter — review retention protocols")
-- Programme indicator subscription — subscribe to DHIS2 programme indicators and surface alerts back in the EHR
-- DATIM MER v3 indicators
+- **TX_ML** — patients who were on ART at period start but had a treatment interruption during the period (LTFU, stopped, transfer out, deceased); disaggregated by age/sex
+- **TX_RTT** — patients who missed ART pickups and restarted treatment during the period (requires `art_restart_date` on `hiv_care_enrollments`)
+- All MER 2.x indicators retained: TX_NEW, TX_CURR, TX_PVLS / TX_PVLS_D, HTS_TST / HTS_TST_POS
+
+### Anomaly Narrative
+
+- `GET /datim/anomaly-narrative/:period` — compares current period indicator totals against the previous period; anomalies ≥ 10% change surface as a bulleted table plus an LLM-generated plain-language commentary (e.g. "HIV LTFU is 23% above last quarter — review retention protocols")
+- Narrative generation uses `ClinicalLlmService` (Anthropic / Azure OpenAI / AWS Bedrock / Ollama) — falls back to a rule-generated bullet list when no LLM backend is configured
+- Integrated into the DATIM MER tab: an **AI Narrative** button appears alongside Preview and Submit; the narrative panel shows above the indicator table
+
+### Programme Indicator Subscriptions
+
+- `GET /dhis2/programme-subscriptions` — list active indicator subscriptions for the current tenant
+- `POST /dhis2/programme-subscriptions` — create or update a subscription (indicator code, name, threshold operator `above`/`below`, threshold value, alert enabled flag)
+- `DELETE /dhis2/programme-subscriptions/:id` — remove a subscription
+- `POST /dhis2/programme-subscriptions/check` — manually pull each subscribed indicator from DHIS2 analytics and flag threshold breaches; scheduler can call this automatically
+- Subscriptions surface in the new **Subscriptions** tab on the DHIS2/DATIM dashboard with a live check-results panel
 
 ---
 

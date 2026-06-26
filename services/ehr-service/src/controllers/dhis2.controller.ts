@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, UseGuards, Request, Param } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Query, UseGuards, Request, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { Dhis2Service } from '../services/dhis2.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -218,5 +218,32 @@ export class Dhis2Controller {
       email: req.user?.email ? String(req.user.email) : null,
       requestId,
     });
+  }
+
+  @Get('programme-subscriptions')
+  @ApiOperation({ summary: 'List programme indicator subscriptions for this tenant' })
+  listProgrammeSubscriptions(@Request() req: RequestWithTenant) {
+    return this.dhis2Service.getProgrammeSubscriptions(req.tenantDb);
+  }
+
+  @Post('programme-subscriptions')
+  @ApiOperation({ summary: 'Create or update a programme indicator subscription' })
+  upsertProgrammeSubscription(
+    @Body() body: { indicatorCode: string; indicatorName: string; thresholdOperator?: string; thresholdValue: number; alertEnabled?: boolean },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.dhis2Service.upsertProgrammeSubscription(req.tenantDb, body);
+  }
+
+  @Delete('programme-subscriptions/:id')
+  @ApiOperation({ summary: 'Delete a programme indicator subscription' })
+  deleteProgrammeSubscription(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    return this.dhis2Service.deleteProgrammeSubscription(req.tenantDb, id);
+  }
+
+  @Post('programme-subscriptions/check')
+  @ApiOperation({ summary: 'Manually trigger a check against DHIS2 for all subscribed indicators' })
+  checkProgrammeSubscriptions(@Request() req: RequestWithTenant) {
+    return this.dhis2Service.checkProgrammeSubscriptions(req.tenantDb, req.tenantId);
   }
 }
