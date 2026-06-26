@@ -63,12 +63,15 @@ export class OemSurveillanceService {
 
   async getOverdueSurveillance(db: any): Promise<any[]> {
     return db.query(
-      `SELECT oss.*, p.first_name, p.last_name, e.name AS company_name
+      `SELECT oss.*,
+              p.first_name, p.last_name,
+              e.name AS company_name,
+              (CURRENT_DATE - oss.due_date)::INT AS days_overdue
        FROM oem_surveillance_schedule oss
        JOIN patients p ON p.id = oss.patient_id
        JOIN oem_employers e ON e.id = oss.employer_id
-       WHERE oss.is_overdue = TRUE
-       ORDER BY oss.days_overdue DESC`,
+       WHERE oss.completed_date IS NULL AND oss.due_date < CURRENT_DATE
+       ORDER BY oss.due_date ASC`,
     );
   }
 

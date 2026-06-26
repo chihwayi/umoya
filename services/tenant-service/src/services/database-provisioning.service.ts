@@ -7269,7 +7269,7 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_ift_job ON inter_facility_transfers(job_id)`,
           `CREATE INDEX IF NOT EXISTS idx_ift_patient ON inter_facility_transfers(patient_id)`,
 
-          `CREATE VIEW IF NOT EXISTS transport_response_quality AS
+          `CREATE OR REPLACE VIEW transport_response_quality AS
             SELECT
               TO_CHAR(DATE_TRUNC('month', call_received_at), 'YYYY-MM-DD') AS month,
               priority,
@@ -7465,12 +7465,11 @@ export class DatabaseProvisioningService {
             reason          TEXT,
             completed       BOOLEAN NOT NULL DEFAULT FALSE,
             completed_date  DATE,
-            is_overdue      BOOLEAN GENERATED ALWAYS AS (completed = FALSE AND due_date < CURRENT_DATE) STORED,
             assigned_to     UUID REFERENCES users(id),
             created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
           )`,
           `CREATE INDEX IF NOT EXISTS idx_paed_cardiac_followup_patient ON paed_cardiac_followup(patient_id)`,
-          `CREATE INDEX IF NOT EXISTS idx_paed_cardiac_overdue ON paed_cardiac_followup(is_overdue) WHERE is_overdue = TRUE`,
+          `CREATE INDEX IF NOT EXISTS idx_paed_cardiac_overdue ON paed_cardiac_followup(due_date) WHERE completed = FALSE`,
         ],
       },
       {
@@ -7643,15 +7642,10 @@ export class DatabaseProvisioningService {
             surveillance_type TEXT NOT NULL,
             due_date        DATE NOT NULL,
             completed_date  DATE,
-            is_overdue      BOOLEAN GENERATED ALWAYS AS (completed_date IS NULL AND due_date < CURRENT_DATE) STORED,
-            days_overdue    INTEGER GENERATED ALWAYS AS (
-                              CASE WHEN completed_date IS NULL AND due_date < CURRENT_DATE
-                                   THEN (CURRENT_DATE - due_date) ELSE 0 END
-                            ) STORED,
             created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
           )`,
           `CREATE INDEX IF NOT EXISTS idx_oem_surv_patient ON oem_surveillance_schedule(patient_id)`,
-          `CREATE INDEX IF NOT EXISTS idx_oem_surv_overdue ON oem_surveillance_schedule(is_overdue, due_date) WHERE is_overdue = TRUE`,
+          `CREATE INDEX IF NOT EXISTS idx_oem_surv_overdue ON oem_surveillance_schedule(due_date) WHERE completed_date IS NULL`,
           `CREATE TABLE IF NOT EXISTS oem_rtw_plans (
             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             patient_id      UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,

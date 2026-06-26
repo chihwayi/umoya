@@ -119,6 +119,7 @@ ehthumbs.db
 venv/
 env/
 .venv/
+.venv-ci/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -152,3 +153,4 @@ test-results/
 
 feedback
 amazon
+ci-errors.txt
