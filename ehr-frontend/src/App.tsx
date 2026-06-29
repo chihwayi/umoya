@@ -101,6 +101,7 @@ const TbaDashboard = lazy(() => import('./pages/TbaDashboard'));
 const SaInteropDashboard = lazy(() => import('./pages/SaInteropDashboard'));
 const Dhis2DatimDashboard = lazy(() => import('./pages/Dhis2DatimDashboard'));
 const CascadeDashboardPage = lazy(() => import('./pages/CascadeDashboardPage'));
+const MdsrDashboard = lazy(() => import('./pages/MdsrDashboard'));
 const MessagingDashboard = lazy(() => import('./pages/MessagingDashboard'));
 const OpenMrsMflDashboard = lazy(() => import('./pages/OpenMrsMflDashboard'));
 const InteropDashboard = lazy(() => import('./components/InteropDashboard'));
@@ -1310,6 +1311,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <CascadeDashboardPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/mdsr-dashboard"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <MdsrDashboard />
                 </RoleProtectedRoute>
               }
             />
