@@ -8050,6 +8050,27 @@ export class DatabaseProvisioningService {
           `CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_snap_unique ON ai_model_performance_snapshots(tenant_id, model_name, snapshot_period)`,
         ],
       },
+      // ── S242: AI Model Governance Log ────────────────────────────────────
+      {
+        id: 'nc_ai_governance_log',
+        label: 'AI Model Governance Audit Log',
+        version: 1,
+        description: 'Formal review workflow for AI model drift, retraining, and retirement',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS ai_model_governance_log (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id       TEXT NOT NULL,
+            model_name      TEXT NOT NULL,
+            model_version   TEXT,
+            event_type      TEXT NOT NULL,
+            reason          TEXT,
+            performed_by    TEXT NOT NULL,
+            notes           TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_gov_model ON ai_model_governance_log(model_name, created_at)`,
+        ],
+      },
       // ── S236: Equity Analytics ────────────────────────────────────────────
       {
         id: 'nc_equity_analytics',

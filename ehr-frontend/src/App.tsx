@@ -107,6 +107,7 @@ const EquityDashboard = lazy(() => import('./pages/EquityDashboard'));
 const BenchmarkingDashboard = lazy(() => import('./pages/BenchmarkingDashboard'));
 const ModuleReportsDashboard = lazy(() => import('./pages/ModuleReportsDashboard'));
 const PharmacyIntelligenceDashboard = lazy(() => import('./pages/PharmacyIntelligenceDashboard'));
+const AiGovernanceDashboard = lazy(() => import('./pages/AiGovernanceDashboard'));
 const MessagingDashboard = lazy(() => import('./pages/MessagingDashboard'));
 const OpenMrsMflDashboard = lazy(() => import('./pages/OpenMrsMflDashboard'));
 const InteropDashboard = lazy(() => import('./components/InteropDashboard'));
@@ -1364,6 +1365,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <PharmacyIntelligenceDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/ai-governance"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'medical_director', 'quality_assurance_officer', 'it_admin']}>
+                  <AiGovernanceDashboard />
                 </RoleProtectedRoute>
               }
             />

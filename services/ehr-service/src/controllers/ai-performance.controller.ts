@@ -50,4 +50,56 @@ export class AiPerformanceController {
   autoVerify(@Param('tenantId') tenantId: string) {
     return this.aiPerformance.autoVerifyPredictions(tenantId);
   }
+
+  // ── S242: Governance ──────────────────────────────────────────────────────
+
+  @Post('governance/:modelName/review-request')
+  requestReview(
+    @Param('tenantId') tenantId: string,
+    @Param('modelName') modelName: string,
+    @Body() dto: any,
+  ) {
+    return this.aiPerformance.requestModelReview(
+      tenantId, modelName, dto.reason, dto.raised_by, dto.notes,
+    );
+  }
+
+  @Put('governance/:modelName/status')
+  updateStatus(
+    @Param('tenantId') tenantId: string,
+    @Param('modelName') modelName: string,
+    @Body() dto: any,
+  ) {
+    return this.aiPerformance.updateModelStatus(
+      tenantId, modelName, dto.action, dto.reviewed_by, dto.notes ?? '',
+    );
+  }
+
+  @Get('governance/:modelName/history')
+  getGovernanceHistory(
+    @Param('tenantId') tenantId: string,
+    @Param('modelName') modelName: string,
+  ) {
+    return this.aiPerformance.getGovernanceHistory(tenantId, modelName);
+  }
+
+  @Get(':modelName/calibration')
+  getCalibration(
+    @Param('tenantId') tenantId: string,
+    @Param('modelName') modelName: string,
+    @Query('period') period: string,
+  ) {
+    const p = period || new Date().toISOString().slice(0, 7);
+    return this.aiPerformance.getCalibrationPlot(tenantId, modelName, p);
+  }
+
+  @Get(':modelName/fairness')
+  getFairness(
+    @Param('tenantId') tenantId: string,
+    @Param('modelName') modelName: string,
+    @Query('period') period: string,
+  ) {
+    const p = period || new Date().toISOString().slice(0, 7);
+    return this.aiPerformance.getModelFairness(tenantId, modelName, p);
+  }
 }

@@ -160,6 +160,138 @@ export class AiPerformanceService {
     }
   }
 
+  // ── S242: Governance ──────────────────────────────────────────────────────
+
+  async requestModelReview(
+    tenantId: string,
+    modelName: string,
+    reason: string,
+    raisedBy: string,
+    notes?: string,
+  ): Promise<void> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    await db.query(
+      `INSERT INTO ai_model_governance_log
+         (tenant_id, model_name, event_type, reason, performed_by, notes)
+       VALUES ($1,$2,'review_requested',$3,$4,$5)`,
+      [tenantId, modelName, reason, raisedBy, notes ?? null],
+    ).catch(() => {});
+  }
+
+  async updateModelStatus(
+    tenantId: string,
+    modelName: string,
+    action: string,
+    reviewedBy: string,
+    notes: string,
+  ): Promise<void> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    await db.query(
+      `INSERT INTO ai_model_governance_log
+         (tenant_id, model_name, event_type, reason, performed_by, notes)
+       VALUES ($1,$2,$3,NULL,$4,$5)`,
+      [tenantId, modelName, action, reviewedBy, notes],
+    ).catch(() => {});
+  }
+
+  async getGovernanceHistory(tenantId: string, modelName: string): Promise<any[]> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const rows = await db.query(
+      `SELECT event_type, reason, performed_by, notes, created_at
+       FROM ai_model_governance_log
+       WHERE tenant_id=$1 AND model_name=$2
+       ORDER BY created_at DESC LIMIT 50`,
+      [tenantId, modelName],
+    ).catch(() => []);
+    return rows;
+  }
+
+  async getCalibrationPlot(tenantId: string, modelName: string, period: string): Promise<any[]> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const rows = await db.query(
+      `SELECT
+         CONCAT(FLOOR(predicted_probability * 10) * 10, '–', FLOOR(predicted_probability * 10) * 10 + 10, '%') AS predicted_bin,
+         FLOOR(predicted_probability * 10) AS bin_idx,
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE is_correct = true AND predicted_class IN ('high_risk','positive','readmitted','relapsed','deteriorated','deceased')) AS positives
+       FROM ai_predictions
+       WHERE tenant_id=$1 AND model_name=$2
+         AND predicted_probability IS NOT NULL
+         AND actual_outcome IS NOT NULL
+         AND TO_CHAR(prediction_date,'YYYY-MM') = $3
+       GROUP BY bin_idx, predicted_bin
+       ORDER BY bin_idx`,
+      [tenantId, modelName, period],
+    ).catch(() => []);
+    return rows.map((r: any) => ({
+      predicted_bin: r.predicted_bin,
+      actual_rate: r.total > 0 ? Number((r.positives / r.total).toFixed(4)) : null,
+      count: Number(r.total),
+    }));
+  }
+
+  async getModelFairness(tenantId: string, modelName: string, period: string): Promise<any> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const [sexRows, ageRows] = await Promise.all([
+      db.query(
+        `SELECT
+           COALESCE(p.sex, 'Unknown') AS group_val,
+           COUNT(ai.id) AS total,
+           COUNT(*) FILTER (WHERE ai.is_correct=true AND ai.predicted_class IN ('high_risk','positive','readmitted','relapsed','deteriorated','deceased')) AS tp,
+           COUNT(*) FILTER (WHERE ai.is_correct=false AND ai.predicted_class IN ('high_risk','positive','readmitted','relapsed','deteriorated','deceased')) AS fp,
+           COUNT(*) FILTER (WHERE ai.is_correct=true AND ai.predicted_class IN ('low_risk','negative','not_readmitted','no_relapse','stable','alive')) AS tn,
+           COUNT(*) FILTER (WHERE ai.is_correct=false AND ai.predicted_class IN ('low_risk','negative','not_readmitted','no_relapse','stable','alive')) AS fn
+         FROM ai_predictions ai
+         LEFT JOIN patients p ON p.id = ai.patient_id AND p.tenant_id = ai.tenant_id
+         WHERE ai.tenant_id=$1 AND ai.model_name=$2
+           AND ai.actual_outcome IS NOT NULL
+           AND TO_CHAR(ai.prediction_date,'YYYY-MM') = $3
+         GROUP BY p.sex`,
+        [tenantId, modelName, period],
+      ).catch(() => []),
+      db.query(
+        `SELECT
+           CASE
+             WHEN EXTRACT(YEAR FROM AGE(p.date_of_birth)) < 25 THEN '<25'
+             WHEN EXTRACT(YEAR FROM AGE(p.date_of_birth)) < 50 THEN '25–49'
+             ELSE '50+'
+           END AS group_val,
+           COUNT(ai.id) AS total,
+           COUNT(*) FILTER (WHERE ai.is_correct=true AND ai.predicted_class IN ('high_risk','positive','readmitted','relapsed','deteriorated','deceased')) AS tp,
+           COUNT(*) FILTER (WHERE ai.is_correct=false AND ai.predicted_class IN ('high_risk','positive','readmitted','relapsed','deteriorated','deceased')) AS fp,
+           COUNT(*) FILTER (WHERE ai.is_correct=true AND ai.predicted_class IN ('low_risk','negative','not_readmitted','no_relapse','stable','alive')) AS tn,
+           COUNT(*) FILTER (WHERE ai.is_correct=false AND ai.predicted_class IN ('low_risk','negative','not_readmitted','no_relapse','stable','alive')) AS fn
+         FROM ai_predictions ai
+         LEFT JOIN patients p ON p.id = ai.patient_id AND p.tenant_id = ai.tenant_id
+         WHERE ai.tenant_id=$1 AND ai.model_name=$2
+           AND ai.actual_outcome IS NOT NULL
+           AND TO_CHAR(ai.prediction_date,'YYYY-MM') = $3
+         GROUP BY group_val`,
+        [tenantId, modelName, period],
+      ).catch(() => []),
+    ]);
+
+    const toMetrics = (rows: any[]) => rows.map((r: any) => {
+      const tp = Number(r.tp); const fp = Number(r.fp);
+      const tn = Number(r.tn); const fn = Number(r.fn);
+      const prec = tp + fp > 0 ? tp / (tp + fp) : 0;
+      const rec = tp + fn > 0 ? tp / (tp + fn) : 0;
+      const f1 = prec + rec > 0 ? (2 * prec * rec) / (prec + rec) : 0;
+      return {
+        group: r.group_val,
+        precision: Number(prec.toFixed(3)),
+        recall: Number(rec.toFixed(3)),
+        auc: Number(this.estimateAuc(prec, rec).toFixed(3)),
+        f1: Number(f1.toFixed(3)),
+        count: Number(r.total),
+      };
+    });
+
+    return { by_sex: toMetrics(sexRows), by_age_band: toMetrics(ageRows) };
+  }
+
+  // ── End S242 ──────────────────────────────────────────────────────────────
+
   private async lookupOutcome(db: any, tenantId: string, pred: any): Promise<{ actual: string; source: string } | null> {
     if (pred.model_name === 'readmission_risk') {
       const [row] = await db.query(
