@@ -1223,4 +1223,176 @@ export class PharmacyIntelligenceService {
   private normalizeText(value: any) {
     return String(value || '').trim().toLowerCase();
   }
+
+  // ── S240: Pharmacy Intelligence Reports ───────────────────────────────────
+
+  async getFormularyAdherenceReport(tenantDb: DataSource, tenantId: string, period: string): Promise<any> {
+    const [total, formulary, offFormulary, topOff, byPrescriber] = await Promise.allSettled([
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS n FROM prescriptions WHERE tenant_id=$1 AND TO_CHAR(created_at,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS n FROM prescriptions p
+         JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
+         WHERE p.tenant_id=$1 AND TO_CHAR(p.created_at,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT p.drug_name, COUNT(*)::int AS n FROM prescriptions p
+         LEFT JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
+         WHERE p.tenant_id=$1 AND TO_CHAR(p.created_at,'YYYYMM')=$2 AND fd.drug_code IS NULL
+         GROUP BY p.drug_name ORDER BY n DESC LIMIT 10`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT p.drug_name, COUNT(*)::int AS n FROM prescriptions p
+         LEFT JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
+         WHERE p.tenant_id=$1 AND TO_CHAR(p.created_at,'YYYYMM')=$2 AND fd.drug_code IS NULL
+         GROUP BY p.drug_name ORDER BY n DESC LIMIT 5`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT p.prescriber_id,
+                COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE fd.drug_code IS NULL)::int AS off_formulary
+         FROM prescriptions p
+         LEFT JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
+         WHERE p.tenant_id=$1 AND TO_CHAR(p.created_at,'YYYYMM')=$2
+         GROUP BY p.prescriber_id
+         ORDER BY off_formulary DESC LIMIT 10`,
+        [tenantId, period],
+      ),
+    ]);
+
+    const totalN = this._val(total);
+    const formularyN = this._val(formulary);
+    const adherenceRate = totalN > 0 ? Number(((formularyN / totalN) * 100).toFixed(1)) : 0;
+
+    return {
+      period, total_prescriptions: totalN,
+      formulary_prescriptions: formularyN,
+      adherence_rate_pct: adherenceRate,
+      off_formulary_count: totalN - formularyN,
+      top_off_formulary_drugs: this._rows(offFormulary),
+      top_off_formulary_drugs_table: this._rows(topOff),
+      prescriber_outliers: this._rows(byPrescriber),
+    };
+  }
+
+  async getDrugWasteReport(tenantDb: DataSource, tenantId: string, period: string): Promise<any> {
+    const [expired, returned, damaged, nearExpiry, totalValue] = await Promise.allSettled([
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS n, COALESCE(SUM(quantity * unit_cost),0) AS value
+         FROM pharmacy_stock_transactions
+         WHERE tenant_id=$1 AND transaction_type='expired' AND TO_CHAR(transaction_date,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS n FROM pharmacy_stock_transactions
+         WHERE tenant_id=$1 AND transaction_type='returned' AND TO_CHAR(transaction_date,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS n FROM pharmacy_stock_transactions
+         WHERE tenant_id=$1 AND transaction_type='damaged' AND TO_CHAR(transaction_date,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT drug_name, expiry_date, quantity FROM pharmacy_inventory
+         WHERE tenant_id=$1 AND expiry_date BETWEEN NOW() AND NOW() + INTERVAL '90 days'
+         ORDER BY expiry_date LIMIT 20`,
+        [tenantId],
+      ),
+      tenantDb.query(
+        `SELECT COALESCE(SUM(quantity * unit_cost),0) AS value FROM pharmacy_inventory WHERE tenant_id=$1`,
+        [tenantId],
+      ),
+    ]);
+
+    const expRow = this._firstRow(expired);
+    return {
+      period,
+      expired_units: Number(expRow?.n ?? 0),
+      expired_value: Number(expRow?.value ?? 0),
+      returned_units: this._val(returned),
+      damaged_units: this._val(damaged),
+      near_expiry_items: this._rows(nearExpiry),
+      total_inventory_value: this._numFirst(totalValue, 'value'),
+    };
+  }
+
+  async getAmsSummary(tenantDb: DataSource, tenantId: string, period: string): Promise<any> {
+    const [total, restricted, ddd, cultures, abxByClass, iv_to_po] = await Promise.allSettled([
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS n FROM prescriptions
+         WHERE tenant_id=$1 AND drug_category='antibiotic' AND TO_CHAR(created_at,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS n FROM prescriptions p
+         JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
+         WHERE p.tenant_id=$1 AND p.drug_category='antibiotic' AND fd.watch_category='restricted'
+           AND TO_CHAR(p.created_at,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT SUM(ddd_value)::NUMERIC(10,2) AS total_ddd,
+                COUNT(DISTINCT patient_id)::int AS patients
+         FROM prescription_ddd_records
+         WHERE tenant_id=$1 AND TO_CHAR(recorded_at,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT COUNT(*)::int AS n FROM lab_cultures
+         WHERE tenant_id=$1 AND TO_CHAR(collected_at,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT COALESCE(drug_class,'Other') AS drug_class, COUNT(*)::int AS n
+         FROM prescriptions WHERE tenant_id=$1 AND drug_category='antibiotic' AND TO_CHAR(created_at,'YYYYMM')=$2
+         GROUP BY drug_class ORDER BY n DESC`,
+        [tenantId, period],
+      ),
+      tenantDb.query(
+        `SELECT COUNT(*) FILTER (WHERE route='IV') * 100.0 / NULLIF(COUNT(*),0) AS iv_pct
+         FROM prescriptions WHERE tenant_id=$1 AND drug_category='antibiotic' AND TO_CHAR(created_at,'YYYYMM')=$2`,
+        [tenantId, period],
+      ),
+    ]);
+
+    const dddRow = this._firstRow(ddd);
+    const ivRow = this._firstRow(iv_to_po);
+    return {
+      period,
+      total_antibiotic_prescriptions: this._val(total),
+      restricted_antibiotic_prescriptions: this._val(restricted),
+      total_ddd: Number(dddRow?.total_ddd ?? 0),
+      patients_on_antibiotics: Number(dddRow?.patients ?? 0),
+      cultures_collected: this._val(cultures),
+      iv_rate_pct: Number((Number(ivRow?.iv_pct ?? 0)).toFixed(1)),
+      by_antibiotic_class: this._rows(abxByClass),
+    };
+  }
+
+  private _val(settled: PromiseSettledResult<any>): number {
+    if (settled.status !== 'fulfilled' || !settled.value?.length) return 0;
+    const row = settled.value[0];
+    return Number(row?.n ?? row?.total ?? 0);
+  }
+
+  private _rows(settled: PromiseSettledResult<any>): any[] {
+    if (settled.status !== 'fulfilled') return [];
+    return settled.value ?? [];
+  }
+
+  private _numFirst(settled: PromiseSettledResult<any>, key: string): number {
+    if (settled.status !== 'fulfilled' || !settled.value?.length) return 0;
+    return Number(settled.value[0]?.[key] ?? 0);
+  }
+
+  private _firstRow(settled: PromiseSettledResult<any>): any {
+    if (settled.status !== 'fulfilled' || !settled.value?.length) return null;
+    return settled.value[0];
+  }
 }

@@ -461,4 +461,26 @@ export class PharmacyController {
     const userId = (req.user as any)?.userId ?? (req.user as any)?.id;
     return this.pharmacyService.createPrescriptionWithContraindicationOverride(dto, userId, req.tenantDb);
   }
+
+  // S240 — Pharmacy Intelligence Reports
+  @Get('reports/formulary-adherence')
+  @ApiOperation({ summary: 'Formulary adherence report for a period' })
+  getFormularyAdherence(@Query('period') period: string, @Request() req: RequestWithTenant) {
+    const p = period || new Date().toISOString().slice(0, 7).replace('-', '');
+    return this.pharmacyIntelligenceService.getFormularyAdherenceReport(req.tenantDb, req.tenantId, p);
+  }
+
+  @Get('reports/drug-waste')
+  @ApiOperation({ summary: 'Drug waste and near-expiry report for a period' })
+  getDrugWaste(@Query('period') period: string, @Request() req: RequestWithTenant) {
+    const p = period || new Date().toISOString().slice(0, 7).replace('-', '');
+    return this.pharmacyIntelligenceService.getDrugWasteReport(req.tenantDb, req.tenantId, p);
+  }
+
+  @Get('reports/ams')
+  @ApiOperation({ summary: 'Antimicrobial stewardship summary for a period' })
+  getAmsSummary(@Query('period') period: string, @Request() req: RequestWithTenant) {
+    const p = period || new Date().toISOString().slice(0, 7).replace('-', '');
+    return this.pharmacyIntelligenceService.getAmsSummary(req.tenantDb, req.tenantId, p);
+  }
 }
