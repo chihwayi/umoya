@@ -315,6 +315,8 @@ import { EquityAnalyticsController } from './controllers/equity-analytics.contro
 import { EquityAnalyticsService } from './services/equity-analytics.service';
 import { BenchmarkingController } from './controllers/benchmarking.controller';
 import { BenchmarkingService } from './services/benchmarking.service';
+import { ModuleReportsController } from './controllers/module-reports.controller';
+import { ModuleReportsService } from './services/module-reports.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -949,6 +951,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AiPerformanceController,
     EquityAnalyticsController,
     BenchmarkingController,
+    ModuleReportsController,
   ],
   providers: [
     NotificationCenterService,
@@ -1314,6 +1317,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     AiPerformanceService,
     EquityAnalyticsService,
     BenchmarkingService,
+    ModuleReportsService,
     MfaGuard,
     {
       provide: APP_GUARD,
