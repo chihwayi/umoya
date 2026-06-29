@@ -8088,6 +8088,34 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_equity_heat ON equity_heat_matrix(tenant_id, period, kpi_name)`,
         ],
       },
+      // ── S237: Multi-Facility Benchmarking ────────────────────────────────
+      {
+        id: 'nc_benchmarking',
+        label: 'Multi-Facility Benchmarking Snapshots',
+        version: 1,
+        description: 'Per-facility metric snapshots for percentile benchmarking against district/national peers',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS facility_benchmark_snapshots (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id     TEXT NOT NULL,
+            facility_id   TEXT NOT NULL,
+            facility_name TEXT,
+            metric_name   TEXT NOT NULL,
+            period        TEXT NOT NULL,
+            raw_value     NUMERIC(10,4),
+            peer_p25      NUMERIC(10,4),
+            peer_p50      NUMERIC(10,4),
+            peer_p75      NUMERIC(10,4),
+            national_p75  NUMERIC(10,4),
+            percentile_rank NUMERIC(5,2),
+            status        TEXT,
+            computed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_bench_facility ON facility_benchmark_snapshots(tenant_id, facility_id, period)`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_bench_unique
+             ON facility_benchmark_snapshots(tenant_id, facility_id, metric_name, period)`,
+        ],
+      },
     ];
   }
 

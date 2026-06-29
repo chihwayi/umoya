@@ -313,6 +313,8 @@ import { AiPerformanceController } from './controllers/ai-performance.controller
 import { AiPerformanceService } from './services/ai-performance.service';
 import { EquityAnalyticsController } from './controllers/equity-analytics.controller';
 import { EquityAnalyticsService } from './services/equity-analytics.service';
+import { BenchmarkingController } from './controllers/benchmarking.controller';
+import { BenchmarkingService } from './services/benchmarking.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -946,6 +948,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MdsrController,
     AiPerformanceController,
     EquityAnalyticsController,
+    BenchmarkingController,
   ],
   providers: [
     NotificationCenterService,
@@ -1310,6 +1313,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     MdsrService,
     AiPerformanceService,
     EquityAnalyticsService,
+    BenchmarkingService,
     MfaGuard,
     {
       provide: APP_GUARD,
