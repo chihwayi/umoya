@@ -154,6 +154,10 @@ export class Dhis2Controller {
         { key: 'surgical_monthly',       label: 'Surgical Services',         period: 'monthly' },
         { key: 'cervical_cancer_monthly',label: 'Cervical Cancer Screening', period: 'monthly' },
         { key: 'neonatal_monthly',       label: 'Neonatal Care',             period: 'monthly' },
+        { key: 'outcome_linkage_monthly', label: 'Outcome Linkage & Follow-Up', period: 'monthly' },
+        { key: 'care_gap_monthly',        label: 'Care Gap Closure',          period: 'monthly' },
+        { key: 'equity_monthly',          label: 'Equity Analytics',          period: 'monthly' },
+        { key: 'ai_performance_monthly',  label: 'AI Model Performance',      period: 'monthly' },
       ],
     };
   }

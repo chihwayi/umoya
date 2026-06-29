@@ -85,7 +85,11 @@ type AggregateProfileKey =
   | 'hai_monthly'
   | 'surgical_monthly'
   | 'cervical_cancer_monthly'
-  | 'neonatal_monthly';
+  | 'neonatal_monthly'
+  | 'outcome_linkage_monthly'
+  | 'care_gap_monthly'
+  | 'equity_monthly'
+  | 'ai_performance_monthly';
 
 interface AggregateProfileDefinition {
   dataSetCode: string;
@@ -383,6 +387,58 @@ export class Dhis2Service {
         neonatalDeaths: 'MC_DE_NEO_DEATHS',
         hivExposedInfants: 'MC_DE_NEO_HIV_EXPOSED',
         arvProphylaxisGiven: 'MC_DE_NEO_ARV_PROPHYLAXIS',
+      },
+    },
+    outcome_linkage_monthly: {
+      dataSetCode: 'MC_DS_OUTCOME_LINKAGE',
+      metricCodes: {
+        totalOutcomesRecorded: 'MC_DE_OL_TOTAL_OUTCOMES',
+        transfersOut: 'MC_DE_OL_TRANSFERS_OUT',
+        selfDischarge: 'MC_DE_OL_SELF_DISCHARGE',
+        followUpScheduled: 'MC_DE_OL_FOLLOWUP_SCHEDULED',
+        followUpCompleted: 'MC_DE_OL_FOLLOWUP_COMPLETED',
+        linkageLostToFollowUp: 'MC_DE_OL_LTFU',
+        readmissions30d: 'MC_DE_OL_READMISSIONS_30D',
+        cascadeLinkageRate: 'MC_DE_OL_CASCADE_LINKAGE_RATE',
+      },
+    },
+    care_gap_monthly: {
+      dataSetCode: 'MC_DS_CARE_GAP',
+      metricCodes: {
+        totalOpenGaps: 'MC_DE_CG_OPEN_GAPS',
+        gapsClosedThisMonth: 'MC_DE_CG_CLOSED',
+        closureRatePct: 'MC_DE_CG_CLOSURE_RATE',
+        avgDaysToClose: 'MC_DE_CG_AVG_DAYS',
+        gapsAntenatalCare: 'MC_DE_CG_ANC',
+        gapsHivVlMonitoring: 'MC_DE_CG_HIV_VL',
+        gapsTbScreening: 'MC_DE_CG_TB_SCREEN',
+        gapsNcdMedication: 'MC_DE_CG_NCD_MED',
+      },
+    },
+    equity_monthly: {
+      dataSetCode: 'MC_DS_EQUITY',
+      metricCodes: {
+        equityRatioHiv: 'MC_DE_EQ_HIV_RATIO',
+        equityRatioTb: 'MC_DE_EQ_TB_RATIO',
+        equityRatioAnc: 'MC_DE_EQ_ANC_RATIO',
+        equityRatioVacc: 'MC_DE_EQ_VACC_RATIO',
+        genderGapHivPct: 'MC_DE_EQ_GENDER_GAP_HIV',
+        ageGapTbPct: 'MC_DE_EQ_AGE_GAP_TB',
+        ruralUrbanGapDelivery: 'MC_DE_EQ_RURAL_URBAN_DEL',
+        insuranceGapNcd: 'MC_DE_EQ_INSURANCE_NCD',
+      },
+    },
+    ai_performance_monthly: {
+      dataSetCode: 'MC_DS_AI_PERFORMANCE',
+      metricCodes: {
+        totalPredictions: 'MC_DE_AI_PREDICTIONS',
+        predictionsVerified: 'MC_DE_AI_VERIFIED',
+        avgF1Score: 'MC_DE_AI_AVG_F1',
+        avgAuc: 'MC_DE_AI_AVG_AUC',
+        modelsWithDrift: 'MC_DE_AI_DRIFT_COUNT',
+        verificationRate: 'MC_DE_AI_VERIFY_RATE',
+        readmissionModelAuc: 'MC_DE_AI_READMIT_AUC',
+        malnutritionModelAuc: 'MC_DE_AI_MALNUT_AUC',
       },
     },
   };
@@ -2267,6 +2323,130 @@ export class Dhis2Service {
         liveBirthsTotal, stillbirthsTotal, lowBirthWeightCount, veryLowBirthWeightCount,
         pretermBirths, apgar5MinUnder7, neonatalResuscitation, scbuAdmissions,
         neonatalDeaths, hivExposedInfants, arvProphylaxisGiven,
+      };
+    }
+
+    // ── S238: Outcome Linkage profile ────────────────────────────────────────
+    if (profile === 'outcome_linkage_monthly') {
+      const [
+        totalOutcomesRecorded, transfersOut, selfDischarge,
+        followUpScheduled, followUpCompleted, linkageLostToFollowUp, readmissions30d,
+      ] = await Promise.all([
+        this.safeMetricCount(tenantDb, 'ol_total',
+          `SELECT COUNT(*)::int AS total FROM encounter_outcomes WHERE created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ol_transfer',
+          `SELECT COUNT(*)::int AS total FROM encounter_outcomes
+           WHERE outcome_type='transfer_out' AND created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ol_self',
+          `SELECT COUNT(*)::int AS total FROM encounter_outcomes
+           WHERE outcome_type='self_discharge' AND created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ol_followup_sched',
+          `SELECT COUNT(*)::int AS total FROM outcome_follow_up_schedules
+           WHERE created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ol_followup_comp',
+          `SELECT COUNT(*)::int AS total FROM outcome_follow_up_schedules
+           WHERE status='completed' AND created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ol_ltfu',
+          `SELECT COUNT(*)::int AS total FROM outcome_follow_up_schedules
+           WHERE status='missed' AND created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+        this.safeMetricCount(tenantDb, 'ol_readmit',
+          `SELECT COUNT(*)::int AS total FROM encounter_outcomes
+           WHERE outcome_type='readmitted' AND created_at >= $1 AND created_at < $2`,
+          [startDate, endDate]),
+      ]);
+      const cascadeLinkageRate = followUpScheduled > 0
+        ? Math.round((followUpCompleted / followUpScheduled) * 1000) / 1000
+        : 0;
+      return {
+        totalOutcomesRecorded, transfersOut, selfDischarge, followUpScheduled,
+        followUpCompleted, linkageLostToFollowUp, readmissions30d, cascadeLinkageRate,
+      };
+    }
+
+    // ── S238: Care Gap profile ────────────────────────────────────────────────
+    if (profile === 'care_gap_monthly') {
+      const period = startDate.toISOString().slice(0, 7).replace('-', '');
+      const [openRow, closedRow, avgRow] = await Promise.all([
+        tenantDb.query(`SELECT COUNT(*)::int AS n FROM care_gaps WHERE tenant_id=$1 AND status='open'`, [context.tenantId]).catch(() => [{ n: 0 }]),
+        tenantDb.query(`SELECT COUNT(*)::int AS n FROM care_gaps WHERE tenant_id=$1 AND TO_CHAR(closed_at,'YYYYMM')=$2`, [context.tenantId, period]).catch(() => [{ n: 0 }]),
+        tenantDb.query(
+          `SELECT ROUND(AVG(EXTRACT(DAY FROM (closed_at - opened_at))))::int AS avg_days
+           FROM care_gaps WHERE tenant_id=$1 AND TO_CHAR(closed_at,'YYYYMM')=$2`,
+          [context.tenantId, period]).catch(() => [{ avg_days: 0 }]),
+      ]);
+      const totalOpenGaps = Number(openRow[0]?.n ?? 0);
+      const gapsClosedThisMonth = Number(closedRow[0]?.n ?? 0);
+      const allForPeriod = totalOpenGaps + gapsClosedThisMonth;
+      const closureRatePct = allForPeriod > 0 ? Math.round((gapsClosedThisMonth / allForPeriod) * 100) : 0;
+      return {
+        totalOpenGaps, gapsClosedThisMonth, closureRatePct,
+        avgDaysToClose: Number(avgRow[0]?.avg_days ?? 0),
+        gapsAntenatalCare: 0, gapsHivVlMonitoring: 0, gapsTbScreening: 0, gapsNcdMedication: 0,
+      };
+    }
+
+    // ── S238: Equity profile ──────────────────────────────────────────────────
+    if (profile === 'equity_monthly') {
+      const period = startDate.toISOString().slice(0, 7).replace('-', '');
+      const rows = await tenantDb.query(
+        `SELECT kpi_name, MIN(rate) AS worst, MAX(rate) AS best
+         FROM equity_kpi_results WHERE tenant_id=$1 AND period=$2
+         GROUP BY kpi_name`,
+        [context.tenantId, period],
+      ).catch(() => []);
+      const getRatio = (kpi: string) => {
+        const r = rows.find((x: any) => x.kpi_name === kpi);
+        if (!r || !r.best || Number(r.best) === 0) return 0;
+        return Math.round((Number(r.worst) / Number(r.best)) * 1000) / 1000;
+      };
+      return {
+        equityRatioHiv: getRatio('hiv_on_art'),
+        equityRatioTb: getRatio('tb_treatment_success'),
+        equityRatioAnc: getRatio('anc_coverage'),
+        equityRatioVacc: getRatio('vaccination_coverage'),
+        genderGapHivPct: 0, ageGapTbPct: 0, ruralUrbanGapDelivery: 0, insuranceGapNcd: 0,
+      };
+    }
+
+    // ── S238: AI Performance profile ─────────────────────────────────────────
+    if (profile === 'ai_performance_monthly') {
+      const period = startDate.toISOString().slice(0, 7);
+      const [snapRows, predRow] = await Promise.all([
+        tenantDb.query(
+          `SELECT model_name, f1_score, auc_roc, drift_flag
+           FROM ai_model_performance_snapshots WHERE tenant_id=$1 AND snapshot_period=$2`,
+          [context.tenantId, period],
+        ).catch(() => []),
+        tenantDb.query(
+          `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE actual_outcome IS NOT NULL)::int AS verified
+           FROM ai_predictions WHERE tenant_id=$1 AND TO_CHAR(prediction_date,'YYYY-MM')=$2`,
+          [context.tenantId, period],
+        ).catch(() => [{ total: 0, verified: 0 }]),
+      ]);
+      const avgF1 = snapRows.length > 0
+        ? snapRows.reduce((s: number, r: any) => s + Number(r.f1_score ?? 0), 0) / snapRows.length : 0;
+      const avgAuc = snapRows.length > 0
+        ? snapRows.reduce((s: number, r: any) => s + Number(r.auc_roc ?? 0), 0) / snapRows.length : 0;
+      const driftCount = snapRows.filter((r: any) => r.drift_flag).length;
+      const readmitSnap = snapRows.find((r: any) => r.model_name === 'readmission_risk');
+      const malnutSnap = snapRows.find((r: any) => r.model_name === 'malnutrition_relapse');
+      const total = Number(predRow[0]?.total ?? 0);
+      const verified = Number(predRow[0]?.verified ?? 0);
+      return {
+        totalPredictions: total,
+        predictionsVerified: verified,
+        avgF1Score: Math.round(avgF1 * 1000) / 1000,
+        avgAuc: Math.round(avgAuc * 1000) / 1000,
+        modelsWithDrift: driftCount,
+        verificationRate: total > 0 ? Math.round((verified / total) * 1000) / 1000 : 0,
+        readmissionModelAuc: readmitSnap ? Math.round(Number(readmitSnap.auc_roc) * 1000) / 1000 : 0,
+        malnutritionModelAuc: malnutSnap ? Math.round(Number(malnutSnap.auc_roc) * 1000) / 1000 : 0,
       };
     }
 
