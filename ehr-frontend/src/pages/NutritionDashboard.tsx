@@ -9,6 +9,8 @@ import {
   Package,
   RefreshCw,
   Scale,
+  TrendingUp,
+  UserCheck,
 } from 'lucide-react';
 import {
   Bar,
@@ -22,7 +24,7 @@ import {
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 
-type TabKey = 'assess' | 'registers' | 'dispensing' | 'reporting';
+type TabKey = 'assess' | 'registers' | 'dispensing' | 'reporting' | 'postdischarge';
 type RegisterTab = 'OTP' | 'SC' | 'TSFP';
 
 interface AssessmentRow {
@@ -243,6 +245,12 @@ const NutritionDashboard: React.FC = () => {
   const [reportPeriod, setReportPeriod] = useState(currentMonthIso());
   const [reportData, setReportData] = useState<ReportData | null>(null);
 
+  // S233 — post-discharge state
+  const [pdPeriod, setPdPeriod] = useState(currentMonthIso());
+  const [pdSummary, setPdSummary] = useState<any>(null);
+  const [pdDue, setPdDue] = useState<any[]>([]);
+  const [pdLoading, setPdLoading] = useState(false);
+
   const currentUser = useMemo(() => {
     const raw = localStorage.getItem('ehr_user');
     if (!raw) return null;
@@ -315,6 +323,27 @@ const NutritionDashboard: React.FC = () => {
     });
   }, [loadReport, showError, tab]);
 
+  const loadPostDischarge = useCallback(async () => {
+    if (!requestConfig) return;
+    setPdLoading(true);
+    try {
+      const [summaryRes, dueRes] = await Promise.all([
+        ehrAxios.get('/nutrition/outcomes', { ...requestConfig, params: { period: pdPeriod } }),
+        ehrAxios.get('/nutrition/followups-due', { ...requestConfig, params: { withinDays: 7 } }),
+      ]);
+      setPdSummary(summaryRes.data);
+      setPdDue(dueRes.data ?? []);
+    } catch (error: any) {
+      showError('Post-Discharge', apiError(error, 'Failed to load post-discharge data'));
+    } finally {
+      setPdLoading(false);
+    }
+  }, [requestConfig, pdPeriod, showError]);
+
+  useEffect(() => {
+    if (tab === 'postdischarge') loadPostDischarge();
+  }, [tab, loadPostDischarge]);
+
   const refreshActiveTab = async () => {
     if (!requestConfig) return;
     setRefreshing(true);
@@ -325,6 +354,8 @@ const NutritionDashboard: React.FC = () => {
         await loadReport();
       } else if (tab === 'dispensing' && historyPatientId) {
         await loadRutfHistory(historyPatientId);
+      } else if (tab === 'postdischarge') {
+        await loadPostDischarge();
       }
       showSuccess('Refreshed', 'Nutrition dashboard data has been refreshed.');
     } catch (error: any) {
@@ -518,6 +549,7 @@ const NutritionDashboard: React.FC = () => {
           <TabButton active={tab === 'registers'} icon={<ClipboardList className="h-4 w-4" />} label="Registers" onClick={() => setTab('registers')} />
           <TabButton active={tab === 'dispensing'} icon={<Package className="h-4 w-4" />} label="Dispensing" onClick={() => setTab('dispensing')} />
           <TabButton active={tab === 'reporting'} icon={<BarChart3 className="h-4 w-4" />} label="Reporting" onClick={() => setTab('reporting')} />
+          <TabButton active={tab === 'postdischarge'} icon={<TrendingUp className="h-4 w-4" />} label="Post-Discharge" onClick={() => setTab('postdischarge')} />
         </div>
 
         {tab === 'assess' && (
@@ -1162,6 +1194,128 @@ const NutritionDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* S233 — Post-Discharge & Outcomes tab */}
+      {tab === 'postdischarge' && (
+        <div className="space-y-6">
+          {/* Period selector */}
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-400">Period</label>
+            <input
+              type="month"
+              value={pdPeriod.slice(0, 4) + '-' + pdPeriod.slice(4, 6)}
+              onChange={(e) => setPdPeriod(e.target.value.replace('-', ''))}
+              className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-white"
+            />
+            <button
+              onClick={loadPostDischarge}
+              disabled={pdLoading}
+              className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-1.5 text-sm text-slate-200 hover:border-slate-700 disabled:opacity-60"
+            >
+              {pdLoading ? 'Loading…' : 'Load'}
+            </button>
+          </div>
+
+          {pdSummary && (
+            <>
+              {/* Outcome summary cards */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {([
+                  { label: 'Cured', value: pdSummary.discharged_cured, colour: '#0AA98A' },
+                  { label: 'Died', value: pdSummary.discharged_died, colour: '#E8614D' },
+                  { label: 'Defaulted', value: pdSummary.discharged_defaulted, colour: '#F0954A' },
+                  { label: 'Non-responsive', value: pdSummary.discharged_non_responsive, colour: '#F0954A' },
+                ] as { label: string; value: number; colour: string }[]).map((c) => (
+                  <div key={c.label} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <div className="text-xs text-slate-400 mb-1">{c.label}</div>
+                    <div className="text-2xl font-bold" style={{ color: c.colour }}>{c.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Weight gain velocity */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="rounded-xl bg-teal-500/10 p-3 text-teal-300"><TrendingUp className="h-5 w-5" /></div>
+                  <div>
+                    <h2 className="text-base font-semibold text-white">Weight Gain Velocity</h2>
+                    <p className="text-xs text-slate-400">WHO target ≥8 g/kg/day for SAM recovery</p>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <span className={`text-2xl font-bold ${(pdSummary.avg_weight_gain_velocity ?? 0) >= 8 ? 'text-teal-400' : 'text-red-400'}`}>
+                      {pdSummary.avg_weight_gain_velocity ?? '—'} g/kg/day
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 text-sm">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+                    <div className="text-slate-400 mb-1">Follow-up due (30d)</div>
+                    <div className="text-white font-semibold">{pdSummary.followup_due_30d}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+                    <div className="text-slate-400 mb-1">Completed</div>
+                    <div className="text-teal-400 font-semibold">{pdSummary.followup_completed_30d}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+                    <div className="text-slate-400 mb-1">Relapsed ≤6 months</div>
+                    <div className="text-red-400 font-semibold">{pdSummary.relapsed_within_6mo}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+                    <div className="text-slate-400 mb-1">MUAC recovery rate</div>
+                    <div className={`font-semibold ${(pdSummary.muac_recovery_rate ?? 0) >= 80 ? 'text-teal-400' : 'text-amber-400'}`}>
+                      {pdSummary.muac_recovery_rate}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Follow-ups due table */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="rounded-xl bg-amber-500/10 p-3 text-amber-300"><UserCheck className="h-5 w-5" /></div>
+              <h2 className="text-base font-semibold text-white">Follow-Ups Due — Next 7 Days</h2>
+              <span className="ml-auto rounded-full bg-amber-500/20 px-3 py-0.5 text-xs font-medium text-amber-300">{pdDue.length}</span>
+            </div>
+            {pdDue.length === 0 ? (
+              <p className="text-sm text-slate-400">No follow-ups due in the next 7 days.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-xs text-slate-500">
+                      <th className="pb-2 text-left">Patient ID</th>
+                      <th className="pb-2 text-left">Due Date</th>
+                      <th className="pb-2 text-left">Last MUAC (cm)</th>
+                      <th className="pb-2 text-left">Last Weight (kg)</th>
+                      <th className="pb-2 text-left">Last Visit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pdDue.map((row) => (
+                      <tr key={row.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                        <td className="py-2 font-mono text-xs text-slate-300">{row.patient_id?.slice(0, 8)}…</td>
+                        <td className="py-2 text-slate-200">{row.due_date?.slice(0, 10)}</td>
+                        <td className="py-2">
+                          {row.last_muac != null ? (
+                            <span className={row.last_muac < 11.5 ? 'text-red-400' : row.last_muac < 12.5 ? 'text-amber-400' : 'text-teal-400'}>
+                              {row.last_muac}
+                            </span>
+                          ) : <span className="text-slate-500">—</span>}
+                        </td>
+                        <td className="py-2 text-slate-200">{row.last_weight_kg ?? '—'}</td>
+                        <td className="py-2 text-slate-400">{row.last_visit_date?.slice(0, 10) ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {ageModalOpen && (
         <ModalShell title="Age In Months" onClose={() => setAgeModalOpen(false)}>

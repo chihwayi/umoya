@@ -563,4 +563,171 @@ export class NutritionService {
   async refeedingRisk(body: any, tenantId?: string, tenantDb?: any) {
     return this.cdssService.assessNutritionRefeedingRisk(body, tenantId, tenantDb);
   }
+
+  // S233 — Post-discharge follow-up
+
+  async recordFollowUpVisit(tenantId: string, dto: any): Promise<any> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const result = await db.query(
+      `INSERT INTO nutrition_followup_visits
+         (admission_id, patient_id, tenant_id, visit_date, weeks_post_discharge,
+          weight_kg, height_cm, muac_cm, oedema, z_score_waz, z_score_whz,
+          nutrition_status, breastfeeding, complementary_feeding_adequate,
+          referral_needed, notes, recorded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       RETURNING *`,
+      [
+        dto.admission_id, dto.patient_id, tenantId, dto.visit_date,
+        dto.weeks_post_discharge, dto.weight_kg, dto.height_cm,
+        dto.muac_cm, dto.oedema ?? false, dto.z_score_waz, dto.z_score_whz,
+        dto.nutrition_status, dto.breastfeeding, dto.complementary_feeding_adequate,
+        dto.referral_needed ?? false, dto.notes, dto.recorded_by,
+      ],
+    );
+    return result[0];
+  }
+
+  async getFollowUpVisits(tenantId: string, admissionId: string): Promise<any[]> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const rows = await db.query(
+      `SELECT * FROM nutrition_followup_visits
+       WHERE admission_id = $1 AND tenant_id = $2
+       ORDER BY visit_date ASC`,
+      [admissionId, tenantId],
+    );
+    return rows.map((v: any) => ({
+      ...v,
+      weight_gain_velocity: this.computeWeightGainVelocity(rows[rows.indexOf(v) - 1], v),
+    }));
+  }
+
+  async recordRelapse(tenantId: string, dto: any): Promise<any> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const result = await db.query(
+      `INSERT INTO nutrition_relapse_events
+         (original_admission_id, readmission_id, patient_id, tenant_id,
+          relapse_date, weeks_post_cure, relapse_severity, probable_cause)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING *`,
+      [
+        dto.original_admission_id, dto.readmission_id ?? null, dto.patient_id,
+        tenantId, dto.relapse_date, dto.weeks_post_cure,
+        dto.relapse_severity, dto.probable_cause ?? null,
+      ],
+    );
+    return result[0];
+  }
+
+  private computeWeightGainVelocity(prev: any, curr: any): number | null {
+    if (!prev || !prev.weight_kg || !curr.weight_kg || !prev.visit_date || !curr.visit_date) {
+      return null;
+    }
+    const days = Math.round((new Date(curr.visit_date).getTime() - new Date(prev.visit_date).getTime()) / 86400000);
+    if (days <= 0) return null;
+    return Number((((curr.weight_kg - prev.weight_kg) * 1000) / prev.weight_kg / days).toFixed(2));
+  }
+
+  async getNutritionOutcomeSummary(tenantId: string, period: string): Promise<any> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const year = period.slice(0, 4);
+    const month = period.slice(4, 6);
+    const startDate = `${year}-${month}-01`;
+    const endDate = `${year}-${month}-01`; // will use DATE_TRUNC
+
+    const [admissionsRow] = await db.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE classification = 'SAM') AS admitted_sam,
+         COUNT(*) FILTER (WHERE classification = 'MAM') AS admitted_mam,
+         COUNT(*) FILTER (WHERE outcome = 'cured') AS discharged_cured,
+         COUNT(*) FILTER (WHERE outcome = 'died') AS discharged_died,
+         COUNT(*) FILTER (WHERE outcome = 'defaulted') AS discharged_defaulted,
+         COUNT(*) FILTER (WHERE outcome = 'non_responsive') AS discharged_non_responsive,
+         COUNT(*) FILTER (WHERE outcome = 'cured' AND muac_at_discharge >= 12.5) AS muac_recovered
+       FROM nutrition_admissions
+       WHERE tenant_id = $1
+         AND DATE_TRUNC('month', admission_date) = DATE_TRUNC('month', $2::DATE)`,
+      [tenantId, startDate],
+    );
+
+    const [followupRow] = await db.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE ofs.status = 'pending' AND ofs.due_date <= NOW() + INTERVAL '30 days') AS due_30d,
+         COUNT(*) FILTER (WHERE ofs.status = 'completed') AS completed_30d
+       FROM outcome_follow_up_schedules ofs
+       WHERE ofs.tenant_id = $1 AND ofs.encounter_type = 'nutrition_admission'
+         AND DATE_TRUNC('month', ofs.created_at) = DATE_TRUNC('month', $2::DATE)`,
+      [tenantId, startDate],
+    );
+
+    const [relapseRow] = await db.query(
+      `SELECT COUNT(*) AS relapsed
+       FROM nutrition_relapse_events
+       WHERE tenant_id = $1
+         AND relapse_date >= $2::DATE AND relapse_date < ($2::DATE + INTERVAL '6 months')`,
+      [tenantId, startDate],
+    );
+
+    const velRows = await db.query(
+      `SELECT v1.weight_kg AS w1, v2.weight_kg AS w2,
+              v1.visit_date AS d1, v2.visit_date AS d2
+       FROM nutrition_followup_visits v1
+       JOIN nutrition_followup_visits v2 ON v2.admission_id = v1.admission_id
+         AND v2.visit_date > v1.visit_date
+       WHERE v1.tenant_id = $1
+         AND DATE_TRUNC('month', v1.visit_date) = DATE_TRUNC('month', $2::DATE)`,
+      [tenantId, startDate],
+    );
+
+    let avgVelocity = 0;
+    if (velRows.length > 0) {
+      const velocities = velRows
+        .map((r: any) => {
+          const days = Math.round((new Date(r.d2).getTime() - new Date(r.d1).getTime()) / 86400000);
+          return days > 0 ? ((r.w2 - r.w1) * 1000) / r.w1 / days : null;
+        })
+        .filter((v: any) => v !== null && v > 0);
+      if (velocities.length > 0) {
+        avgVelocity = Number((velocities.reduce((a: number, b: number) => a + b, 0) / velocities.length).toFixed(2));
+      }
+    }
+
+    const admitted = Number(admissionsRow.admitted_sam) + Number(admissionsRow.admitted_mam);
+    const cured = Number(admissionsRow.discharged_cured);
+    return {
+      admitted_sam: Number(admissionsRow.admitted_sam),
+      admitted_mam: Number(admissionsRow.admitted_mam),
+      discharged_cured: cured,
+      discharged_died: Number(admissionsRow.discharged_died),
+      discharged_defaulted: Number(admissionsRow.discharged_defaulted),
+      discharged_non_responsive: Number(admissionsRow.discharged_non_responsive),
+      followup_due_30d: Number(followupRow?.due_30d ?? 0),
+      followup_completed_30d: Number(followupRow?.completed_30d ?? 0),
+      relapsed_within_6mo: Number(relapseRow?.relapsed ?? 0),
+      avg_weight_gain_velocity: avgVelocity,
+      muac_recovery_rate: admitted > 0 ? Number(((Number(admissionsRow.muac_recovered) / admitted) * 100).toFixed(1)) : 0,
+    };
+  }
+
+  async getFollowUpsDue(tenantId: string, withinDays = 7): Promise<any[]> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    return db.query(
+      `SELECT ofs.id, ofs.patient_id, ofs.encounter_id AS admission_id,
+              ofs.due_date, ofs.window_days,
+              nfv.muac_cm AS last_muac, nfv.weight_kg AS last_weight_kg,
+              nfv.visit_date AS last_visit_date
+       FROM outcome_follow_up_schedules ofs
+       LEFT JOIN LATERAL (
+         SELECT muac_cm, weight_kg, visit_date
+         FROM nutrition_followup_visits
+         WHERE admission_id = ofs.encounter_id AND tenant_id = $1
+         ORDER BY visit_date DESC LIMIT 1
+       ) nfv ON true
+       WHERE ofs.tenant_id = $1
+         AND ofs.encounter_type = 'nutrition_admission'
+         AND ofs.status = 'pending'
+         AND ofs.due_date <= NOW() + ($2 || ' days')::INTERVAL
+       ORDER BY ofs.due_date ASC`,
+      [tenantId, withinDays],
+    );
+  }
 }

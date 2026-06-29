@@ -165,4 +165,30 @@ export class NutritionController {
   cdssRefeeding(@Body() body: any, @Request() req: RequestWithTenant) {
     return this.nutritionService.refeedingRisk(body, req.tenantId, req.tenantDb);
   }
+
+  // S233 — Post-discharge follow-up
+  @Post('followup')
+  recordFollowUpVisit(@Body() dto: any, @Request() req: RequestWithTenant) {
+    return this.nutritionService.recordFollowUpVisit(req.tenantId, dto);
+  }
+
+  @Get('followup/:admissionId')
+  getFollowUpVisits(@Param('admissionId') admissionId: string, @Request() req: RequestWithTenant) {
+    return this.nutritionService.getFollowUpVisits(req.tenantId, admissionId);
+  }
+
+  @Post('relapse')
+  recordRelapse(@Body() dto: any, @Request() req: RequestWithTenant) {
+    return this.nutritionService.recordRelapse(req.tenantId, dto);
+  }
+
+  @Get('outcomes')
+  getNutritionOutcomeSummary(@Query('period') period: string, @Request() req: RequestWithTenant) {
+    return this.nutritionService.getNutritionOutcomeSummary(req.tenantId, period || new Date().toISOString().slice(0, 7).replace('-', ''));
+  }
+
+  @Get('followups-due')
+  getFollowUpsDue(@Query('withinDays') withinDays: string, @Request() req: RequestWithTenant) {
+    return this.nutritionService.getFollowUpsDue(req.tenantId, Number(withinDays) || 7);
+  }
 }

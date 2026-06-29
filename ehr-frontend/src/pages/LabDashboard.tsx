@@ -31,7 +31,7 @@ import {
   CreditCard,
   Loader2,
 } from 'lucide-react';
-import { ehrApi, tenantApi } from '../services/api';
+import { ehrApi, ehrAxios, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
@@ -264,7 +264,7 @@ const LabDashboard: React.FC = () => {
   const { showSuccess, showError } = useNotification();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'pending' | 'in-progress' | 'completed'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'in-progress' | 'completed' | 'quality'>('pending');
   const [pendingOrders, setPendingOrders] = useState<LabOrder[]>([]);
   const [inProgressOrders, setInProgressOrders] = useState<LabOrder[]>([]);
   const [completedOrders, setCompletedOrders] = useState<LabOrder[]>([]);
@@ -284,6 +284,18 @@ const LabDashboard: React.FC = () => {
   const [reagentInventory, setReagentInventory] = useState<any[]>([]);
   const [qcLoading, setQcLoading] = useState(false);
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  // S233 — Lab Quality Assurance
+  const [labQaSummary, setLabQaSummary] = useState<any>(null);
+  const [labQaEqaRows, setLabQaEqaRows] = useState<any[]>([]);
+  const [labQaRepeatFlags, setLabQaRepeatFlags] = useState<any[]>([]);
+  const [labQaPeriod, setLabQaPeriod] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [labQaLoading, setLabQaLoading] = useState(false);
+  const [showEqaForm, setShowEqaForm] = useState(false);
+  const [showQcFailForm, setShowQcFailForm] = useState(false);
+  const [eqaForm, setEqaForm] = useState({ scheme_name: '', survey_round: '', analyte: '', specimen_type: '', assigned_value: '', measured_value: '', unit: '', report_date: new Date().toISOString().slice(0, 10), corrective_action_taken: '' });
+  const [qcFailForm, setQcFailForm] = useState({ analyzer_id: '', analyte: '', qc_level: 'Level 2 (Normal)', expected_range_low: '', expected_range_high: '', measured_value: '', rule_violated: '', failure_date: new Date().toISOString().slice(0, 16), action_taken: 'repeat_qc', patient_samples_held: '0' });
   const [tenantInfo, setTenantInfo] = useState<any>(null);
 
   useEffect(() => {
@@ -611,6 +623,56 @@ const LabDashboard: React.FC = () => {
     fetchQualityControls();
     fetchReagentInventory();
   }, [tenantSlug, fetchQualityControls, fetchReagentInventory]);
+
+  const loadLabQa = useCallback(async () => {
+    if (!tenantSlug) return;
+    const token = localStorage.getItem('ehr_token');
+    if (!token) return;
+    setLabQaLoading(true);
+    try {
+      const headers = { Authorization: `Bearer ${token}`, 'x-tenant-id': tenantSlug };
+      const [summaryRes, repeatRes] = await Promise.all([
+        ehrAxios.get(`/lab/quality/summary?period=${labQaPeriod}`, { headers }),
+        ehrAxios.get(`/lab/quality/repeat-flags`, { headers }),
+      ]);
+      setLabQaSummary(summaryRes.data);
+      setLabQaRepeatFlags(repeatRes.data ?? []);
+    } catch {
+      // non-blocking
+    } finally {
+      setLabQaLoading(false);
+    }
+  }, [tenantSlug, labQaPeriod]);
+
+  useEffect(() => {
+    if (activeTab === 'quality') loadLabQa();
+  }, [activeTab, loadLabQa]);
+
+  const submitEqaScore = async () => {
+    if (!tenantSlug) return;
+    const token = localStorage.getItem('ehr_token');
+    if (!token) return;
+    try {
+      await ehrAxios.post('/lab/quality/eqa-scores', eqaForm, {
+        headers: { Authorization: `Bearer ${token}`, 'x-tenant-id': tenantSlug },
+      });
+      setShowEqaForm(false);
+      loadLabQa();
+    } catch { /* ignore */ }
+  };
+
+  const submitQcFailure = async () => {
+    if (!tenantSlug) return;
+    const token = localStorage.getItem('ehr_token');
+    if (!token) return;
+    try {
+      await ehrAxios.post('/lab/quality/qc-failures', qcFailForm, {
+        headers: { Authorization: `Bearer ${token}`, 'x-tenant-id': tenantSlug },
+      });
+      setShowQcFailForm(false);
+      loadLabQa();
+    } catch { /* ignore */ }
+  };
 
   const handleCollectSample = async (orderId: string) => {
     try {
@@ -1731,6 +1793,19 @@ const LabDashboard: React.FC = () => {
               <div className="flex items-center justify-center gap-2">
                 <CheckCircle className="w-5 h-5" />
                 <span>Completed ({completedOrders.length})</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('quality')}
+              className={`flex-1 px-6 py-4 font-semibold transition-colors ${
+                activeTab === 'quality'
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <ClipboardCheck className="w-5 h-5" />
+                <span>Quality Assurance</span>
               </div>
             </button>
           </div>
@@ -3141,6 +3216,236 @@ const LabDashboard: React.FC = () => {
             </div>
           </div>
         </ModalPortal>
+      )}
+
+      {/* S233 — Quality Assurance tab content */}
+      {activeTab === 'quality' && (
+        <div className="space-y-6 mt-6">
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="month"
+              value={labQaPeriod.slice(0, 4) + '-' + labQaPeriod.slice(4, 6)}
+              onChange={(e) => setLabQaPeriod(e.target.value.replace('-', ''))}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+            />
+            <button onClick={loadLabQa} disabled={labQaLoading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60">
+              {labQaLoading ? 'Loading…' : 'Load Period'}
+            </button>
+            <button onClick={() => setShowEqaForm(true)} className="rounded-lg border border-blue-600 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50">
+              + Log EQA Score
+            </button>
+            <button onClick={() => setShowQcFailForm(true)} className="rounded-lg border border-red-500 px-4 py-2 text-sm text-red-500 hover:bg-red-50">
+              + Log QC Failure
+            </button>
+          </div>
+
+          {labQaSummary && (
+            <>
+              {/* Summary KPI cards */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="text-xs text-slate-500 mb-1">EQA Satisfactory</div>
+                  <div className="text-2xl font-bold text-green-600">{labQaSummary.eqa_scores?.satisfactory ?? 0}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="text-xs text-slate-500 mb-1">EQA Warning / Unacceptable</div>
+                  <div className="text-2xl font-bold text-amber-500">{(labQaSummary.eqa_scores?.warning ?? 0) + (labQaSummary.eqa_scores?.unsatisfactory ?? 0)}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="text-xs text-slate-500 mb-1">QC Failures</div>
+                  <div className="text-2xl font-bold text-red-500">{labQaSummary.qc_failures?.total ?? 0}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="text-xs text-slate-500 mb-1">Critical Val. Notification</div>
+                  <div className={`text-2xl font-bold ${(labQaSummary.critical_value_notification_rate ?? 100) >= 95 ? 'text-green-600' : 'text-amber-500'}`}>
+                    {labQaSummary.critical_value_notification_rate != null ? `${labQaSummary.critical_value_notification_rate}%` : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* TAT + rejection */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 mb-3">Turnaround Time</h3>
+                  <div className="flex gap-8">
+                    <div>
+                      <div className="text-xs text-slate-500">P50</div>
+                      <div className="text-xl font-bold text-slate-800">{labQaSummary.turnaround_p50_hours ?? '—'} hr</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">P95</div>
+                      <div className={`text-xl font-bold ${(labQaSummary.turnaround_p95_hours ?? 0) > 12 ? 'text-amber-500' : 'text-green-600'}`}>
+                        {labQaSummary.turnaround_p95_hours ?? '—'} hr
+                      </div>
+                      <div className="text-xs text-slate-400">Target ≤12 hr</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 mb-3">Repeat Test Flags</h3>
+                  <div className="flex gap-8">
+                    <div>
+                      <div className="text-xs text-slate-500">Possible error (&lt;1d)</div>
+                      <div className="text-xl font-bold text-red-500">{labQaSummary.repeat_test_flags?.possible_error ?? 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Clinically close (1–3d)</div>
+                      <div className="text-xl font-bold text-amber-500">{labQaSummary.repeat_test_flags?.clinically_close ?? 0}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* QC failures by analyte */}
+              {labQaSummary.qc_failures?.by_analyte && Object.keys(labQaSummary.qc_failures.by_analyte).length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 mb-3">QC Failures by Analyte</h3>
+                  <div className="space-y-2">
+                    {Object.entries(labQaSummary.qc_failures.by_analyte as Record<string, number>)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([analyte, count]) => (
+                        <div key={analyte} className="flex items-center gap-3">
+                          <span className="w-32 text-sm text-slate-700">{analyte}</span>
+                          <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-red-400 rounded-full"
+                              style={{ width: `${Math.min((count / labQaSummary.qc_failures.total) * 100, 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-semibold text-red-500">{count}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Repeat flags table */}
+          {labQaRepeatFlags.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="font-semibold text-slate-800 mb-3">Recent Repeat Test Flags</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs text-slate-500">
+                      <th className="pb-2 text-left">Analyte</th>
+                      <th className="pb-2 text-left">Days Between</th>
+                      <th className="pb-2 text-left">Reason</th>
+                      <th className="pb-2 text-left">Flagged At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {labQaRepeatFlags.slice(0, 20).map((f: any) => (
+                      <tr key={f.id} className="border-b border-slate-100">
+                        <td className="py-2 text-slate-700">{f.analyte}</td>
+                        <td className="py-2 text-slate-700">{f.days_between}d</td>
+                        <td className="py-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            f.flag_reason === 'possible_error_repeat' ? 'bg-red-100 text-red-600' :
+                            f.flag_reason === 'clinically_justified_close' ? 'bg-amber-100 text-amber-600' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>
+                            {f.flag_reason?.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="py-2 text-slate-500">{f.flagged_at?.slice(0, 10)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* EQA Score Form modal */}
+          {showEqaForm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+                <h2 className="text-lg font-semibold text-slate-800">Log EQA Score</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(['scheme_name', 'survey_round', 'analyte', 'specimen_type', 'unit'] as const).map((field) => (
+                    <label key={field} className="space-y-1 text-sm text-slate-700">
+                      <span className="capitalize">{field.replace(/_/g, ' ')}</span>
+                      <input value={eqaForm[field]} onChange={(e) => setEqaForm((p) => ({ ...p, [field]: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                    </label>
+                  ))}
+                  {(['assigned_value', 'measured_value'] as const).map((field) => (
+                    <label key={field} className="space-y-1 text-sm text-slate-700">
+                      <span className="capitalize">{field.replace(/_/g, ' ')}</span>
+                      <input type="number" value={eqaForm[field]} onChange={(e) => setEqaForm((p) => ({ ...p, [field]: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                    </label>
+                  ))}
+                  <label className="space-y-1 text-sm text-slate-700">
+                    <span>Report Date</span>
+                    <input type="date" value={eqaForm.report_date} onChange={(e) => setEqaForm((p) => ({ ...p, report_date: e.target.value }))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                  </label>
+                </div>
+                <label className="block space-y-1 text-sm text-slate-700">
+                  <span>Corrective Action</span>
+                  <input value={eqaForm.corrective_action_taken} onChange={(e) => setEqaForm((p) => ({ ...p, corrective_action_taken: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                </label>
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => setShowEqaForm(false)} className="px-4 py-2 text-slate-600">Cancel</button>
+                  <button onClick={submitEqaScore} className="rounded-lg bg-blue-600 px-5 py-2 text-sm text-white hover:bg-blue-700">Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* QC Failure Form modal */}
+          {showQcFailForm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+                <h2 className="text-lg font-semibold text-slate-800">Log QC Failure</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(['analyzer_id', 'analyte', 'rule_violated'] as const).map((field) => (
+                    <label key={field} className="space-y-1 text-sm text-slate-700">
+                      <span className="capitalize">{field.replace(/_/g, ' ')}</span>
+                      <input value={qcFailForm[field]} onChange={(e) => setQcFailForm((p) => ({ ...p, [field]: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                    </label>
+                  ))}
+                  <label className="space-y-1 text-sm text-slate-700">
+                    <span>QC Level</span>
+                    <select value={qcFailForm.qc_level} onChange={(e) => setQcFailForm((p) => ({ ...p, qc_level: e.target.value }))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2">
+                      {['Level 1 (Low)', 'Level 2 (Normal)', 'Level 3 (High)'].map((l) => <option key={l}>{l}</option>)}
+                    </select>
+                  </label>
+                  {(['expected_range_low', 'expected_range_high', 'measured_value', 'patient_samples_held'] as const).map((field) => (
+                    <label key={field} className="space-y-1 text-sm text-slate-700">
+                      <span className="capitalize">{field.replace(/_/g, ' ')}</span>
+                      <input type="number" value={qcFailForm[field]} onChange={(e) => setQcFailForm((p) => ({ ...p, [field]: e.target.value }))}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                    </label>
+                  ))}
+                  <label className="space-y-1 text-sm text-slate-700">
+                    <span>Action Taken</span>
+                    <select value={qcFailForm.action_taken} onChange={(e) => setQcFailForm((p) => ({ ...p, action_taken: e.target.value }))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2">
+                      {['repeat_qc', 'recalibrate', 'reagent_change', 'maintenance', 'report_held'].map((a) => <option key={a}>{a}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-sm text-slate-700">
+                    <span>Failure Date/Time</span>
+                    <input type="datetime-local" value={qcFailForm.failure_date} onChange={(e) => setQcFailForm((p) => ({ ...p, failure_date: e.target.value }))}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2" />
+                  </label>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => setShowQcFailForm(false)} className="px-4 py-2 text-slate-600">Cancel</button>
+                  <button onClick={submitQcFailure} className="rounded-lg bg-red-600 px-5 py-2 text-sm text-white hover:bg-red-700">Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

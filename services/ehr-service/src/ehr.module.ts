@@ -305,6 +305,8 @@ import { OutcomeLinkageController } from './controllers/outcome-linkage.controll
 import { OutcomeLinkageService } from './services/outcome-linkage.service';
 import { CascadeAnalyticsController } from './controllers/cascade-analytics.controller';
 import { CascadeAnalyticsService } from './services/cascade-analytics.service';
+import { LabQualityController } from './controllers/lab-quality.controller';
+import { LabQualityService } from './services/lab-quality.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -934,6 +936,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OemSurveillanceController,
     OutcomeLinkageController,
     CascadeAnalyticsController,
+    LabQualityController,
   ],
   providers: [
     NotificationCenterService,
@@ -1294,6 +1297,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OemSurveillanceService,
     OutcomeLinkageService,
     CascadeAnalyticsService,
+    LabQualityService,
     MfaGuard,
     {
       provide: APP_GUARD,

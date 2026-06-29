@@ -7790,6 +7790,112 @@ export class DatabaseProvisioningService {
             ON outcome_follow_up_schedules(patient_id)`,
         ],
       },
+
+      // S233 — Nutrition Post-Discharge Follow-up
+      {
+        id: 'nc_nutrition_followup',
+        label: 'Nutrition Post-Discharge Follow-Up',
+        version: '2026.06.29.1',
+        description: 'Weight-gain tracking and post-discharge outcome records for SAM/MAM patients',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS nutrition_followup_visits (
+            id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admission_id        UUID NOT NULL,
+            patient_id          UUID NOT NULL,
+            tenant_id           TEXT NOT NULL,
+            visit_date          DATE NOT NULL,
+            weeks_post_discharge INT NOT NULL,
+            weight_kg           NUMERIC(5,2),
+            height_cm           NUMERIC(5,1),
+            muac_cm             NUMERIC(4,1),
+            oedema              BOOLEAN DEFAULT FALSE,
+            z_score_waz         NUMERIC(4,2),
+            z_score_whz         NUMERIC(4,2),
+            nutrition_status    TEXT,
+            breastfeeding       BOOLEAN,
+            complementary_feeding_adequate BOOLEAN,
+            referral_needed     BOOLEAN DEFAULT FALSE,
+            notes               TEXT,
+            recorded_by         UUID,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_nfu_patient ON nutrition_followup_visits(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nfu_admission ON nutrition_followup_visits(admission_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_nfu_date ON nutrition_followup_visits(visit_date)`,
+          `CREATE TABLE IF NOT EXISTS nutrition_relapse_events (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            original_admission_id UUID NOT NULL,
+            readmission_id  UUID,
+            patient_id      UUID NOT NULL,
+            tenant_id       TEXT NOT NULL,
+            relapse_date    DATE NOT NULL,
+            weeks_post_cure INT NOT NULL,
+            relapse_severity TEXT NOT NULL,
+            probable_cause  TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_relapse_patient ON nutrition_relapse_events(patient_id)`,
+        ],
+      },
+
+      // S233 — Lab Quality Assurance
+      {
+        id: 'nc_lab_quality_assurance',
+        label: 'Laboratory Quality Assurance',
+        version: '2026.06.29.1',
+        description: 'EQA scores, internal QC failures, and repeat-testing pattern tracking',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS lab_eqa_scores (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id       TEXT NOT NULL,
+            scheme_name     TEXT NOT NULL,
+            survey_round    TEXT NOT NULL,
+            analyte         TEXT NOT NULL,
+            specimen_type   TEXT,
+            assigned_value  NUMERIC,
+            measured_value  NUMERIC,
+            unit            TEXT,
+            z_score         NUMERIC(5,2),
+            result_flag     TEXT NOT NULL DEFAULT 'satisfactory',
+            report_date     DATE NOT NULL,
+            corrective_action_taken TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_eqa_analyte ON lab_eqa_scores(analyte, report_date)`,
+          `CREATE INDEX IF NOT EXISTS idx_eqa_tenant ON lab_eqa_scores(tenant_id, report_date)`,
+          `CREATE TABLE IF NOT EXISTS lab_qc_failures (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id       TEXT NOT NULL,
+            analyzer_id     TEXT,
+            analyte         TEXT NOT NULL,
+            qc_level        TEXT NOT NULL,
+            expected_range_low  NUMERIC,
+            expected_range_high NUMERIC,
+            measured_value  NUMERIC,
+            rule_violated   TEXT,
+            failure_date    TIMESTAMPTZ NOT NULL,
+            action_taken    TEXT,
+            patient_samples_held INT DEFAULT 0,
+            resolved_at     TIMESTAMPTZ,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_qcf_analyte ON lab_qc_failures(analyte, failure_date)`,
+          `CREATE INDEX IF NOT EXISTS idx_qcf_tenant ON lab_qc_failures(tenant_id, failure_date)`,
+          `CREATE TABLE IF NOT EXISTS lab_repeat_test_flags (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id       TEXT NOT NULL,
+            patient_id      UUID NOT NULL,
+            analyte         TEXT NOT NULL,
+            first_order_id  UUID NOT NULL,
+            repeat_order_id UUID NOT NULL,
+            days_between    INT NOT NULL,
+            flag_reason     TEXT,
+            clinician_justification TEXT,
+            flagged_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_rtf_patient ON lab_repeat_test_flags(patient_id, flagged_at)`,
+        ],
+      },
     ];
   }
 
