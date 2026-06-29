@@ -1,6 +1,6 @@
 # Umoya Architecture Reference
 
-Last updated: 2026-06-25
+Last updated: 2026-06-29
 
 This document contains the architecture rules, DB provisioning patterns, and agent constraints that apply to all work on this codebase. Read it before editing any file.
 
@@ -112,6 +112,21 @@ Add a provisioning bundle to `getProvisioningBundles()` in `services/tenant-serv
 | `sprint249_paediatric_cardiology` | `paed_cardiology_register` (CHD diagnosis, anatomy, shunt direction, genetic syndrome, antenatal detection, current status); `paed_echo_reports` (structured echo data: LV dimensions, EF, SF auto-computed, PASP, generated `has_pulmonary_hypertension`; defect measurements); `paed_cardiology_interventions` (procedure type, date, surgeon, outcome); `paed_cardiology_followup` (visit date, corrected age, auto-generated `is_overdue`); `sbe_prophylaxis_records` (indication, procedure, antibiotic prescribed) |
 | `sprint230_occupational_medicine_core` | `oem_employers` (NSSA number, industry sector, contracted services); `oem_employee_links` (patient-to-employer, job title, department, hazard class); `oem_encounters` (pre-employment/periodic/exit/FFD visit, exam findings); `oem_certificates` (FFD category, restrictions, valid until, issued by) — includes status triggers for is_active |
 | `sprint231_occ_surveillance_rtw` | `oem_hazard_profiles` (employer hazards with type, OEL, BEI, control measures); `oem_exposure_records` (measured value, unit, generated `exceeds_oel`); `oem_biological_monitoring` (analyte, specimen, result, generated `exceeds_bei`); `oem_surveillance_schedule` (due date, generated `is_overdue`, generated `days_overdue`); `oem_rtw_plans` (restriction codes, graded return, employer_signed_at, status) |
+| `nc_datim_ext_indicators` | `tb_preventive_therapy`, `hts_self_tests`, `eid_results` — extends DATIM MER 3.0 with TB_TB, TB_STAT, TB_ART, TB_PREV, PMTCT_EID, PMTCT_FO, HTS_SELF indicators (S231) |
+| `nc_outcome_linkage` | `encounter_outcomes` (diagnosis, outcome code, follow-up required flag); `outcome_follow_up_schedules` (expected visit, interval days, status); LTFU detection and readmission auto-classification triggers (S230) |
+| `nc_nutrition_followup` | `nutrition_followup_visits` (weeks post-discharge, MUAC, weight, oedema, outcome); `nutrition_relapse_events` (relapse date, weeks post-cure, severity, probable cause) — post-SAM discharge follow-up (S233) |
+| `nc_lab_quality_assurance` | `lab_eqa_results` (panel, scheme, score, status); `lab_internal_qc_failures` (analyte, failure type, corrective action); `lab_critical_notifications` (patient, result, notified_at, minutes_to_notify); `lab_tat_records` (order_to_result hours) (S233) |
+| `nc_mdsr_workflow` | `mdsr_reviews` (maternal death, date, cause, ICD-10, three-delay classification, preventability); `mdsr_action_items` (responsible officer, due date, status, overdue flag); `mdsr_annual_summary` view (S234) |
+| `nc_care_gap_tracking` | `care_gaps` (gap type, patient, priority, status, due date, dismissed_until); `care_gap_interventions` (action taken, outcome, resolved_at); composite AI-recommended action fields (S235) |
+| `nc_ai_performance_registry` | `ai_predictions` (model, patient, predicted value, confidence, features); `ai_model_performance_snapshots` (period, AUC, calibration slope, Brier score, fairness metrics by subgroup) (S235/S242) |
+| `nc_ai_governance_log` | `ai_model_governance_log` (model, action: review_requested / status_updated / calibration_run, performed_by, notes, timestamp) (S242) |
+| `nc_equity_analytics` | `equity_disaggregation_snapshots` (indicator, period, stratum type: age_sex / district / insurance, stratum, value, national_avg, disparity_flag) (S236) |
+| `nc_benchmarking` | `facility_benchmarks` (indicator, period, facility_value, district_avg, national_avg, percentile_rank, above_district flag) (S237) |
+| `nc_dhis2_validation` | `dhis2_validation_snapshots` (data element, period, dhis2 value, local value, deviation_pct, outlier_flag, outlier_severity, resolved_at, resolved_by, resolution) (S241) |
+| `nc_s243_research_portal` | `research_cohort_queries` (SQL-safe JSONB definition, field whitelist); `research_portal_tokens` (hashed token, uses remaining, expires_at); `research_access_log` (query, token, record count, export format, accessed_at) (S243) |
+| `nc_oncology_outcomes` | `oncology_survival_cohorts` (diagnosis, stage, regimen, start date, survival status); `oncology_abandonment_events`; `oncology_near_miss_events` (S239) |
+| `nc_oem_longitudinal` | `oem_longitudinal_health` (annual aggregates of audiometry, spirometry, bio-monitoring per employee) (S239) |
+| `nc_pharmacy_intelligence` | `pharmacy_formulary_adherence` (period, on/off formulary counts, adherence_pct); `pharmacy_waste_events` (drug, quantity, value, reason); `ams_approvals` (antibiotic, indication, approver, DDD) (S240) |
 
 ### System-level column additions (via `ensureSubscriptionSchema()`)
 
@@ -196,6 +211,18 @@ Every controller must appear in `controllers: []`.
 | `PaediatricCardiologyController` | `/paed-cardiology` | CHD register, structured echo reports, intervention log, follow-up scheduling, SBE prophylaxis |
 | `OccupationalMedicineController` | `/oem` | Employer register, employee-patient links, FFD encounters, fitness certificates, dashboard |
 | `OemSurveillanceController` | `/oem/surveillance` | Hazard profiles, exposure records (`exceeds_oel`), bio monitoring (`exceeds_bei`), overdue surveillance, RTW plans |
+| `OutcomeLinkageController` | `/outcomes` | Outcome recording per encounter, follow-up schedule management, LTFU detection, readmission flag, care continuum KPIs (S230) |
+| `CascadeAnalyticsController` | `/cascade` | HIV 95-95-95 funnel, PMTCT, TB-HIV, and NCD cascade computation with period + sex/age disaggregation, trend series, gap lists (S232) |
+| `EquityAnalyticsController` | `/equity` | Disaggregated indicator snapshots by age/sex/district/insurance; disparity detection; heat-matrix data for VL suppression, ANC, HbA1c control (S236) |
+| `BenchmarkingController` | `/benchmarking` | Facility scorecard vs district and national averages; percentile rank computation; DHIS2-sourced peer benchmarks (S237) |
+| `MdsrController` | `/mdsr` | MDSR case creation and review; three-delay classification; preventability scoring; action item lifecycle; MOHCC letter generation (S234) |
+| `ModuleReportsController` | `/module-reports` | Per-module uplift reports: oncology survival/abandonment, blood bank efficiency, radiology AI concordance, dialysis adequacy, dental outcomes, aviation exam cohort, OEM longitudinal (S239) |
+| `Dhis2ValidationController` | `/dhis2-validation` | Nightly outlier sweep; outlier report by period; alert resolution (`PATCH /alerts/:id/resolve`); DQA score computation; element-level validation history (S241) |
+| `AiPerformanceController` | `/ai-performance` | Prediction recording; outcome verification; monthly snapshot computation; model performance summary; calibration plots; fairness metrics; governance request/approval workflow (S242) |
+| `CareGapController` | `/care-gaps` | Care gap list per patient/cohort; AI-recommended actions; dismiss (30-day) and resolve workflows; gap KPI summary (S235) |
+| `PopulationHealthController` | `/population-health` | Population health dashboard; cohort gap closure metrics; disease burden analytics; multi-programme KPI aggregation (S235) |
+| `ResearchPortalController` | `/research` | Cohort query builder; HIPAA Safe Harbor de-identification; time-limited access tokens; CSV/FHIR export; access audit log (S243) |
+| `ReportExportController` | `/tenants/:id/exports` | `POST /pdf`, `POST /xlsx`, `POST /csv`, `POST /monthly-bundle` — branded UMOYA PDF reports, Excel XLSX, CSV, and zipped monthly bundle (S245) |
 
 ---
 

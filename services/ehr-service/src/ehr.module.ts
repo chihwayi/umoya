@@ -321,6 +321,8 @@ import { Dhis2ValidationController } from './controllers/dhis2-validation.contro
 import { Dhis2ValidationService } from './services/dhis2-validation.service';
 import { ResearchDeidentificationService } from './services/research-deidentification.service';
 import { ResearchPortalService } from './services/research-portal.service';
+import { ReportExportController } from './controllers/report-export.controller';
+import { MonthlyReportBundleService } from './services/monthly-report-bundle.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -957,6 +959,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     BenchmarkingController,
     ModuleReportsController,
     Dhis2ValidationController,
+    ReportExportController,
   ],
   providers: [
     NotificationCenterService,
@@ -1326,6 +1329,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     Dhis2ValidationService,
     ResearchDeidentificationService,
     ResearchPortalService,
+    MonthlyReportBundleService,
     MfaGuard,
     {
       provide: APP_GUARD,

@@ -109,6 +109,21 @@ const interestOptions = [
   'Aesthetics and Regenerative Medicine with CDSS contraindication alerts',
   'Paediatric Cardiology — CHD register, echo, interventions, SBE prophylaxis',
   'Occupational Medicine — FFD, exposure surveillance, RTW coordination',
+  'HIV 95-95-95 cascade dashboards with disaggregation',
+  'PMTCT, TB-HIV, and NCD cascade analytics',
+  'Equity & disparity analytics by age, sex, district, insurance',
+  'Multi-facility benchmarking with district/national peer comparison',
+  'Maternal Mortality Audit (MDSR) workflow',
+  'Population health & care gap closure engine',
+  'DHIS2 validation feedback loop & DQA scoring',
+  'Extended DATIM MER indicators (TB_TB, TB_STAT, PMTCT_EID, HTS_SELF)',
+  'Pharmacy intelligence — formulary adherence, drug waste, AMS',
+  'Lab quality assurance — EQA, QC failures, TAT, critical notifications',
+  'AI model governance registry — drift detection, fairness, approvals',
+  'De-identified research data portal (HIPAA Safe Harbor)',
+  'Mobile clinical reports for M&E officers (offline + WhatsApp share)',
+  'Universal report export engine (branded PDF, XLSX, CSV, monthly bundle)',
+  'Outcome linkage & post-encounter follow-up scheduling',
 ];
 
 const STANDARDS = [
@@ -127,7 +142,7 @@ const STANDARDS = [
 ];
 
 const stats = [
-  { value: '110+', label: 'Clinical modules', sub: 'From maternity and CathLab to ICU, NICU, occupational medicine and beyond' },
+  { value: '125+', label: 'Clinical modules', sub: 'From maternity and CathLab to ICU, NICU, occupational medicine, reporting analytics and beyond' },
   { value: '40+', label: 'AI capabilities', sub: 'Risk, forecasting, substitution, adherence, voice, FFD, exposure, RTW' },
   { value: '8 langs', label: 'Mobile languages', sub: 'Auto-detected from device locale' },
   { value: 'DHIS2', label: 'Program reporting', sub: 'HIV, maternal, vaccine, ICU, neonatal cohorts' },
@@ -203,6 +218,8 @@ const audiences = [
       'FHIR R4 export for cohort building and analytics',
       'DHIS2 integration for population-level program data',
       'LOINC-coded lab results and RxNorm medication events',
+      'De-identified Research Data Portal — HIPAA Safe Harbor exports with time-shifting, rare-disease suppression and token-gated collaborator access',
+      'AI Model Governance Registry — calibration plots, fairness metrics (demographic parity, equalized odds) and drift monitoring per model',
     ],
   },
   {
@@ -214,7 +231,11 @@ const audiences = [
       '18 DHIS2 aggregate profiles — TB, malaria, HIV, NCD, maternal, neonatal, lab, ICU, HAI, surgical, nutrition, mental health, pharmacy, cervical cancer & outpatient morbidity',
       'Bi-directional DHIS2 sync — push clinical data out AND pull district/national benchmarks back into the doctor dashboard',
       'Tracker TEI sync with real-time clinical event push (encounters, labs, vitals as DHIS2 program stage events)',
-      'DATIM MER submission for PEPFAR-funded facilities',
+      'DATIM MER submission for PEPFAR-funded facilities — TX_CURR, TX_PVLS, HTS_TST, HTS_SELF, TB_PREV, PMTCT, VMMC and more',
+      'HIV/PMTCT cascade analytics with 90-90-90 funnel, quarterly equity disparity alerts and mobile M&E reports for district officers',
+      'MDSR (Maternal Death Surveillance & Response) — digital case reviews, preventability classification, action-item tracking',
+      'DHIS2 Data Quality Alerts — automated outlier detection with 20%/50% deviation thresholds; in-app DQA score and one-tap alert resolution',
+      'Universal Report Export Engine — branded PDF, XLSX workbook and CSV export; monthly 7-report ZIP bundles for district health offices',
       'SORMAS + IHR Annex 2 outbreak notification and PACTR trial registry integration',
       'CRVS integration — birth and death events auto-reported to national civil registries',
       'Mobile app in 8 languages (en, fr, pt, sw, sn, zu, nd, af) — locale auto-detected from device',
@@ -517,6 +538,22 @@ const modules = [
   { label: 'Paediatric Cardiology (CHD)', icon: HeartPulse, color: '#3B9EFF' },
   { label: 'Occupational Medicine (OEM)', icon: Shield, color: '#E8614D' },
   { label: 'OEM Surveillance & RTW', icon: TrendingUp, color: '#0AA98A' },
+  { label: 'HIV Cascade Dashboards', icon: TrendingUp, color: '#E8614D' },
+  { label: 'PMTCT / TB-HIV Cascades', icon: BarChart3, color: '#0AA98A' },
+  { label: 'Equity & Disparity Analytics', icon: Users, color: '#3B9EFF' },
+  { label: 'Multi-Facility Benchmarking', icon: BarChart3, color: '#E8614D' },
+  { label: 'MDSR — Maternal Mortality Audit', icon: HeartPulse, color: '#0AA98A' },
+  { label: 'Population Health & Care Gaps', icon: TrendingUp, color: '#3B9EFF' },
+  { label: 'DHIS2 Validation & DQA Score', icon: CheckCircle2, color: '#E8614D' },
+  { label: 'Extended DATIM MER Indicators', icon: Globe, color: '#0AA98A' },
+  { label: 'Pharmacy Intelligence Reports', icon: Activity, color: '#3B9EFF' },
+  { label: 'Lab Quality Assurance (EQA)', icon: FlaskConical, color: '#E8614D' },
+  { label: 'AI Model Governance Registry', icon: Brain, color: '#0AA98A' },
+  { label: 'Research Data Portal (HIPAA)', icon: ShieldCheck, color: '#3B9EFF' },
+  { label: 'Mobile M&E Reports', icon: Smartphone, color: '#E8614D' },
+  { label: 'Universal Report Export (PDF/XLSX)', icon: FileText, color: '#0AA98A' },
+  { label: 'Monthly Report Bundle (ZIP)', icon: Database, color: '#3B9EFF' },
+  { label: 'Outcome Linkage Engine', icon: Network, color: '#E8614D' },
 ];
 
 const liveActivityItems = [
@@ -590,6 +627,20 @@ const liveActivityItems = [
   { type: 'oem',      text: 'OEM: Pre-employment FFD — BP 172/106, hypertension stage 2 → CDSS triggered "temporarily unfit" category; specialist review flag raised; certificate withheld pending cardiology clearance', color: '#E8614D' },
   { type: 'oemsurveil',text: 'OEM surveillance: Silica dust exposure at quarry site — measured value 0.34 mg/m³ (OEL 0.05 mg/m³, exceeds_oel = true) → CDSS alert fired; respiratory protective equipment audit scheduled', color: '#3B9EFF' },
   { type: 'oemrtw',   text: 'OEM RTW: Graded return-to-work plan signed off by employer — patient back to light duties week 1, half duties week 2, full duties week 3; CDSS job-demand match: 0 conflicts', color: '#0AA98A' },
+  { type: 'cascade',  text: 'HIV Cascade: 3rd 90 VL suppression 85.9% (Q2 2026) — 677 patients unsuppressed; mobile funnel chart exported to WhatsApp for district review meeting', color: '#0AA98A' },
+  { type: 'equity',   text: 'Equity alert: Male 15–24 VL suppression 61.3% — 22.8 pp below average; auto-disparity flag raised; M&E officer notified via mobile app', color: '#E8614D' },
+  { type: 'mdsr',     text: 'MDSR review: Maternal death #MDR-2026-014 — Delay 3 (facility) classified as preventable; 3 action items created and assigned to nursing management', color: '#E8614D' },
+  { type: 'dqa',      text: 'DHIS2 DQA: TX_CURR outlier detected — local count 1,204 vs DHIS2 estimate 1,100 (9.5% deviation, WARNING); investigation alert raised for data officer', color: '#3B9EFF' },
+  { type: 'pharmrpt', text: 'Pharmacy report: Formulary adherence 88.4% (target >95%); drug waste $14,280 in Jun 2026; AMS pending reviews 6 — report exported to PDF and emailed to pharmacy manager', color: '#0AA98A' },
+  { type: 'labqa',    text: 'Lab QA: 14 internal QC failures this month (↑3 vs May); creatinine top failure (5); critical value notification within 1 hour 94.2% — P95 TAT 14.8 h (target <12 h)', color: '#3B9EFF' },
+  { type: 'aidrft',   text: 'AI governance: Deterioration risk model drift detected — AUC 0.689 (↓0.052 vs baseline); model flagged for mandatory review; governance board notified', color: '#E8614D' },
+  { type: 'research', text: 'Research portal: External collaborator token issued (24-hour, 3-use); de-identified cohort of 842 HIV patients exported as CSV — 18 PHI identifiers suppressed per HIPAA Safe Harbor', color: '#0AA98A' },
+  { type: 'mobileRpt',text: 'Mobile M&E: District health officer pulled MDSR summary and equity heat grid on mobile during ward round; shared cascade funnel screenshot to district WhatsApp group', color: '#3B9EFF' },
+  { type: 'pdfexport',text: 'Report export: "HIV 95-95-95 Programme Report — Q2 2026" generated in 1.4 s (A4 PDF, UMOYA branded, teal header, facility watermark) — downloaded by M&E coordinator', color: '#0AA98A' },
+  { type: 'bundle',   text: 'Monthly bundle: 7 programme PDFs (HIV, PMTCT, TB-HIV, NCD, maternal, pharmacy, lab QA) zipped and emailed to district health officer — umoya-monthly-bundle-202606.zip (1.2 MB)', color: '#3B9EFF' },
+  { type: 'benchmark',text: 'Benchmarking: Facility percentile rank 68th on VL suppression; above district on 7/10 indicators; below national on TB treatment success rate — peer comparison chart updated', color: '#E8614D' },
+  { type: 'datim',    text: 'DATIM MER: TB_PREV indicator submitted — 342 patients on TPT during Q2; HTS_SELF indicator 87 self-test kits distributed; PEPFAR reporting period closed', color: '#0AA98A' },
+  { type: 'outcome',  text: 'Outcome linkage: 14 patients LTFU (>90 days past expected visit) auto-detected; follow-up schedule triggered; 3 patients with matching re-admission linked via encounter join', color: '#3B9EFF' },
 ];
 
 export default function LandingPage() {
@@ -813,7 +864,7 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="mt-7 max-w-2xl text-[1.05rem] leading-[1.9] text-[#7A9CBC]">
-                  Umoya is the clinical operating system built for Africa and the world. AI-first, offline-capable, and deeply human — 110+ clinical modules, 40+ AI capabilities, FHIR R4, DHIS2, SNOMED CT, and a multilingual mobile app in 8 languages. Designed for clinicians in Harare, Johannesburg, Nairobi, Lusaka, Maputo — and everywhere care cannot wait for a signal.
+                  Umoya is the clinical operating system built for Africa and the world. AI-first, offline-capable, and deeply human — 125+ clinical modules, 40+ AI capabilities, FHIR R4, DHIS2, SNOMED CT, and a multilingual mobile app in 8 languages. Designed for clinicians in Harare, Johannesburg, Nairobi, Lusaka, Maputo — and everywhere care cannot wait for a signal.
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -835,7 +886,7 @@ export default function LandingPage() {
 
                 {/* Compliance badges */}
                 <div className="mt-8 flex flex-wrap gap-2">
-                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2 18-profile', 'LOINC', 'HIPAA-aware', 'HL7', 'X12 EDI', '110+ modules', '40+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS', 'MCAZ', 'AHFoZ tariffs', 'Inventory AI', 'WHO Partograph', 'CathLab AI', 'ICU + NICU', 'EPI / NBS', 'Occ. Medicine', 'Tracker sync', 'Benchmark pull-back'].map((tag) => (
+                  {['SADC-first', 'FHIR R4', 'SNOMED CT', 'ICD-10', 'RxNorm', 'DHIS2 18-profile', 'LOINC', 'HIPAA-aware', 'HL7', 'X12 EDI', '125+ modules', '40+ AI capabilities', '8 languages', 'SaaS billing', 'CRVS', 'MCAZ', 'AHFoZ tariffs', 'Inventory AI', 'WHO Partograph', 'CathLab AI', 'ICU + NICU', 'EPI / NBS', 'Occ. Medicine', 'Tracker sync', 'Benchmark pull-back'].map((tag) => (
                     <span
                       key={tag}
                       className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-[#8FA8CC]"
@@ -1574,7 +1625,7 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-6 text-[#5A7A9A]">
-                  The clinical operating system built for Africa and the world. 80+ clinical modules · 30+ AI capabilities. Breath intelligence, offline-first, FHIR R4 · DHIS2 · SNOMED CT · 8 languages. Serving clinicians, hospitals, NGOs, and ministries of health across Southern, Eastern, and Western Africa.
+                  The clinical operating system built for Africa and the world. 125+ clinical modules · 40+ AI capabilities. Breath intelligence, offline-first, FHIR R4 · DHIS2 · SNOMED CT · 8 languages. Serving clinicians, hospitals, NGOs, and ministries of health across Southern, Eastern, and Western Africa.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {['FHIR R4', 'SNOMED CT', 'ICD-10', 'DHIS2', 'LOINC', 'SADC'].map((s) => (
@@ -1643,7 +1694,7 @@ export default function LandingPage() {
           <div className="border-t border-white/[0.05] px-5 py-4 lg:px-8">
             <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[11px] text-[#3A5A7A]">
-                © {currentYear} Umoya Health. Breath · Intelligence · Continuity of Care. 80+ modules · 30+ AI capabilities · 8 languages · FHIR R4 · DHIS2.
+                © {currentYear} Umoya Health. Breath · Intelligence · Continuity of Care. 125+ modules · 40+ AI capabilities · 8 languages · FHIR R4 · DHIS2.
               </p>
               <p className="text-[11px] text-[#2A4060]">
                 FHIR R4 · SNOMED CT · ICD-10 · DHIS2 · LOINC · RxNorm · HIPAA-aware · HL7 · PACTR · 40+ languages

@@ -38,6 +38,7 @@ import AestheticsTreatmentScreen from "../screens/AestheticsTreatmentScreen";
 import PaedCardiologyScreen from "../screens/PaedCardiologyScreen";
 import OccupationalMedicineScreen from "../screens/OccupationalMedicineScreen";
 import OemRtwScreen from "../screens/OemRtwScreen";
+import ReportsNavigator from "./ReportsNavigator";
 
 import { NurseShiftScreen }  from "../components/nurse/NurseShiftScreen";
 import { NurseVitalsScreen } from "../components/nurse/NurseVitalsScreen";
@@ -182,6 +183,7 @@ const RoleRouter = () => {
   const { role } = useAuthStore();
   if (role === "nurse")   return <NurseNavigator />;
   if (role === "patient") return <PatientStackNavigator />;
+  if (role === "manager") return <ReportsNavigator />;
   return <DoctorNavigator />;
 };
 

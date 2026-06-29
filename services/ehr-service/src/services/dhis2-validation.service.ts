@@ -109,6 +109,42 @@ export class Dhis2ValidationService {
     };
   }
 
+  async resolveAlert(
+    tenantId: string,
+    dataElementId: string,
+    period: string,
+    resolution: 'investigated' | 'accepted_correct' | 'corrected',
+    resolvedBy: string,
+    note?: string,
+  ): Promise<void> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    await db.query(
+      `UPDATE dhis2_validation_snapshots
+          SET outlier_flag = (CASE WHEN $5 = 'corrected' THEN true ELSE false END),
+              resolved_at = NOW(), resolved_by = $4, resolution = $5, resolution_note = $6
+        WHERE tenant_id = $1 AND data_element_id = $2 AND period = $3`,
+      [tenantId, dataElementId, period, resolvedBy, resolution, note ?? null],
+    ).catch(() => { /* column may not exist on older schemas */ });
+  }
+
+  async getDqaScore(tenantId: string, period: string): Promise<{ score: number; period: string }> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const [total, unresolved] = await Promise.all([
+      db.query(
+        `SELECT COUNT(*)::int AS n FROM dhis2_validation_snapshots WHERE tenant_id=$1 AND period=$2`,
+        [tenantId, period],
+      ).catch(() => [{ n: 0 }]),
+      db.query(
+        `SELECT COUNT(*)::int AS n FROM dhis2_validation_snapshots WHERE tenant_id=$1 AND period=$2 AND outlier_flag=true AND resolved_at IS NULL`,
+        [tenantId, period],
+      ).catch(() => [{ n: 0 }]),
+    ]);
+    const t = Number(total[0]?.n ?? 0);
+    const u = Number(unresolved[0]?.n ?? 0);
+    const score = t === 0 ? 100 : Math.round(((t - u) / t) * 1000) / 10;
+    return { score, period };
+  }
+
   async getValidationHistory(tenantId: string, dataElementId: string, periods = 6): Promise<any[]> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const rows = await db.query(

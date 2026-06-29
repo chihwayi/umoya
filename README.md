@@ -383,6 +383,37 @@ Umoya implements the deepest DHIS2 integration of any open-source EHR. Every cli
 
 ---
 
+## Reporting Excellence (S230–S245)
+
+A 16-sprint reporting and analytics layer raising programme reporting maturity from data collection to decision intelligence.
+
+### Programme Outcome Analytics
+- **Outcome Linkage Engine** — every encounter outcome (cured, died, defaulted, transferred) linked to a follow-up schedule; LTFU auto-detected at ≥ 90 days; readmission auto-classified from admissions data; care continuum KPIs computed per period
+- **Clinical Programme Cascade Dashboards** — HIV 95-95-95 (diagnosed → on ART → suppressed) with sex/age disaggregation; PMTCT MTCT rate and coverage; TB-HIV co-infection cascade; NCD (DM/HTN) control cascade; all with 4-quarter trend series and patient-level gap lists
+- **Equity & Disparity Analytics** — disaggregated snapshots by age band × sex × district × insurance type; disparity flags when a stratum deviates >10 pp from national average; mobile heat-grid and desktop equity dashboard (S236)
+- **Multi-Facility Benchmarking** — facility scorecard with percentile rank across 10 key indicators; district and national averages pulled from DHIS2; above/below/at-par trend indicators (S237)
+- **Maternal Mortality Audit (MDSR)** — structured MDSR review workflow: three-delay classification, preventability scoring, cause-of-death (ICD-10), action item lifecycle with overdue flags, and one-click MOHCC MDSR letter generation (S234)
+- **Nutrition Post-Discharge Follow-up** — post-SAM discharge visit register with weight-gain velocity computation; relapse event tracking; cure sustainability metrics (S233)
+- **Population Health & Care Gap Closure** — cohort-level chronic disease gap analytics; AI-recommended actions for overdue HbA1c, HIV tests, cervical screening; dismiss (30-day) and resolve workflows surfaced in EHR and mobile (S235)
+
+### Data Quality & Interoperability
+- **Extended DATIM MER Indicators** — TB_TB, TB_STAT, TB_ART, TB_PREV, PMTCT_EID, PMTCT_FO, HTS_SELF added to the DATIM submission with full disaggregation; anomaly narrative AI compares current vs prior period (S231)
+- **DHIS2 Aggregate Gap Closure** — 8 aggregate data elements that were previously missing from DHIS2 push are now sourced from live clinical data: lab quality, discharge disposition, MDSR, pharmacy adherence, and more (S238)
+- **DHIS2 Validation Feedback Loop** — nightly outlier sweep compares DHIS2 values against local computed values; deviations ≥ 20% flagged as warning, ≥ 50% as critical; `PATCH /alerts/:id/resolve` with `investigated / accepted_correct / corrected` resolution codes; DQA score per period (S241)
+- **Lab Quality Assurance Reports** — EQA panel results (satisfactory / warning / unacceptable); internal QC failure log; critical value notification timeliness (target >95% within 1 hour); turnaround time P50/P95 (S233)
+
+### Module-Level Report Uplift
+- **Pharmacy Intelligence Reports** — formulary adherence rate; drug waste value and top wasted items; AMS antibiotic stewardship metrics (DDD/100 bed-days, Watch+Reserve %, pending AMS reviews); all with period filtering and trend (S240)
+- **Oncology, Blood Bank, Radiology, Dialysis, Dental, Aviation, OEM reports** — survival cohort and abandonment tracking; blood bank efficiency; radiology AI concordance; dialysis Kt/V adequacy; per-module dashboards (S239)
+- **AI Model Governance Registry** — per-model monthly performance snapshots (AUC, Brier score, calibration slope); fairness metrics by age/sex/insurance; drift detection (AUC drop >0.05 = alert); governance approval workflow (request review → approve / reject); mobile governance screen (S242)
+
+### Research & Export
+- **De-identified Research Data Portal** — HIPAA Safe Harbor 18-identifier removal; 5-year age banding; time-limited token issuance for external collaborators; JSONB cohort query builder with field whitelist; CSV export; access audit log (S243)
+- **Mobile Clinical Reports** — 8 report screens for field M&E officers: cascade funnels, equity heat grids, MDSR summary, pharmacy intelligence, DHIS2 DQA alerts, lab QA, AI governance — all with pull-to-refresh, offline cache, and share-to-WhatsApp for district review meetings (S244)
+- **Universal Report Export Engine** — any dashboard can invoke `ExportMenu` to generate branded UMOYA PDFs (pdfkit, A4, teal header/footer), XLSX (exceljs, teal header row, alternating colours, conditional cell colouring), or CSV; monthly bundle generates 7 programme PDFs zipped into one file for district submission (S245)
+
+---
+
 ## Zimbabwe Market-Fit Additions
 
 Targeted enhancements built specifically for private clinic and hospital operations in Zimbabwe (S216–S225).
