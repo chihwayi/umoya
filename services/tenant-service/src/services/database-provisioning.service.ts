@@ -8050,6 +8050,44 @@ export class DatabaseProvisioningService {
           `CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_snap_unique ON ai_model_performance_snapshots(tenant_id, model_name, snapshot_period)`,
         ],
       },
+      // ── S236: Equity Analytics ────────────────────────────────────────────
+      {
+        id: 'nc_equity_analytics',
+        label: 'Equity Analytics Dimensions',
+        version: 1,
+        description: 'Equity disaggregation results and heat matrix caching',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS equity_kpi_results (
+            id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id      TEXT NOT NULL,
+            kpi_name       TEXT NOT NULL,
+            dimension      TEXT NOT NULL,
+            dimension_value TEXT NOT NULL,
+            period         TEXT NOT NULL,
+            numerator      INT,
+            denominator    INT,
+            rate           NUMERIC(6,4),
+            computed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_equity_kpi ON equity_kpi_results(tenant_id, kpi_name, period)`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_equity_kpi_unique
+             ON equity_kpi_results(tenant_id, kpi_name, dimension, dimension_value, period)`,
+          `CREATE TABLE IF NOT EXISTS equity_heat_matrix (
+            id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id    TEXT NOT NULL,
+            period       TEXT NOT NULL,
+            row_dim      TEXT NOT NULL,
+            row_value    TEXT NOT NULL,
+            col_dim      TEXT NOT NULL,
+            col_value    TEXT NOT NULL,
+            kpi_name     TEXT NOT NULL,
+            rate         NUMERIC(6,4),
+            equity_ratio NUMERIC(6,4),
+            computed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_equity_heat ON equity_heat_matrix(tenant_id, period, kpi_name)`,
+        ],
+      },
     ];
   }
 

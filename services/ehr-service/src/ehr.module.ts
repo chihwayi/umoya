@@ -311,6 +311,8 @@ import { MdsrController } from './controllers/mdsr.controller';
 import { MdsrService } from './services/mdsr.service';
 import { AiPerformanceController } from './controllers/ai-performance.controller';
 import { AiPerformanceService } from './services/ai-performance.service';
+import { EquityAnalyticsController } from './controllers/equity-analytics.controller';
+import { EquityAnalyticsService } from './services/equity-analytics.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -943,6 +945,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     LabQualityController,
     MdsrController,
     AiPerformanceController,
+    EquityAnalyticsController,
   ],
   providers: [
     NotificationCenterService,
@@ -1306,6 +1309,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     LabQualityService,
     MdsrService,
     AiPerformanceService,
+    EquityAnalyticsService,
     MfaGuard,
     {
       provide: APP_GUARD,
