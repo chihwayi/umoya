@@ -197,4 +197,31 @@ export class PopulationHealthController {
       body?.channel ?? 'sms',
     );
   }
+
+  // S235 — Care Gap endpoints
+  @Post('gaps/upsert')
+  upsertGap(@Body() dto: any, @Req() req: RequestWithTenant) {
+    return this.populationHealthService.upsertCareGap(req.tenantDb, req.tenantId, dto.patient_id, dto.gap_type, dto.days_overdue, dto.clinical_context);
+  }
+
+  @Post('gaps/:gapId/interventions')
+  recordIntervention(@Param('gapId') gapId: string, @Body() dto: any, @Req() req: RequestWithTenant) {
+    return this.populationHealthService.recordGapIntervention(req.tenantDb, req.tenantId, gapId, dto);
+  }
+
+  @Post('gaps/close')
+  closeGap(@Body() dto: any, @Req() req: RequestWithTenant) {
+    return this.populationHealthService.closeGapForPatient(req.tenantDb, req.tenantId, dto.patient_id, dto.gap_type, dto.closure_method);
+  }
+
+  @Get('gaps/summary')
+  getGapSummary(@Query('period') period: string, @Req() req: RequestWithTenant) {
+    const p = period || new Date().toISOString().slice(0, 7).replace('-', '');
+    return this.populationHealthService.getGapClosureSummary(req.tenantDb, req.tenantId, p);
+  }
+
+  @Get('gaps/priority')
+  getHighPriorityGaps(@Query('limit') limit: string, @Req() req: RequestWithTenant) {
+    return this.populationHealthService.getHighPriorityGaps(req.tenantDb, req.tenantId, Number(limit) || 50);
+  }
 }

@@ -309,6 +309,8 @@ import { LabQualityController } from './controllers/lab-quality.controller';
 import { LabQualityService } from './services/lab-quality.service';
 import { MdsrController } from './controllers/mdsr.controller';
 import { MdsrService } from './services/mdsr.service';
+import { AiPerformanceController } from './controllers/ai-performance.controller';
+import { AiPerformanceService } from './services/ai-performance.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -940,6 +942,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CascadeAnalyticsController,
     LabQualityController,
     MdsrController,
+    AiPerformanceController,
   ],
   providers: [
     NotificationCenterService,
@@ -1302,6 +1305,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CascadeAnalyticsService,
     LabQualityService,
     MdsrService,
+    AiPerformanceService,
     MfaGuard,
     {
       provide: APP_GUARD,

@@ -892,4 +892,103 @@ export class PopulationHealthService {
 
     return actions.slice(0, 4);
   }
+
+  // S235 — Care Gap Closure
+
+  async upsertCareGap(db: DataSource, tenantId: string, patientId: string, gapType: string, daysOverdue: number, context?: any): Promise<void> {
+    await db.query(
+      `INSERT INTO care_gaps (tenant_id, patient_id, gap_type, days_overdue, clinical_context)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (tenant_id, patient_id, gap_type)
+         WHERE status NOT IN ('gap_closed','patient_declined','cannot_contact','clinically_excluded')
+       DO UPDATE SET days_overdue=$4, status_updated_at=NOW()`,
+      [tenantId, patientId, gapType, daysOverdue, context ? JSON.stringify(context) : null],
+    );
+  }
+
+  async recordGapIntervention(db: DataSource, tenantId: string, gapId: string, dto: any): Promise<any> {
+    const result = await db.query(
+      `INSERT INTO care_gap_interventions (gap_id, tenant_id, intervention_type, performed_by, outcome, notes)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [gapId, tenantId, dto.intervention_type, dto.performed_by ?? null, dto.outcome ?? null, dto.notes ?? null],
+    );
+    // Update gap status
+    await db.query(
+      `UPDATE care_gaps SET status=$1, status_updated_at=NOW() WHERE id=$2 AND tenant_id=$3`,
+      [dto.gap_status ?? 'outreach_sent', gapId, tenantId],
+    );
+    return result[0];
+  }
+
+  async closeGapForPatient(db: DataSource, tenantId: string, patientId: string, gapType: string, method?: string): Promise<void> {
+    await db.query(
+      `UPDATE care_gaps SET
+         status='gap_closed', closed_at=NOW(), closure_method=$1,
+         days_to_close=EXTRACT(DAY FROM NOW() - detected_at)::INT
+       WHERE tenant_id=$2 AND patient_id=$3 AND gap_type=$4
+         AND status NOT IN ('gap_closed','patient_declined','cannot_contact','clinically_excluded')`,
+      [method ?? 'attended_appointment', tenantId, patientId, gapType],
+    );
+  }
+
+  async getGapClosureSummary(db: DataSource, tenantId: string, period: string): Promise<any> {
+    const year = period.slice(0, 4);
+    const month = period.slice(4, 6);
+    const startDate = `${year}-${month}-01`;
+
+    const rows = await db.query(
+      `SELECT gap_type,
+         COUNT(*) AS total_detected,
+         COUNT(*) FILTER (WHERE status = 'gap_closed') AS closed,
+         COUNT(*) FILTER (WHERE status = 'patient_declined') AS patient_declined,
+         COUNT(*) FILTER (WHERE status = 'cannot_contact') AS cannot_contact,
+         AVG(days_to_close) FILTER (WHERE status = 'gap_closed') AS avg_days_to_close
+       FROM care_gaps
+       WHERE tenant_id=$1 AND DATE_TRUNC('month', detected_at) = DATE_TRUNC('month', $2::DATE)
+       GROUP BY gap_type ORDER BY total_detected DESC`,
+      [tenantId, startDate],
+    );
+
+    const [overallRow] = await db.query(
+      `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='gap_closed') AS closed,
+              COUNT(DISTINCT patient_id) FILTER (WHERE status NOT IN ('gap_closed','patient_declined','clinically_excluded')) AS open_patients,
+              AVG(days_to_close) FILTER (WHERE status='gap_closed') AS avg_close,
+              COUNT(DISTINCT g.id) AS interventions
+       FROM care_gaps g
+       LEFT JOIN care_gap_interventions i ON i.gap_id = g.id
+       WHERE g.tenant_id=$1 AND DATE_TRUNC('month', g.detected_at) = DATE_TRUNC('month', $2::DATE)`,
+      [tenantId, startDate],
+    );
+
+    const byType = rows.map((r: any) => ({
+      gap_type: r.gap_type,
+      total_detected: Number(r.total_detected),
+      closed: Number(r.closed),
+      closure_rate: Number(r.total_detected) > 0 ? Number(((Number(r.closed) / Number(r.total_detected)) * 100).toFixed(1)) : 0,
+      avg_days_to_close: r.avg_days_to_close ? Number(Number(r.avg_days_to_close).toFixed(1)) : null,
+      patient_declined: Number(r.patient_declined),
+      cannot_contact: Number(r.cannot_contact),
+    }));
+
+    const total = Number(overallRow?.total ?? 0);
+    const closed = Number(overallRow?.closed ?? 0);
+    return {
+      by_type: byType,
+      overall_closure_rate: total > 0 ? Number(((closed / total) * 100).toFixed(1)) : 0,
+      avg_days_to_close: overallRow?.avg_close ? Number(Number(overallRow.avg_close).toFixed(1)) : null,
+      interventions_sent: Number(overallRow?.interventions ?? 0),
+      patients_with_open_gaps: Number(overallRow?.open_patients ?? 0),
+    };
+  }
+
+  async getHighPriorityGaps(db: DataSource, tenantId: string, limit = 50): Promise<any[]> {
+    return db.query(
+      `SELECT g.*, EXTRACT(DAY FROM NOW() - g.detected_at)::INT AS days_open
+       FROM care_gaps g
+       WHERE g.tenant_id=$1 AND g.status NOT IN ('gap_closed','patient_declined','clinically_excluded')
+         AND g.detected_at < NOW() - INTERVAL '90 days'
+       ORDER BY days_open DESC LIMIT $2`,
+      [tenantId, limit],
+    );
+  }
 }

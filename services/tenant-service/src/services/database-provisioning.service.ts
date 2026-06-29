@@ -7955,6 +7955,101 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_mdsr_actions_responsible ON mdsr_action_items(responsible_for)`,
         ],
       },
+
+      // S235 — Care Gap Closure Tracking
+      {
+        id: 'nc_care_gap_tracking',
+        label: 'Care Gap Closure Tracking',
+        version: '2026.06.29.1',
+        description: 'Tracks whether population health care gaps are resolved',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS care_gaps (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id       TEXT NOT NULL,
+            patient_id      UUID NOT NULL,
+            gap_type        TEXT NOT NULL,
+            detected_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            days_overdue    INT NOT NULL,
+            clinical_context JSONB,
+            status          TEXT NOT NULL DEFAULT 'open',
+            status_updated_at TIMESTAMPTZ,
+            closed_at       TIMESTAMPTZ,
+            closed_by       UUID,
+            days_to_close   INT,
+            closure_method  TEXT,
+            auto_detected   BOOLEAN DEFAULT TRUE
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_gap_patient ON care_gaps(patient_id, gap_type)`,
+          `CREATE INDEX IF NOT EXISTS idx_gap_status ON care_gaps(status, detected_at)`,
+          `CREATE INDEX IF NOT EXISTS idx_gap_tenant ON care_gaps(tenant_id, detected_at)`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_gap_open_unique ON care_gaps(tenant_id, patient_id, gap_type)
+            WHERE status NOT IN ('gap_closed','patient_declined','cannot_contact','clinically_excluded')`,
+          `CREATE TABLE IF NOT EXISTS care_gap_interventions (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            gap_id          UUID NOT NULL,
+            tenant_id       TEXT NOT NULL,
+            intervention_type TEXT NOT NULL,
+            performed_by    UUID,
+            performed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            outcome         TEXT,
+            notes           TEXT
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_gap_interventions_gap ON care_gap_interventions(gap_id)`,
+        ],
+      },
+
+      // S235 — AI Model Performance Registry
+      {
+        id: 'nc_ai_performance_registry',
+        label: 'AI Model Performance Registry',
+        version: '2026.06.29.1',
+        description: 'Records AI predictions and verifies them against actual outcomes',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS ai_predictions (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id       TEXT NOT NULL,
+            model_name      TEXT NOT NULL,
+            model_version   TEXT NOT NULL DEFAULT '1.0',
+            patient_id      UUID NOT NULL,
+            encounter_id    UUID,
+            prediction_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            predicted_class TEXT NOT NULL,
+            predicted_probability NUMERIC(5,4),
+            threshold_used  NUMERIC(5,4),
+            input_features  JSONB,
+            actual_outcome  TEXT,
+            outcome_verified_at TIMESTAMPTZ,
+            outcome_source  TEXT,
+            is_correct      BOOLEAN,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_model ON ai_predictions(model_name, prediction_date)`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_patient ON ai_predictions(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_unverified ON ai_predictions(actual_outcome) WHERE actual_outcome IS NULL`,
+          `CREATE TABLE IF NOT EXISTS ai_model_performance_snapshots (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id       TEXT NOT NULL,
+            model_name      TEXT NOT NULL,
+            model_version   TEXT NOT NULL DEFAULT '1.0',
+            snapshot_period TEXT NOT NULL,
+            total_predictions INT NOT NULL,
+            predictions_verified INT NOT NULL,
+            true_positives  INT,
+            false_positives INT,
+            true_negatives  INT,
+            false_negatives INT,
+            precision       NUMERIC(5,4),
+            recall          NUMERIC(5,4),
+            f1_score        NUMERIC(5,4),
+            auc_roc         NUMERIC(5,4),
+            calibration_error NUMERIC(5,4),
+            drift_flag      BOOLEAN DEFAULT FALSE,
+            computed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ai_snap_model ON ai_model_performance_snapshots(model_name, snapshot_period)`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_snap_unique ON ai_model_performance_snapshots(tenant_id, model_name, snapshot_period)`,
+        ],
+      },
     ];
   }
 
