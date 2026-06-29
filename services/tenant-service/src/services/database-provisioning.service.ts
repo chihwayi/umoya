@@ -8163,6 +8163,52 @@ export class DatabaseProvisioningService {
              ON dhis2_validation_snapshots(tenant_id, data_element_id, period, org_unit_id)`,
         ],
       },
+      {
+        id: 'nc_s243_research_portal',
+        label: 'De-identified Research Data Portal (S243)',
+        version: 1,
+        description: 'Research query definitions, time-limited tokens, and access audit log for HIPAA Safe Harbor exports',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS research_queries (
+            id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name                   VARCHAR(200) NOT NULL,
+            description            TEXT,
+            ethics_reference       VARCHAR(100) NOT NULL,
+            institution            VARCHAR(200) NOT NULL,
+            principal_investigator VARCHAR(200) NOT NULL,
+            permitted_fields       JSONB        NOT NULL DEFAULT '[]',
+            cohort_definition      JSONB        NOT NULL DEFAULT '{}',
+            status                 VARCHAR(20)  NOT NULL DEFAULT 'active',
+            created_by             UUID,
+            created_at             TIMESTAMPTZ  NOT NULL DEFAULT now(),
+            updated_at             TIMESTAMPTZ  NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_research_queries_status ON research_queries(status)`,
+          `CREATE TABLE IF NOT EXISTS research_portal_tokens (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            token             VARCHAR(64)  NOT NULL UNIQUE,
+            query_id          UUID         NOT NULL REFERENCES research_queries(id),
+            researcher_email  VARCHAR(200),
+            expires_at        TIMESTAMPTZ  NOT NULL,
+            max_uses          INTEGER      NOT NULL DEFAULT 3,
+            uses_remaining    INTEGER      NOT NULL DEFAULT 3,
+            ethics_ref        VARCHAR(100),
+            created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_research_tokens_token ON research_portal_tokens(token)`,
+          `CREATE INDEX IF NOT EXISTS idx_research_tokens_query ON research_portal_tokens(query_id)`,
+          `CREATE TABLE IF NOT EXISTS research_access_log (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            query_id      UUID         NOT NULL,
+            token_used    VARCHAR(64)  NOT NULL,
+            record_count  INTEGER      NOT NULL DEFAULT 0,
+            export_format VARCHAR(10)  NOT NULL DEFAULT 'json',
+            accessed_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_research_access_query ON research_access_log(query_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_research_access_at ON research_access_log(accessed_at DESC)`,
+        ],
+      },
     ];
   }
 

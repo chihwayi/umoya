@@ -108,6 +108,8 @@ const BenchmarkingDashboard = lazy(() => import('./pages/BenchmarkingDashboard')
 const ModuleReportsDashboard = lazy(() => import('./pages/ModuleReportsDashboard'));
 const PharmacyIntelligenceDashboard = lazy(() => import('./pages/PharmacyIntelligenceDashboard'));
 const AiGovernanceDashboard = lazy(() => import('./pages/AiGovernanceDashboard'));
+const ResearchPortalAdmin = lazy(() => import('./pages/ResearchPortalAdmin'));
+const ResearchDownloadPage = lazy(() => import('./pages/ResearchDownloadPage'));
 const MessagingDashboard = lazy(() => import('./pages/MessagingDashboard'));
 const OpenMrsMflDashboard = lazy(() => import('./pages/OpenMrsMflDashboard'));
 const InteropDashboard = lazy(() => import('./components/InteropDashboard'));
@@ -1456,6 +1458,15 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
+            <Route
+              path="/ehr/:tenantSlug/research-admin"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'medical_director', 'research_coordinator']}>
+                  <ResearchPortalAdmin />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route path="/research" element={<ResearchDownloadPage />} />
             </Routes>
           </Suspense>
         </Router>

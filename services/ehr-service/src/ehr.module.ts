@@ -319,6 +319,8 @@ import { ModuleReportsController } from './controllers/module-reports.controller
 import { ModuleReportsService } from './services/module-reports.service';
 import { Dhis2ValidationController } from './controllers/dhis2-validation.controller';
 import { Dhis2ValidationService } from './services/dhis2-validation.service';
+import { ResearchDeidentificationService } from './services/research-deidentification.service';
+import { ResearchPortalService } from './services/research-portal.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -1322,6 +1324,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     BenchmarkingService,
     ModuleReportsService,
     Dhis2ValidationService,
+    ResearchDeidentificationService,
+    ResearchPortalService,
     MfaGuard,
     {
       provide: APP_GUARD,

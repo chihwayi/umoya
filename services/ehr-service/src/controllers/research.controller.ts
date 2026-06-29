@@ -1,11 +1,16 @@
-import { Controller, Get, Post, Param, Body, Query, Req, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  Controller, Get, Post, Param, Body, Query, Req,
+  UseGuards, BadRequestException, Res, Header,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CascadeMetricsService } from '../services/cascade-metrics.service';
 import { RetentionService } from '../services/retention.service';
 import { CohortBuilderService } from '../services/cohort-builder.service';
 import { KaplanMeierService } from '../services/kaplan-meier.service';
 import { DeidExportService } from '../services/deid-export.service';
+import { ResearchPortalService } from '../services/research-portal.service';
 
 @ApiTags('Research')
 @Controller('research')
@@ -18,7 +23,10 @@ export class ResearchController {
     private readonly cohortSvc: CohortBuilderService,
     private readonly kmSvc: KaplanMeierService,
     private readonly deidSvc: DeidExportService,
+    private readonly portalSvc: ResearchPortalService,
   ) {}
+
+  // ── Cascade / Retention / Cohort / Kaplan-Meier ──────────────────────────
 
   @Get('cascade/current')
   @ApiOperation({ summary: 'Compute live 95-95-95 cascade' })
@@ -99,6 +107,8 @@ export class ResearchController {
     });
   }
 
+  // ── Adverse Events ────────────────────────────────────────────────────────
+
   @Post('adverse-events')
   @ApiOperation({ summary: 'Report an ART adverse event' })
   async reportAdverseEvent(@Body() body: any, @Req() req: any) {
@@ -136,6 +146,8 @@ export class ResearchController {
     return { exported: rows.length, records: rows };
   }
 
+  // ── De-id Export (legacy) ─────────────────────────────────────────────────
+
   @Post('export/deid')
   @ApiOperation({ summary: 'Export de-identified cohort data (HIPAA Safe Harbor)' })
   async exportDeid(
@@ -159,5 +171,94 @@ export class ResearchController {
       approvedBy: body.approvedBy,
       db: req.tenantDb,
     });
+  }
+
+  // ── Research Portal — Admin Endpoints (require EHR JWT) ───────────────────
+
+  @Post('portal/queries')
+  @ApiOperation({ summary: 'Create a new research query definition' })
+  createQuery(@Body() body: any, @Req() req: any) {
+    return this.portalSvc.createQuery(req.tenantDb, body, req.user.sub);
+  }
+
+  @Get('portal/queries')
+  @ApiOperation({ summary: 'List active research queries' })
+  listQueries(@Req() req: any) {
+    return this.portalSvc.listQueries(req.tenantDb);
+  }
+
+  @Post('portal/tokens')
+  @ApiOperation({ summary: 'Issue a time-limited research portal token' })
+  issueToken(@Body() body: any, @Req() req: any) {
+    return this.portalSvc.issueToken(req.tenantDb, body);
+  }
+
+  @Get('portal/audit')
+  @ApiOperation({ summary: 'Research data access audit trail' })
+  getAudit(@Req() req: any) {
+    return this.portalSvc.getAudit(req.tenantDb);
+  }
+
+  // ── Research Portal — Token-authenticated Endpoints (no EHR JWT) ──────────
+
+  @Get('portal/query/:queryId')
+  @ApiOperation({ summary: 'Execute a research query using a research token (no EHR auth)' })
+  async executeQuery(
+    @Param('queryId') queryId: string,
+    @Query('token') tokenParam: string,
+    @Req() req: any,
+  ) {
+    const token = tokenParam || this.extractBearerToken(req);
+    if (!token) throw new BadRequestException('Research token required');
+    return this.portalSvc.executeQuery(req.tenantDb, queryId, token);
+  }
+
+  @Get('portal/query/:queryId/csv')
+  @Header('Content-Type', 'text/csv')
+  @ApiOperation({ summary: 'Download research dataset as CSV (token-authenticated)' })
+  async downloadCsv(
+    @Param('queryId') queryId: string,
+    @Query('token') tokenParam: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    const token = tokenParam || this.extractBearerToken(req);
+    if (!token) throw new BadRequestException('Research token required');
+    const result = await this.portalSvc.executeQuery(req.tenantDb, queryId, token);
+    const csv = this.portalSvc.exportToCsv(result.records);
+    await this.portalSvc.logAccess(req.tenantDb, queryId, token, result.records.length, 'csv');
+    res.setHeader('Content-Disposition', `attachment; filename="research-${queryId}.csv"`);
+    res.setHeader('Content-Type', 'text/csv');
+    res.send(csv);
+  }
+
+  @Get('portal/query/:queryId/json')
+  @ApiOperation({ summary: 'Download research dataset as JSON (token-authenticated)' })
+  async downloadJson(
+    @Param('queryId') queryId: string,
+    @Query('token') tokenParam: string,
+    @Req() req: any,
+  ) {
+    const token = tokenParam || this.extractBearerToken(req);
+    if (!token) throw new BadRequestException('Research token required');
+    return this.portalSvc.executeQuery(req.tenantDb, queryId, token);
+  }
+
+  @Get('portal/query/:queryId/data-dictionary')
+  @ApiOperation({ summary: 'Get field data dictionary for a research query' })
+  getDataDictionary(
+    @Param('queryId') queryId: string,
+    @Query('token') tokenParam: string,
+    @Req() req: any,
+  ) {
+    const token = tokenParam || this.extractBearerToken(req);
+    if (!token) throw new BadRequestException('Research token required');
+    return this.portalSvc.getDataDictionary(req.tenantDb, queryId, token);
+  }
+
+  private extractBearerToken(req: any): string | undefined {
+    const auth: string | undefined = req.headers?.authorization;
+    if (auth?.startsWith('Bearer ')) return auth.substring(7);
+    return undefined;
   }
 }
