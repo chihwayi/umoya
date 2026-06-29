@@ -31,7 +31,7 @@ import {
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 
-type TabKey = 'tracker' | 'datim' | 'mappings' | 'aggregate' | 'benchmarks' | 'subscriptions';
+type TabKey = 'tracker' | 'datim' | 'mappings' | 'aggregate' | 'benchmarks' | 'subscriptions' | 'extended_mer';
 
 interface Dhis2DatimDashboardProps {
   tenantSlug?: string;
@@ -81,6 +81,27 @@ interface AnomalyNarrative {
   narrative: string;
   anomalies: Array<{ indicator: string; current: number; previous: number; pctChange: number }>;
   model: string | null;
+}
+
+interface AggregateReportResult {
+  status: string;
+  message?: string;
+  profile?: string;
+  period?: string;
+  dataValues?: number;
+  imported?: number;
+  updated?: number;
+  ignored?: number;
+  validation?: {
+    rulesChecked: number;
+    violations: Array<{
+      ruleName: string;
+      description?: string;
+      leftValue?: string | number;
+      operator?: string;
+      rightValue?: string | number;
+    }>;
+  };
 }
 
 const authHeaders = (token: string, tenantSlug: string) => ({
@@ -202,6 +223,29 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
   });
   const [checkResults, setCheckResults] = useState<Array<{ indicatorCode: string; value: number; breached: boolean }>>([]);
   const [checkLoading, setCheckLoading] = useState(false);
+
+  // Extended MER state
+  const [extendedMerPeriod, setExtendedMerPeriod] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [extendedMerData, setExtendedMerData] = useState<any | null>(null);
+  const [extendedMerLoading, setExtendedMerLoading] = useState(false);
+
+  const loadExtendedMer = useCallback(async (period?: string) => {
+    const p = period ?? extendedMerPeriod;
+    setExtendedMerLoading(true);
+    try {
+      const { data } = await ehrAxios.get(`/datim/extended/${p}`, {
+        headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      });
+      setExtendedMerData(data);
+    } catch {
+      // silently fail
+    } finally {
+      setExtendedMerLoading(false);
+    }
+  }, [extendedMerPeriod, tenantSlug, token]);
 
   const [hivEnrollmentForm, setHivEnrollmentForm] = useState({
     patientId: '',
@@ -591,6 +635,7 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
             <TabButton active={tab === 'aggregate'} icon={<Activity className="h-4 w-4" />} label="Aggregate Reports" onClick={() => setTab('aggregate')} />
             <TabButton active={tab === 'benchmarks'} icon={<TrendingUp className="h-4 w-4" />} label="Facility Benchmarks" onClick={() => { setTab('benchmarks'); loadBenchmarks(); }} />
             <TabButton active={tab === 'subscriptions'} icon={<Bell className="h-4 w-4" />} label="Subscriptions" onClick={() => setTab('subscriptions')} />
+            <TabButton active={tab === 'extended_mer'} icon={<Activity className="h-4 w-4" />} label="Extended MER" onClick={() => { setTab('extended_mer'); loadExtendedMer(); }} />
           </div>
 
           {tab === 'tracker' && (
@@ -1310,7 +1355,7 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
                       <th className="px-3 py-2 text-left font-medium">Last Value</th>
                       <th className="px-3 py-2 text-left font-medium">Last Checked</th>
                       <th className="px-3 py-2 text-left font-medium">Alerts</th>
-                      <th className="px-3 py-2" />
+                      <th className="px-3 py-2 text-left font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800 bg-slate-950 text-slate-200">
@@ -1350,6 +1395,131 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+          {tab === 'extended_mer' && (
+            <div className="space-y-6">
+              {/* Period selector */}
+              <div className="flex items-center gap-3">
+                <span className="text-slate-400 text-sm">Period:</span>
+                <input
+                  type="text"
+                  value={extendedMerPeriod}
+                  onChange={(e) => setExtendedMerPeriod(e.target.value)}
+                  placeholder="e.g. 202606 or 2026Q2"
+                  className="bg-slate-800 border border-slate-700 text-slate-200 rounded px-3 py-1.5 text-sm w-36"
+                />
+                <button
+                  onClick={() => loadExtendedMer(extendedMerPeriod)}
+                  disabled={extendedMerLoading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium disabled:opacity-50"
+                >
+                  {extendedMerLoading ? 'Loading…' : 'Load'}
+                </button>
+              </div>
+
+              {!extendedMerData && !extendedMerLoading && (
+                <div className="text-slate-500 text-sm text-center py-12">
+                  Select a period and click Load to view extended MER indicators.
+                </div>
+              )}
+
+              {extendedMerData && (() => {
+                const d = extendedMerData;
+                const coverageBadge = (pct: number) => {
+                  const color = pct >= 90 ? '#0AA98A' : pct >= 75 ? '#F0954A' : '#E8614D';
+                  return <span style={{ background: color + '22', color, border: `1px solid ${color}44`, borderRadius: 4, padding: '1px 7px', fontSize: 12, fontWeight: 600 }}>{pct.toFixed(1)}%</span>;
+                };
+                const tb = d.tbHiv;
+                const pmtct = d.pmtct;
+                const hts = d.htsSelf;
+                const foTotal = pmtct.fo.hivFree + pmtct.fo.hivInfected + pmtct.fo.deceased + pmtct.fo.ltfu;
+                return (
+                  <div className="space-y-6">
+                    {/* TB-HIV indicators */}
+                    <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+                      <div className="px-4 py-3 border-b border-slate-700">
+                        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">TB-HIV Indicators</h3>
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-700">
+                            <th className="text-left px-4 py-2 text-slate-400 font-medium">Indicator</th>
+                            <th className="text-right px-4 py-2 text-slate-400 font-medium">Value</th>
+                            <th className="text-right px-4 py-2 text-slate-400 font-medium">Denom</th>
+                            <th className="text-right px-4 py-2 text-slate-400 font-medium">Coverage</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-slate-700/50">
+                            <td className="px-4 py-2.5 text-slate-200 font-medium">TX_TB</td>
+                            <td className="px-4 py-2.5 text-right text-slate-300">{tb.txTb.total.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-slate-400">{tb.txTbD.total.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right">{coverageBadge(tb.coverage)}</td>
+                          </tr>
+                          <tr className="border-b border-slate-700/50">
+                            <td className="px-4 py-2.5 text-slate-200 font-medium">TB_STAT</td>
+                            <td className="px-4 py-2.5 text-right text-slate-300">{tb.tbStat.numerator.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-slate-400">{tb.tbStat.denominator.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right">{coverageBadge(tb.tbStat.coverage)}</td>
+                          </tr>
+                          <tr className="border-b border-slate-700/50">
+                            <td className="px-4 py-2.5 text-slate-200 font-medium">TB_ART</td>
+                            <td className="px-4 py-2.5 text-right text-slate-300">{tb.tbArt.total.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-slate-400">{tb.tbStat.numerator.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right">{coverageBadge(tb.tbArt.coverage)}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-4 py-2.5 text-slate-200 font-medium">TB_PREV</td>
+                            <td className="px-4 py-2.5 text-right text-slate-300">{tb.tbPrev.total.toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-slate-400">—</td>
+                            <td className="px-4 py-2.5 text-right text-slate-500">—</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* PMTCT indicators */}
+                    <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+                      <div className="px-4 py-3 border-b border-slate-700">
+                        <h3 className="text-slate-200 font-semibold text-sm uppercase tracking-wider">PMTCT Indicators</h3>
+                      </div>
+                      <div className="px-4 py-4 grid grid-cols-2 gap-6">
+                        <div>
+                          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">PMTCT_EID</div>
+                          <div className="text-slate-200 text-sm">Early (≤2 months): <span className="text-teal-400 font-semibold">{pmtct.eid.early}</span></div>
+                          <div className="text-slate-200 text-sm mt-1">Late (2–12 months): <span className="text-teal-400 font-semibold">{pmtct.eid.late}</span></div>
+                        </div>
+                        <div>
+                          <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">PMTCT_FO</div>
+                          <div className="text-slate-200 text-sm">HIV-free: <span className="text-teal-400 font-semibold">{pmtct.fo.hivFree}</span>{foTotal > 0 && <span className="text-slate-500 ml-1">({((pmtct.fo.hivFree / foTotal) * 100).toFixed(1)}%)</span>}</div>
+                          <div className="text-slate-200 text-sm mt-0.5">HIV-infected: <span className="text-red-400 font-semibold">{pmtct.fo.hivInfected}</span></div>
+                          <div className="text-slate-200 text-sm mt-0.5">Deceased: <span className="text-red-400 font-semibold">{pmtct.fo.deceased}</span> · LTFU: <span className="text-amber-400 font-semibold">{pmtct.fo.ltfu}</span></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* HTS_SELF */}
+                    <div className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-4">
+                      <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">HTS_SELF — Self-Tests Distributed</div>
+                      <div className="flex items-center gap-6 flex-wrap">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-slate-100">{hts.total.toLocaleString()}</div>
+                          <div className="text-slate-400 text-xs mt-0.5">Total</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-semibold text-pink-400">{hts.female.toLocaleString()}</div>
+                          <div className="text-slate-400 text-xs mt-0.5">Female {hts.total > 0 && `(${((hts.female / hts.total) * 100).toFixed(1)}%)`}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-semibold text-blue-400">{hts.male.toLocaleString()}</div>
+                          <div className="text-slate-400 text-xs mt-0.5">Male {hts.total > 0 && `(${((hts.male / hts.total) * 100).toFixed(1)}%)`}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

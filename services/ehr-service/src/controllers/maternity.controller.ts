@@ -3,13 +3,17 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { MaternityService } from '../services/maternity.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 
 @ApiTags('Maternity & Obstetrics')
 @Controller('maternity')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class MaternityController {
-  constructor(private readonly maternityService: MaternityService) {}
+  constructor(
+    private readonly maternityService: MaternityService,
+    private readonly outcomeLinkage: OutcomeLinkageService,
+  ) {}
 
   // ===== ENROLLMENTS =====
 
@@ -174,7 +178,14 @@ export class MaternityController {
     @Body() deliveryData: any,
   ) {
     const userId = req.user?.userId;
-    return this.maternityService.createDelivery(req.tenantDb, deliveryData, userId);
+    const delivery = await this.maternityService.createDelivery(req.tenantDb, deliveryData, userId);
+    if (delivery?.id && deliveryData?.patient_id && req.tenantId) {
+      this.outcomeLinkage.scheduleFollowUpsFromDb(
+        req.tenantDb, req.tenantId, delivery.id, 'delivery',
+        deliveryData.patient_id, new Date(deliveryData.delivery_date ?? Date.now()),
+      ).catch(() => undefined);
+    }
+    return delivery;
   }
 
   @Get('deliveries/:id')

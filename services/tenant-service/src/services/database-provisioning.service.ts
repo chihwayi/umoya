@@ -7669,6 +7669,127 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_oem_rtw_status ON oem_rtw_plans(status)`,
         ],
       },
+      {
+        id: 'nc_datim_ext_indicators',
+        label: 'DATIM Extended Indicators — TX_TB, TB_STAT, TB_ART, TB_PREV, PMTCT_EID, PMTCT_FO, HTS_SELF',
+        version: '2026.06.27.1',
+        description: 'Tables and column extensions supporting the 8 missing PEPFAR MER 3.0 indicators',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS tb_preventive_therapy (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id      UUID NOT NULL,
+            tenant_id       TEXT NOT NULL,
+            hiv_patient_id  UUID,
+            regimen         TEXT NOT NULL,
+            start_date      DATE NOT NULL,
+            expected_end    DATE NOT NULL,
+            completion_date DATE,
+            status          TEXT NOT NULL DEFAULT 'active',
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_tpt_patient ON tb_preventive_therapy(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_tpt_status ON tb_preventive_therapy(status, start_date)`,
+          `CREATE TABLE IF NOT EXISTS hts_self_tests (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id         TEXT NOT NULL,
+            distribution_date DATE NOT NULL,
+            kit_type          TEXT NOT NULL DEFAULT 'oral',
+            distribution_point TEXT,
+            recipient_age_band TEXT,
+            recipient_sex     TEXT,
+            key_population    TEXT,
+            result_returned   BOOLEAN DEFAULT FALSE,
+            result            TEXT,
+            linked_to_hts     BOOLEAN DEFAULT FALSE,
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_hts_self_date ON hts_self_tests(distribution_date)`,
+          `CREATE INDEX IF NOT EXISTS idx_hts_self_tenant ON hts_self_tests(tenant_id)`,
+          `DO $$ BEGIN
+             ALTER TABLE tb_cases ADD COLUMN IF NOT EXISTS hiv_status_known BOOLEAN DEFAULT FALSE;
+             ALTER TABLE tb_cases ADD COLUMN IF NOT EXISTS hiv_result TEXT;
+             ALTER TABLE tb_cases ADD COLUMN IF NOT EXISTS art_started BOOLEAN DEFAULT FALSE;
+             ALTER TABLE tb_cases ADD COLUMN IF NOT EXISTS art_start_date DATE;
+             ALTER TABLE tb_cases ADD COLUMN IF NOT EXISTS tpt_eligible BOOLEAN DEFAULT FALSE;
+             ALTER TABLE tb_cases ADD COLUMN IF NOT EXISTS tpt_started BOOLEAN DEFAULT FALSE;
+           EXCEPTION WHEN undefined_table THEN NULL;
+           END $$`,
+          `DO $$ BEGIN
+             ALTER TABLE hiv_visits ADD COLUMN IF NOT EXISTS tb_screened BOOLEAN DEFAULT FALSE;
+             ALTER TABLE hiv_visits ADD COLUMN IF NOT EXISTS tb_screen_result TEXT;
+           EXCEPTION WHEN undefined_table THEN NULL;
+           END $$`,
+          `DO $$ BEGIN
+             ALTER TABLE hiv_clinical_visits ADD COLUMN IF NOT EXISTS tb_screened BOOLEAN DEFAULT FALSE;
+             ALTER TABLE hiv_clinical_visits ADD COLUMN IF NOT EXISTS tb_screen_result TEXT;
+           EXCEPTION WHEN undefined_table THEN NULL;
+           END $$`,
+          `CREATE TABLE IF NOT EXISTS eid_results (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id      UUID NOT NULL,
+            mother_id       UUID NOT NULL,
+            tenant_id       TEXT NOT NULL,
+            sample_date     DATE NOT NULL,
+            result_date     DATE,
+            test_type       TEXT NOT NULL DEFAULT 'PCR',
+            result          TEXT,
+            age_weeks_at_test INT,
+            art_initiated   BOOLEAN DEFAULT FALSE,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_eid_mother ON eid_results(mother_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_eid_date ON eid_results(sample_date)`,
+        ],
+      },
+      {
+        id: 'nc_outcome_linkage',
+        label: 'Outcome Linkage Engine',
+        version: '2026.06.26.1',
+        description: 'Post-encounter outcome tracking for all clinical modules (delivery→42-day, TB→cure, nutrition→weight-gain, ICU→readmission)',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS encounter_outcomes (
+            id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id             TEXT NOT NULL,
+            encounter_id          UUID NOT NULL,
+            encounter_type        TEXT NOT NULL,
+            patient_id            UUID NOT NULL,
+            outcome_type          TEXT NOT NULL,
+            outcome_date          DATE NOT NULL,
+            follow_up_window_days INT NOT NULL,
+            clinical_notes        TEXT,
+            verified_by           UUID,
+            verified_at           TIMESTAMPTZ,
+            auto_flagged          BOOLEAN NOT NULL DEFAULT FALSE,
+            data_source           TEXT NOT NULL DEFAULT 'manual',
+            created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_enc_outcomes_patient
+            ON encounter_outcomes(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_enc_outcomes_type_date
+            ON encounter_outcomes(encounter_type, outcome_date)`,
+          `CREATE INDEX IF NOT EXISTS idx_enc_outcomes_encounter
+            ON encounter_outcomes(encounter_id)`,
+          `CREATE TABLE IF NOT EXISTS outcome_follow_up_schedules (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id        TEXT NOT NULL,
+            encounter_id     UUID NOT NULL,
+            encounter_type   TEXT NOT NULL,
+            patient_id       UUID NOT NULL,
+            due_date         DATE NOT NULL,
+            window_days      INT NOT NULL,
+            status           TEXT NOT NULL DEFAULT 'pending',
+            assigned_to      UUID,
+            completed_at     TIMESTAMPTZ,
+            outcome_id       UUID,
+            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_follow_up_due
+            ON outcome_follow_up_schedules(due_date, status)`,
+          `CREATE INDEX IF NOT EXISTS idx_follow_up_patient
+            ON outcome_follow_up_schedules(patient_id)`,
+        ],
+      },
     ];
   }
 

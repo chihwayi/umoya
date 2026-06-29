@@ -344,6 +344,228 @@ export class DatimMerService {
     return db.getRepository(DatimIndicatorMapping).find({ order: { merIndicator: 'ASC', disaggregate: 'ASC' } });
   }
 
+  // ─── Extended MER 3.0 Indicators ─────────────────────────────────────────
+
+  private async computeTxTb(db: any, period: string): Promise<DatimRow[]> {
+    const window = this.parsePeriod(period);
+    const counts = new Map<string, number>();
+    const rows = await db.query(
+      `SELECT p.date_of_birth, p.gender
+         FROM hiv_clinical_visits v
+         INNER JOIN hiv_care_enrollments e ON e.id = v.enrollment_id
+         INNER JOIN patients p ON p.id = e.patient_id
+        WHERE v.tb_screened = TRUE
+          AND v.visit_date >= $1::date AND v.visit_date <= $2::date`,
+      [window.startDate, window.endDate],
+    ).catch(() => [] as any[]);
+    for (const row of rows) {
+      this.increment(counts, 'TX_TB', this.disaggregate(row.gender, row.date_of_birth, window.endDate));
+    }
+    return this.flatten(counts);
+  }
+
+  private async computeTxTbDenominator(db: any, period: string): Promise<DatimRow[]> {
+    const window = this.parsePeriod(period);
+    const counts = new Map<string, number>();
+    const rows = await db.query(
+      `SELECT DISTINCT e.patient_id, p.date_of_birth, p.gender
+         FROM hiv_care_enrollments e
+         INNER JOIN patients p ON p.id = e.patient_id
+        WHERE e.art_start_date IS NOT NULL
+          AND e.art_start_date <= $1::date
+          AND (e.transfer_out_date IS NULL OR e.transfer_out_date > $1::date)
+          AND COALESCE(e.enrollment_status, 'active') NOT IN ('deceased', 'discontinued')`,
+      [window.endDate],
+    ).catch(() => [] as any[]);
+    for (const row of rows) {
+      this.increment(counts, 'TX_TB_D', this.disaggregate(row.gender, row.date_of_birth, window.endDate));
+    }
+    return this.flatten(counts);
+  }
+
+  private async computeTbStat(db: any, period: string): Promise<{ numerator: DatimRow[]; denominator: DatimRow[] }> {
+    const window = this.parsePeriod(period);
+    const numCounts = new Map<string, number>();
+    const denCounts = new Map<string, number>();
+    const rows = await db.query(
+      `SELECT hiv_status_known, hiv_result, p.date_of_birth, p.gender
+         FROM tb_cases tc
+         INNER JOIN patients p ON p.id = tc.patient_id
+        WHERE tc.date_registered >= $1::date AND tc.date_registered <= $2::date`,
+      [window.startDate, window.endDate],
+    ).catch(() => [] as any[]);
+    for (const row of rows) {
+      const dis = this.disaggregate(row.gender, row.date_of_birth, window.endDate);
+      this.increment(denCounts, 'TB_STAT_D', dis);
+      if (row.hiv_status_known) this.increment(numCounts, 'TB_STAT', dis);
+    }
+    return { numerator: this.flatten(numCounts), denominator: this.flatten(denCounts) };
+  }
+
+  private async computeTbArt(db: any, period: string): Promise<DatimRow[]> {
+    const window = this.parsePeriod(period);
+    const counts = new Map<string, number>();
+    const rows = await db.query(
+      `SELECT p.date_of_birth, p.gender, tc.art_start_date IS NOT NULL AND tc.art_start_date < tc.date_registered AS already_on_art
+         FROM tb_cases tc
+         INNER JOIN patients p ON p.id = tc.patient_id
+        WHERE tc.date_registered >= $1::date AND tc.date_registered <= $2::date
+          AND tc.hiv_result = 'positive'
+          AND tc.art_started = TRUE`,
+      [window.startDate, window.endDate],
+    ).catch(() => [] as any[]);
+    for (const row of rows) {
+      const dis = `${row.already_on_art ? 'Already on ART' : 'New on ART'}`;
+      this.increment(counts, 'TB_ART', dis);
+    }
+    return this.flatten(counts);
+  }
+
+  private async computeTbPrev(db: any, period: string): Promise<DatimRow[]> {
+    const window = this.parsePeriod(period);
+    const counts = new Map<string, number>();
+    const rows = await db.query(
+      `SELECT t.hiv_patient_id IS NOT NULL AS on_art
+         FROM tb_preventive_therapy t
+        WHERE t.completion_date >= $1::date AND t.completion_date <= $2::date
+          AND t.status = 'completed'`,
+      [window.startDate, window.endDate],
+    ).catch(() => [] as any[]);
+    for (const row of rows) {
+      this.increment(counts, 'TB_PREV', row.on_art ? 'New on ART' : 'Previously on ART');
+    }
+    return this.flatten(counts);
+  }
+
+  private async computePmtctEid(db: any, period: string): Promise<{ early: number; late: number }> {
+    const window = this.parsePeriod(period);
+    const rows = await db.query(
+      `SELECT age_weeks_at_test
+         FROM eid_results
+        WHERE sample_date >= $1::date AND sample_date <= $2::date`,
+      [window.startDate, window.endDate],
+    ).catch(() => [] as any[]);
+    let early = 0;
+    let late = 0;
+    for (const row of rows) {
+      const weeks = Number(row.age_weeks_at_test ?? 99);
+      if (weeks <= 8) early++;
+      else if (weeks <= 52) late++;
+    }
+    return { early, late };
+  }
+
+  private async computePmtctFo(db: any, period: string): Promise<{ hivFree: number; hivInfected: number; deceased: number; ltfu: number }> {
+    const window = this.parsePeriod(period);
+    const rows = await db.query(
+      `SELECT o.outcome_type
+         FROM encounter_outcomes o
+        WHERE o.encounter_type = 'delivery'
+          AND o.follow_up_window_days = 365
+          AND o.outcome_date >= $1::date AND o.outcome_date <= $2::date`,
+      [window.startDate, window.endDate],
+    ).catch(() => [] as any[]);
+    let hivFree = 0, hivInfected = 0, deceased = 0, ltfu = 0;
+    for (const row of rows) {
+      const t = row.outcome_type;
+      if (t === 'alive_stable' || t === 'cured') hivFree++;
+      else if (t === 'alive_uncontrolled' || t === 'alive_in_care') hivInfected++;
+      else if (t === 'deceased') deceased++;
+      else if (t === 'ltfu') ltfu++;
+    }
+    return { hivFree, hivInfected, deceased, ltfu };
+  }
+
+  private async computeHtsSelf(db: any, period: string): Promise<DatimRow[]> {
+    const window = this.parsePeriod(period);
+    const counts = new Map<string, number>();
+    const rows = await db.query(
+      `SELECT recipient_sex, recipient_age_band, key_population, result_returned, result, linked_to_hts
+         FROM hts_self_tests
+        WHERE distribution_date >= $1::date AND distribution_date <= $2::date`,
+      [window.startDate, window.endDate],
+    ).catch(() => [] as any[]);
+    for (const row of rows) {
+      const sex = row.recipient_sex ?? 'Unknown';
+      const band = row.recipient_age_band ?? 'Unknown';
+      this.increment(counts, 'HTS_SELF', `${sex}_${band}`);
+    }
+    return this.flatten(counts);
+  }
+
+  async getExtendedIndicators(tenantId: string, period: string): Promise<any> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const [txTb, txTbD, tbStat, tbArt, tbPrev, pmtctEid, pmtctFo, htsSelf] = await Promise.all([
+      this.computeTxTb(db, period),
+      this.computeTxTbDenominator(db, period),
+      this.computeTbStat(db, period),
+      this.computeTbArt(db, period),
+      this.computeTbPrev(db, period),
+      this.computePmtctEid(db, period),
+      this.computePmtctFo(db, period),
+      this.computeHtsSelf(db, period),
+    ]);
+    const txTbTotal = txTb.reduce((s, r) => s + r.value, 0);
+    const txTbDTotal = txTbD.reduce((s, r) => s + r.value, 0);
+    const tbStatNum = tbStat.numerator.reduce((s, r) => s + r.value, 0);
+    const tbStatDen = tbStat.denominator.reduce((s, r) => s + r.value, 0);
+    const tbArtTotal = tbArt.reduce((s, r) => s + r.value, 0);
+    const tbPrevTotal = tbPrev.reduce((s, r) => s + r.value, 0);
+    const htsSelfTotal = htsSelf.reduce((s, r) => s + r.value, 0);
+    return {
+      period,
+      tbHiv: {
+        txTb: { rows: txTb, total: txTbTotal },
+        txTbD: { rows: txTbD, total: txTbDTotal },
+        coverage: txTbDTotal > 0 ? Math.round((txTbTotal / txTbDTotal) * 1000) / 10 : 0,
+        tbStat: { numerator: tbStatNum, denominator: tbStatDen, rows: tbStat.numerator,
+          coverage: tbStatDen > 0 ? Math.round((tbStatNum / tbStatDen) * 1000) / 10 : 0 },
+        tbArt: { rows: tbArt, total: tbArtTotal,
+          coverage: tbStatNum > 0 ? Math.round((tbArtTotal / tbStatNum) * 1000) / 10 : 0 },
+        tbPrev: { rows: tbPrev, total: tbPrevTotal },
+      },
+      pmtct: { eid: pmtctEid, fo: pmtctFo },
+      htsSelf: {
+        rows: htsSelf,
+        total: htsSelfTotal,
+        female: htsSelf.filter((r) => r.disaggregate.startsWith('F')).reduce((s, r) => s + r.value, 0),
+        male: htsSelf.filter((r) => r.disaggregate.startsWith('M')).reduce((s, r) => s + r.value, 0),
+      },
+    };
+  }
+
+  async recordTpt(tenantId: string, body: { patientId: string; hivPatientId?: string; regimen: string; startDate: string }): Promise<any> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const regimenDays: Record<string, number> = { '6H': 180, '3HP': 90, '1HP': 30, '4R': 120 };
+    const days = regimenDays[body.regimen] ?? 180;
+    const start = new Date(body.startDate);
+    const expectedEnd = new Date(start.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+    const [row] = await db.query(
+      `INSERT INTO tb_preventive_therapy
+        (patient_id, tenant_id, hiv_patient_id, regimen, start_date, expected_end, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING *`,
+      [body.patientId, tenantId, body.hivPatientId ?? null, body.regimen, body.startDate, expectedEnd],
+    );
+    return row;
+  }
+
+  async recordHtsSelf(tenantId: string, body: any): Promise<any> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const [row] = await db.query(
+      `INSERT INTO hts_self_tests
+        (tenant_id, distribution_date, kit_type, distribution_point, recipient_age_band,
+         recipient_sex, key_population, result_returned, result, linked_to_hts)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [
+        tenantId, body.distributionDate, body.kitType ?? 'oral',
+        body.distributionPoint ?? null, body.recipientAgeBand ?? null,
+        body.recipientSex ?? null, body.keyPopulation ?? null,
+        body.resultReturned ?? false, body.result ?? null, body.linkedToHts ?? false,
+      ],
+    );
+    return row;
+  }
+
   async generateAnomalyNarrative(tenantId: string, period: string): Promise<{ narrative: string; anomalies: any[]; model: string | null }> {
     const [current, prevPeriod] = await Promise.all([
       this.computeIndicators(tenantId, period),

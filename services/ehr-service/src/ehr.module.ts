@@ -301,6 +301,10 @@ import { PaediatricCardiologyController } from './controllers/paediatric-cardiol
 import { PaediatricCardiologyService } from './services/paediatric-cardiology.service';
 import { TbaModule } from './tba/tba.module';
 import { DisaSmartcareModule } from './interop/disa-smartcare.module';
+import { OutcomeLinkageController } from './controllers/outcome-linkage.controller';
+import { OutcomeLinkageService } from './services/outcome-linkage.service';
+import { CascadeAnalyticsController } from './controllers/cascade-analytics.controller';
+import { CascadeAnalyticsService } from './services/cascade-analytics.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -928,6 +932,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PaediatricCardiologyController,
     OccupationalMedicineController,
     OemSurveillanceController,
+    OutcomeLinkageController,
+    CascadeAnalyticsController,
   ],
   providers: [
     NotificationCenterService,
@@ -1286,6 +1292,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PaediatricCardiologyService,
     OccupationalMedicineService,
     OemSurveillanceService,
+    OutcomeLinkageService,
+    CascadeAnalyticsService,
     MfaGuard,
     {
       provide: APP_GUARD,

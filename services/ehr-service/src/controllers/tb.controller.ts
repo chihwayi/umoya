@@ -4,11 +4,15 @@ import {
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { TbService } from '../services/tb.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 
 @Controller('tb')
 @UseGuards(JwtAuthGuard)
 export class TbController {
-  constructor(private readonly tbService: TbService) {}
+  constructor(
+    private readonly tbService: TbService,
+    private readonly outcomeLinkage: OutcomeLinkageService,
+  ) {}
 
   // ── Patients ──────────────────────────────────────────────────────────────
 
@@ -27,8 +31,15 @@ export class TbController {
   }
 
   @Post()
-  register(@Body() body: Record<string, any>, @Request() req: RequestWithTenant) {
-    return this.tbService.registerPatient(body, req.tenantDb);
+  async register(@Body() body: Record<string, any>, @Request() req: RequestWithTenant) {
+    const tbPatient = await this.tbService.registerPatient(body, req.tenantDb);
+    if (tbPatient?.id && tbPatient?.patientId && req.tenantId) {
+      this.outcomeLinkage.scheduleFollowUpsFromDb(
+        req.tenantDb, req.tenantId, tbPatient.id, 'tb_case',
+        tbPatient.patientId, new Date(),
+      ).catch(() => undefined);
+    }
+    return tbPatient;
   }
 
   @Get('patient/:patientId')

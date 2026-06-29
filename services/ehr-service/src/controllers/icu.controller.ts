@@ -1,11 +1,15 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { IcuService } from '../services/icu.service';
+import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('icu')
 export class IcuController {
-  constructor(private readonly icu: IcuService) {}
+  constructor(
+    private readonly icu: IcuService,
+    private readonly outcomeLinkage: OutcomeLinkageService,
+  ) {}
 
   @Get('census')
   getCensus(@Req() req: any, @Query('icuType') icuType?: string) {
@@ -30,8 +34,15 @@ export class IcuController {
   }
 
   @Patch('admissions/:id/discharge')
-  discharge(@Req() req: any, @Param('id') id: string, @Body() body: { destination?: string }) {
-    return this.icu.dischargePatient(req.tenantDb, id, body.destination);
+  async discharge(@Req() req: any, @Param('id') id: string, @Body() body: { destination?: string }) {
+    const admission = await this.icu.dischargePatient(req.tenantDb, id, body.destination);
+    if (admission?.patient_id && req.tenantId) {
+      this.outcomeLinkage.scheduleFollowUpsFromDb(
+        req.tenantDb, req.tenantId, id, 'icu_admission',
+        admission.patient_id, new Date(),
+      ).catch(() => undefined);
+    }
+    return admission;
   }
 
   @Post('admissions/:id/vitals')

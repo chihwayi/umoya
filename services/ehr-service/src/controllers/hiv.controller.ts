@@ -8,6 +8,7 @@ import { HivFastTrackService } from '../services/hiv-fast-track.service';
 import { HivResistanceService } from '../services/hiv-resistance.service';
 import { HivMmdService } from '../services/hiv-mmd.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 
 @ApiTags('HIV/AIDS/TB')
 @Controller('hiv')
@@ -21,6 +22,7 @@ export class HivController {
     private readonly hivFastTrackService: HivFastTrackService,
     private readonly hivResistanceService: HivResistanceService,
     private readonly hivMmdService: HivMmdService,
+    private readonly outcomeLinkage: OutcomeLinkageService,
   ) {}
 
   @Post('tests')
@@ -155,7 +157,14 @@ export class HivController {
       body.providerName ||
       'Unknown';
 
-    return this.hivService.createClinicalVisit({ ...body, providerId, providerName }, req.tenantDb, providerRole, req.tenantId);
+    const visit = await this.hivService.createClinicalVisit({ ...body, providerId, providerName }, req.tenantDb, providerRole, req.tenantId);
+    if (visit?.id && body?.patientId && req.tenantId) {
+      this.outcomeLinkage.scheduleFollowUpsFromDb(
+        req.tenantDb, req.tenantId, visit.id, 'hiv_visit',
+        body.patientId, new Date(),
+      ).catch(() => undefined);
+    }
+    return visit;
   }
 
   @Get('visits/enrollment/:enrollmentId')

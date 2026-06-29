@@ -41,4 +41,19 @@ export class DatimMerController {
   upsertIndicatorMapping(@Body() body: any, @Request() req: RequestWithTenant) {
     return this.datimMerService.upsertIndicatorMapping(req.tenantId, body);
   }
+
+  @Get('extended/:period')
+  getExtendedIndicators(@Param('period') period: string, @Request() req: RequestWithTenant) {
+    return this.datimMerService.getExtendedIndicators(req.tenantId, period);
+  }
+
+  @Post('tpt')
+  recordTpt(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.datimMerService.recordTpt(req.tenantId, body);
+  }
+
+  @Post('hts-self')
+  recordHtsSelf(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.datimMerService.recordHtsSelf(req.tenantId, body);
+  }
 }
