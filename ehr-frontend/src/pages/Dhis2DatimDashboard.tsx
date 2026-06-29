@@ -31,7 +31,7 @@ import {
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 
-type TabKey = 'tracker' | 'datim' | 'mappings' | 'aggregate' | 'benchmarks' | 'subscriptions' | 'extended_mer';
+type TabKey = 'tracker' | 'datim' | 'mappings' | 'aggregate' | 'benchmarks' | 'subscriptions' | 'extended_mer' | 'validation';
 
 interface Dhis2DatimDashboardProps {
   tenantSlug?: string;
@@ -223,6 +223,39 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
   });
   const [checkResults, setCheckResults] = useState<Array<{ indicatorCode: string; value: number; breached: boolean }>>([]);
   const [checkLoading, setCheckLoading] = useState(false);
+
+  // S241 — Validation Feedback state
+  const [validationPeriod, setValidationPeriod] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [validationReport, setValidationReport] = useState<any | null>(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+
+  const loadValidation = useCallback(async () => {
+    setValidationLoading(true);
+    try {
+      const { data } = await ehrAxios.get(
+        `/tenants/${tenantSlug}/dhis2-validation/outliers?period=${validationPeriod}`,
+        { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } },
+      );
+      setValidationReport(data);
+    } catch { /* handled silently */ }
+    setValidationLoading(false);
+  }, [tenantSlug, token, validationPeriod]);
+
+  const runValidation = async () => {
+    setValidationLoading(true);
+    try {
+      await ehrAxios.post(
+        `/tenants/${tenantSlug}/dhis2-validation/run?period=${validationPeriod}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } },
+      );
+      await loadValidation();
+    } catch { /* handled silently */ }
+    setValidationLoading(false);
+  };
 
   // Extended MER state
   const [extendedMerPeriod, setExtendedMerPeriod] = useState(() => {
@@ -636,6 +669,7 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
             <TabButton active={tab === 'benchmarks'} icon={<TrendingUp className="h-4 w-4" />} label="Facility Benchmarks" onClick={() => { setTab('benchmarks'); loadBenchmarks(); }} />
             <TabButton active={tab === 'subscriptions'} icon={<Bell className="h-4 w-4" />} label="Subscriptions" onClick={() => setTab('subscriptions')} />
             <TabButton active={tab === 'extended_mer'} icon={<Activity className="h-4 w-4" />} label="Extended MER" onClick={() => { setTab('extended_mer'); loadExtendedMer(); }} />
+            <TabButton active={tab === 'validation'} icon={<Activity className="h-4 w-4" />} label="Validation Feedback" onClick={() => { setTab('validation'); loadValidation(); }} />
           </div>
 
           {tab === 'tracker' && (
@@ -1520,6 +1554,102 @@ const Dhis2DatimDashboard: React.FC<Dhis2DatimDashboardProps> = ({ tenantSlug: t
                   </div>
                 );
               })()}
+            </div>
+          )}
+
+          {/* S241 — Validation Feedback Loop */}
+          {tab === 'validation' && (
+            <div className="space-y-6 p-6">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div>
+                  <label className="text-xs text-slate-400 block mb-1">Period (YYYYMM)</label>
+                  <input
+                    value={validationPeriod}
+                    onChange={e => setValidationPeriod(e.target.value)}
+                    className="bg-slate-800 border border-slate-600 rounded px-3 py-1 text-sm w-28 text-white"
+                    maxLength={6}
+                  />
+                </div>
+                <button
+                  onClick={loadValidation}
+                  className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded text-sm"
+                >
+                  <Activity className="h-4 w-4" /> Load Report
+                </button>
+                <button
+                  onClick={runValidation}
+                  disabled={validationLoading}
+                  className="flex items-center gap-1 bg-teal-600 hover:bg-teal-500 text-white px-3 py-2 rounded text-sm disabled:opacity-50"
+                >
+                  <Activity className="h-4 w-4" /> {validationLoading ? 'Running…' : 'Run Validation Pull'}
+                </button>
+              </div>
+
+              {validationReport && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                      { label: 'Elements Checked', val: validationReport.total_checked, color: 'text-white' },
+                      { label: 'OK', val: validationReport.ok, color: 'text-teal-400' },
+                      { label: 'Warnings (>20%)', val: validationReport.warnings, color: 'text-yellow-400' },
+                      { label: 'Critical (>50%)', val: validationReport.critical, color: 'text-red-400' },
+                    ].map(c => (
+                      <div key={c.label} className="bg-slate-800 rounded-lg p-4">
+                        <div className="text-xs text-slate-400">{c.label}</div>
+                        <div className={`text-2xl font-bold ${c.color}`}>{c.val ?? 0}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {validationReport.outliers?.length > 0 ? (
+                    <div className="bg-slate-800 rounded-lg p-4">
+                      <h3 className="text-sm font-semibold text-slate-300 mb-3">Outlier Data Elements</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-slate-400 text-xs border-b border-slate-700">
+                              <th className="text-left py-2 pr-4">Data Element</th>
+                              <th className="text-right py-2 pr-4">DHIS2</th>
+                              <th className="text-right py-2 pr-4">Local EHR</th>
+                              <th className="text-right py-2 pr-4">Deviation</th>
+                              <th className="text-left py-2">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {validationReport.outliers.map((o: any, i: number) => (
+                              <tr key={i} className={`border-b border-slate-700/50 ${o.severity === 'critical' ? 'bg-red-900/20' : ''}`}>
+                                <td className="py-2 pr-4 text-slate-200">{o.name}</td>
+                                <td className="py-2 pr-4 text-right text-slate-300">{o.dhis2?.toLocaleString() ?? '—'}</td>
+                                <td className="py-2 pr-4 text-right text-slate-300">{o.local?.toLocaleString() ?? '—'}</td>
+                                <td className={`py-2 pr-4 text-right font-bold ${Math.abs(o.deviation_pct) > 50 ? 'text-red-400' : 'text-yellow-400'}`}>
+                                  {o.deviation_pct > 0 ? '+' : ''}{o.deviation_pct?.toFixed(1)}%
+                                </td>
+                                <td className="py-2">
+                                  {o.severity === 'critical'
+                                    ? <span className="text-red-400 text-xs font-semibold">CRITICAL</span>
+                                    : <span className="text-yellow-400 text-xs">WARNING</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-800 rounded-lg p-8 text-center text-slate-400">
+                      {validationReport.total_checked > 0
+                        ? '✓ All data elements within acceptable deviation thresholds.'
+                        : 'No validation data. Run a validation pull to compare DHIS2 vs local EHR values.'}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!validationReport && !validationLoading && (
+                <div className="bg-slate-800 rounded-lg p-8 text-center text-slate-400">
+                  Click "Load Report" to view cached validation results, or "Run Validation Pull" to fetch fresh data from DHIS2.
+                </div>
+              )}
             </div>
           )}
         </div>

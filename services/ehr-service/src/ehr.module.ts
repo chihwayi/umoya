@@ -317,6 +317,8 @@ import { BenchmarkingController } from './controllers/benchmarking.controller';
 import { BenchmarkingService } from './services/benchmarking.service';
 import { ModuleReportsController } from './controllers/module-reports.controller';
 import { ModuleReportsService } from './services/module-reports.service';
+import { Dhis2ValidationController } from './controllers/dhis2-validation.controller';
+import { Dhis2ValidationService } from './services/dhis2-validation.service';
 
 // Services
 import { AuthService } from './services/auth.service';
@@ -952,6 +954,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EquityAnalyticsController,
     BenchmarkingController,
     ModuleReportsController,
+    Dhis2ValidationController,
   ],
   providers: [
     NotificationCenterService,
@@ -1318,6 +1321,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     EquityAnalyticsService,
     BenchmarkingService,
     ModuleReportsService,
+    Dhis2ValidationService,
     MfaGuard,
     {
       provide: APP_GUARD,

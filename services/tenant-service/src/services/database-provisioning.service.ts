@@ -8116,6 +8116,32 @@ export class DatabaseProvisioningService {
              ON facility_benchmark_snapshots(tenant_id, facility_id, metric_name, period)`,
         ],
       },
+      // ── S241: DHIS2 Validation Feedback Cache ────────────────────────────
+      {
+        id: 'nc_dhis2_validation',
+        label: 'DHIS2 Validation Feedback Cache',
+        version: 1,
+        description: 'Stores pulled DHIS2 data values and outlier comparison results',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS dhis2_validation_snapshots (
+            id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id        TEXT NOT NULL,
+            data_element_id  TEXT NOT NULL,
+            data_element_name TEXT,
+            period           TEXT NOT NULL,
+            org_unit_id      TEXT,
+            dhis2_value      NUMERIC(14,4),
+            local_value      NUMERIC(14,4),
+            deviation_pct    NUMERIC(8,4),
+            outlier_flag     BOOLEAN DEFAULT FALSE,
+            outlier_severity TEXT,
+            pulled_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_dhis2_val_tenant ON dhis2_validation_snapshots(tenant_id, period)`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_dhis2_val_unique
+             ON dhis2_validation_snapshots(tenant_id, data_element_id, period, org_unit_id)`,
+        ],
+      },
     ];
   }
 
