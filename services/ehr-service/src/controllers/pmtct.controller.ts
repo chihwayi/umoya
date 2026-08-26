@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
 import { PmtctService } from '../services/pmtct.service';
 import { PmtctObservationMapper } from '../fhir/mappers/pmtct-observation.mapper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('hiv/pmtct')
+@UseGuards(JwtAuthGuard)
 export class PmtctController {
   constructor(private readonly svc: PmtctService) {}
 

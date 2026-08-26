@@ -8338,6 +8338,17 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_ams_decision ON ams_approvals(ams_decision)`,
         ],
       },
+      {
+        id: 'workflow_wait_durability',
+        label: 'Clinical Workflow Durable Wait',
+        version: '2026.08.25.1',
+        description:
+          'resume_at column on workflow_step_executions so wait-type workflow steps survive a process restart instead of being lost in an in-process setTimeout (S254 remediation)',
+        statements: () => [
+          `ALTER TABLE workflow_step_executions ADD COLUMN IF NOT EXISTS resume_at TIMESTAMPTZ`,
+          `CREATE INDEX IF NOT EXISTS idx_workflow_step_executions_resume_at ON workflow_step_executions(resume_at) WHERE resume_at IS NOT NULL`,
+        ],
+      },
     ];
   }
 

@@ -2,9 +2,11 @@ import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
 import { getMasterDbConfig } from '../utils/runtime-env';
+import { Public } from '../decorators/public.decorator';
 
 @ApiTags('Tenants')
 @Controller('tenants')
+@Public()
 export class TenantsController {
   private masterDb: DataSource | null = null;
 

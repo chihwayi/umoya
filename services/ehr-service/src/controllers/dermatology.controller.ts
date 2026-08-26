@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
 import { DermatologyService } from '../services/dermatology.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('dermatology')
+@UseGuards(JwtAuthGuard)
 export class DermatologyController {
   constructor(private readonly svc: DermatologyService) {}
 

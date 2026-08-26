@@ -215,6 +215,11 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [saving, setSaving] = useState(false);
   const [signing, setSigning] = useState(false);
+  const [showAmendForm, setShowAmendForm] = useState(false);
+  const [amending, setAmending] = useState(false);
+  const [amendReason, setAmendReason] = useState('');
+  const [amendFindings, setAmendFindings] = useState('');
+  const [amendImpression, setAmendImpression] = useState('');
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [currentDiagnosisConcept, setCurrentDiagnosisConcept] = useState<SnomedConcept | null>(null);
   const [aiDraft, setAiDraft] = useState<ReportDraftArtifact | null>(study?.reportDraft || null);
@@ -512,6 +517,40 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
       showError(message, 'error');
     } finally {
       setSigning(false);
+    }
+  };
+
+  const openAmendForm = () => {
+    setAmendReason('');
+    setAmendFindings(existingReport?.findings || '');
+    setAmendImpression(existingReport?.impression || '');
+    setShowAmendForm(true);
+  };
+
+  const handleAmendReport = async () => {
+    if (!ensureStudyContext()) return;
+    if (!existingReport?.id) return;
+    if (!amendReason.trim()) {
+      showError('An amendment reason is required.', 'error');
+      return;
+    }
+
+    setAmending(true);
+    try {
+      await ehrApi.amendImagingReport(tenantSlug, token, existingReport.id, {
+        amendment_reason: amendReason.trim(),
+        findings: amendFindings,
+        impression: amendImpression,
+      });
+      showSuccess('Report amended', 'success');
+      setShowAmendForm(false);
+      if (onRefresh) await onRefresh();
+    } catch (error: any) {
+      console.error('Failed to amend report', error);
+      const message = error?.response?.data?.message || 'Failed to amend report';
+      showError(message, 'error');
+    } finally {
+      setAmending(false);
     }
   };
 
@@ -964,10 +1003,81 @@ const ImagingReportComposer: React.FC<ImagingReportComposerProps> = ({
           </div>
         )}
 
-        {existingReport?.report_status === 'final' && (
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            <CheckCircle2 className="w-5 h-5" />
-            This report has been signed. Further edits will require an amendment workflow (coming soon).
+        {existingReport?.report_status === 'final' && !showAmendForm && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5" />
+              This report has been signed. Further edits require a documented amendment.
+            </div>
+            {isAssignedRadiologist && (
+              <button
+                type="button"
+                onClick={openAmendForm}
+                className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+              >
+                Amend report
+              </button>
+            )}
+          </div>
+        )}
+
+        {existingReport?.report_status === 'amended' && (
+          <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <AlertTriangle className="w-5 h-5" />
+            This report was amended{existingReport?.amended_at ? ` on ${new Date(existingReport.amended_at).toLocaleString()}` : ''}
+            {existingReport?.amendment_reason ? `: ${existingReport.amendment_reason}` : ''}
+          </div>
+        )}
+
+        {showAmendForm && (
+          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900">Amend signed report</p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-amber-800">Amendment reason (required)</label>
+              <textarea
+                value={amendReason}
+                onChange={(e) => setAmendReason(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm"
+                placeholder="Why is this report being amended?"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-amber-800">Findings</label>
+              <textarea
+                value={amendFindings}
+                onChange={(e) => setAmendFindings(e.target.value)}
+                rows={4}
+                className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-amber-800">Impression</label>
+              <textarea
+                value={amendImpression}
+                onChange={(e) => setAmendImpression(e.target.value)}
+                rows={3}
+                className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleAmendReport}
+                disabled={amending}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {amending ? 'Submitting amendment...' : 'Submit amendment'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAmendForm(false)}
+                disabled={amending}
+                className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 

@@ -404,16 +404,25 @@ export class MedicalAidApiService {
   /**
    * Verify member with medical aid provider
    */
+  /** True when the request was routed to the local demo simulator instead of a
+   * real payer, because no tenant-configured API credentials exist for this
+   * provider. Callers must surface this — a claim "succeeding" against the
+   * demo service will never be paid by a real medical aid. */
+  private isSandboxConfig(config: MedicalAidApiConfig): boolean {
+    return config.configurationData?.source === 'env-demo-fallback';
+  }
+
   async verifyMember(
     medicalAidName: string,
     memberNumber: string,
     tenantDb: DataSource,
-  ): Promise<{ valid: boolean; memberDetails?: any; error?: string }> {
+  ): Promise<{ valid: boolean; memberDetails?: any; error?: string; sandbox?: boolean }> {
     const config = await this.getApiConfiguration(medicalAidName, tenantDb);
 
     if (!config) {
       return { valid: false, error: 'API configuration not found for this medical aid' };
     }
+    const sandbox = this.isSandboxConfig(config);
 
     if (config.testMode) {
       // Simulate verification in test mode
@@ -425,6 +434,7 @@ export class MedicalAidApiService {
           plan: 'Test Plan',
           status: 'active',
         },
+        sandbox,
       };
     }
 
@@ -432,7 +442,7 @@ export class MedicalAidApiService {
       const client = await this.getAuthenticatedClient(config, tenantDb);
 
       if (!config.memberVerificationEndpoint) {
-        return { valid: false, error: 'Member verification endpoint not configured' };
+        return { valid: false, error: 'Member verification endpoint not configured', sandbox };
       }
 
       const response = await client.post(config.memberVerificationEndpoint, {
@@ -442,12 +452,14 @@ export class MedicalAidApiService {
       return {
         valid: response.data.valid || response.data.status === 'active',
         memberDetails: response.data,
+        sandbox,
       };
     } catch (error: any) {
       this.logger.error(`Member verification failed: ${error.message}`);
       return {
         valid: false,
         error: error.response?.data?.message || error.message,
+        sandbox,
       };
     }
   }
@@ -459,12 +471,13 @@ export class MedicalAidApiService {
     medicalAidName: string,
     preAuthRequest: PreAuthorizationRequest,
     tenantDb: DataSource,
-  ): Promise<{ success: boolean; preAuthId?: string; approvedAmount?: number; error?: string }> {
+  ): Promise<{ success: boolean; preAuthId?: string; approvedAmount?: number; error?: string; sandbox?: boolean }> {
     const config = await this.getApiConfiguration(medicalAidName, tenantDb);
 
     if (!config) {
       return { success: false, error: 'API configuration not found' };
     }
+    const sandbox = this.isSandboxConfig(config);
 
     if (config.testMode) {
       // Simulate pre-auth in test mode
@@ -472,6 +485,7 @@ export class MedicalAidApiService {
         success: true,
         preAuthId: `PREAUTH-${Date.now()}`,
         approvedAmount: preAuthRequest.requestedAmount * 0.9, // 90% approval
+        sandbox,
       };
     }
 
@@ -479,7 +493,7 @@ export class MedicalAidApiService {
       const client = await this.getAuthenticatedClient(config, tenantDb);
 
       if (!config.preauthEndpoint) {
-        return { success: false, error: 'Pre-authorization endpoint not configured' };
+        return { success: false, error: 'Pre-authorization endpoint not configured', sandbox };
       }
 
       const payload = this.formatPreAuthPayload(preAuthRequest, config);
@@ -489,12 +503,14 @@ export class MedicalAidApiService {
         success: response.data.approved || response.data.status === 'approved',
         preAuthId: response.data.preAuthId || response.data.referenceNumber,
         approvedAmount: response.data.approvedAmount,
+        sandbox,
       };
     } catch (error: any) {
       this.logger.error(`Pre-authorization submission failed: ${error.message}`);
       return {
         success: false,
         error: error.response?.data?.message || error.message,
+        sandbox,
       };
     }
   }
@@ -506,18 +522,20 @@ export class MedicalAidApiService {
     medicalAidName: string,
     claimRequest: ClaimSubmissionRequest,
     tenantDb: DataSource,
-  ): Promise<{ success: boolean; externalClaimId?: string; error?: string }> {
+  ): Promise<{ success: boolean; externalClaimId?: string; error?: string; sandbox?: boolean }> {
     const config = await this.getApiConfiguration(medicalAidName, tenantDb);
 
     if (!config) {
       return { success: false, error: 'API configuration not found' };
     }
+    const sandbox = this.isSandboxConfig(config);
 
     if (config.testMode) {
       // Simulate claim submission in test mode
       return {
         success: true,
         externalClaimId: `CLAIM-${Date.now()}`,
+        sandbox,
       };
     }
 
@@ -525,7 +543,7 @@ export class MedicalAidApiService {
       const client = await this.getAuthenticatedClient(config, tenantDb);
 
       if (!config.claimSubmissionEndpoint) {
-        return { success: false, error: 'Claim submission endpoint not configured' };
+        return { success: false, error: 'Claim submission endpoint not configured', sandbox };
       }
 
       const payload = this.formatClaimPayload(claimRequest, config);
@@ -534,12 +552,14 @@ export class MedicalAidApiService {
       return {
         success: response.data.success || response.data.status === 'submitted',
         externalClaimId: response.data.claimId || response.data.referenceNumber,
+        sandbox,
       };
     } catch (error: any) {
       this.logger.error(`Claim submission failed: ${error.message}`);
       return {
         success: false,
         error: error.response?.data?.message || error.message,
+        sandbox,
       };
     }
   }
@@ -551,18 +571,20 @@ export class MedicalAidApiService {
     medicalAidName: string,
     externalClaimId: string,
     tenantDb: DataSource,
-  ): Promise<{ status: string; approvedAmount?: number; rejectionReason?: string; details?: any }> {
+  ): Promise<{ status: string; approvedAmount?: number; rejectionReason?: string; details?: any; sandbox?: boolean }> {
     const config = await this.getApiConfiguration(medicalAidName, tenantDb);
 
     if (!config) {
       throw new BadRequestException('API configuration not found');
     }
+    const sandbox = this.isSandboxConfig(config);
 
     if (config.testMode) {
       // Simulate status check in test mode
       return {
         status: 'processing',
         details: { externalClaimId },
+        sandbox,
       };
     }
 
@@ -582,6 +604,7 @@ export class MedicalAidApiService {
         approvedAmount: response.data.approvedAmount,
         rejectionReason: response.data.rejectionReason,
         details: response.data,
+        sandbox,
       };
     } catch (error: any) {
       this.logger.error(`Status check failed: ${error.message}`);

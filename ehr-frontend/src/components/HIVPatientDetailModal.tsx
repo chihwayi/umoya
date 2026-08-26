@@ -11,6 +11,7 @@ import { HIVCareVisitWithSmartForms, HIVWorkflowIntegration } from './HIV';
 import { GuidelineResult } from '../types/guidelines';
 import { getHivCdssConfig } from './HIV/hivCdssConfig';
 import { GuidelineSearchPanel } from './GuidelineSearchPanel';
+import HIVReferralManagement from './HIVReferralManagement';
 
 interface HIVPatientDetailModalProps {
   enrollment: any;
@@ -1433,7 +1434,11 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
 
           {activeTab === 'referrals' && (
             <div className="space-y-6">
-              <p className="text-slate-600">Referral management coming soon</p>
+              <HIVReferralManagement
+                enrollmentId={enrollment.id}
+                patientName={`${enrollment.first_name || ''} ${enrollment.last_name || ''}`.trim()}
+                tenantSlug={tenantSlug}
+              />
             </div>
           )}
 

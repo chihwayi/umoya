@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
 import { SdohService } from '../services/sdoh.service';
 import { SdohObservationMapper } from '../fhir/mappers/sdoh-observation.mapper';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('sdoh')
+@UseGuards(JwtAuthGuard)
 export class SdohController {
   constructor(private readonly svc: SdohService) {}
 

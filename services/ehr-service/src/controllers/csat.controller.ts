@@ -1,11 +1,14 @@
-import { Controller, Get, Post, Param, Body, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, Req, UseGuards } from '@nestjs/common';
 import { CsatService, CsatSubmissionDto } from '../services/csat.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('csat')
 export class CsatController {
   constructor(private readonly csat: CsatService) {}
 
+  // survey/:token routes stay unguarded by design — SHA-256 token is the credential.
   @Post('send')
+  @UseGuards(JwtAuthGuard)
   sendSurvey(
     @Req() req: any,
     @Body() body: { encounterId: string; patientId: string; clinicianId?: string },
@@ -25,11 +28,13 @@ export class CsatController {
   }
 
   @Get('stats')
+  @UseGuards(JwtAuthGuard)
   getStats(@Req() req: any, @Query('days') days?: string) {
     return this.csat.getAggregateStats(req.tenantDb, days ? +days : 30);
   }
 
   @Get('clinician/:id/stats')
+  @UseGuards(JwtAuthGuard)
   getClinicianStats(@Req() req: any, @Param('id') id: string, @Query('days') days?: string) {
     return this.csat.getClinicianStats(req.tenantDb, id, days ? +days : 30);
   }

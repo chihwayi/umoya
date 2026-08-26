@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
 import { PredictiveRiskService } from '../services/predictive-risk.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('risk')
+@UseGuards(JwtAuthGuard)
 export class PredictiveRiskController {
   constructor(private readonly svc: PredictiveRiskService) {}
 

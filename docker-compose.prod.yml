@@ -21,6 +21,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
     networks:
       - umoya-network
 
@@ -36,6 +44,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
     networks:
       - umoya-network
 
@@ -54,6 +70,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     networks:
       - umoya-network
 
@@ -119,6 +143,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     depends_on:
       postgres-master:
         condition: service_healthy
@@ -140,6 +172,14 @@ services:
       timeout: 10s
       retries: 6
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
     environment:
       - ENVIRONMENT=production
       - REDIS_URL=${SERVICE_REDIS_URL}
@@ -207,7 +247,23 @@ services:
     restart: unless-stopped
     command: ["python", "worker_main.py"]
     healthcheck:
-      disable: true
+      # No HTTP server in this process (pure Redis job-consumer loop) — the
+      # loop touches /tmp/cdss_worker_heartbeat on every iteration (poll
+      # interval CDSS_JOB_WORKER_POLL_SECONDS, default 5s), so a stale file
+      # past 90s means the loop has hung or crashed.
+      test: ["CMD-SHELL", "find /tmp/cdss_worker_heartbeat -mmin -1.5 2>/dev/null | grep -q ."]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
     environment:
       - ENVIRONMENT=production
       - REDIS_URL=${SERVICE_REDIS_URL}
@@ -265,6 +321,14 @@ services:
       - DEMO_API_KEY=${MEDICAL_AID_DEMO_API_KEY}
       - DEMO_REQUIRE_API_KEY=${MEDICAL_AID_DEMO_REQUIRE_API_KEY:-true}
     command: node services/medical-aid-demo-service/src/server.js
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
     networks:
       - umoya-network
 
@@ -285,6 +349,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - FHIR_INBOUND_API_KEY=${FHIR_INBOUND_API_KEY}
       - SNOMED_USE_POSTGRES=true
       - SNOMED_USE_CACHE=true
       - CDSS_SERVICE_URL=${SERVICE_CDSS_URL}
@@ -353,6 +418,14 @@ services:
     command: npm start
     volumes:
       - ${HOME}/.aws:/root/.aws:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     depends_on:
       postgres-master:
         condition: service_healthy
@@ -379,6 +452,14 @@ services:
       - SERVICE_TENANT_URL=${SERVICE_TENANT_URL}
       - SERVICE_EHR_URL=${SERVICE_EHR_URL}
       - SERVICE_CDSS_URL=${SERVICE_CDSS_URL}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
     depends_on:
       tenant-service:
         condition: service_healthy
@@ -398,6 +479,14 @@ services:
       - SERVICE_TENANT_URL=${SERVICE_TENANT_URL:-http://tenant-service:3001}
       - SERVICE_EHR_URL=${SERVICE_EHR_URL:-http://ehr-service:3013}
       - SERVICE_CDSS_URL=${SERVICE_CDSS_URL:-http://cdss-service:8000}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
     depends_on:
       - tenant-service
       - ehr-service
@@ -415,6 +504,14 @@ services:
       - "${PORT_PATIENT_PORTAL:-3015}:80"
     environment:
       - SERVICE_EHR_URL=${SERVICE_EHR_URL:-http://ehr-service:3013}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
     depends_on:
       - ehr-service
     networks:
@@ -427,6 +524,14 @@ services:
     volumes:
       - ./infrastructure/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     networks:
       - umoya-network
 
@@ -445,6 +550,14 @@ services:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
     networks:
       - umoya-network
 

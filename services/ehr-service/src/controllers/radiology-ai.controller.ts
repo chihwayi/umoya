@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
 import { RadiologyAiService } from '../services/radiology-ai.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('radiology-ai')
+@UseGuards(JwtAuthGuard)
 export class RadiologyAiController {
   constructor(private readonly svc: RadiologyAiService) {}
 

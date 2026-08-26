@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Headers, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Headers, Query, UseGuards } from '@nestjs/common';
 import { OutbreakProtocolService } from './outbreak.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('outbreak')
+@UseGuards(JwtAuthGuard)
 export class OutbreakProtocolController {
   constructor(private readonly outbreakService: OutbreakProtocolService) {}
 

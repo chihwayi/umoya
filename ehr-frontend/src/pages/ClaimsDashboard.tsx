@@ -2727,7 +2727,17 @@ const ClaimDetailModal: React.FC<{
 
         <div>
           <p className="text-white/60 text-sm">Medical Aid Provider</p>
-          <p className="text-white font-medium capitalize">{claim.medicalAidProvider?.replace('_', ' ')}</p>
+          <p className="text-white font-medium capitalize flex items-center gap-2">
+            {claim.medicalAidProvider?.replace('_', ' ')}
+            {claim.apiResponseData?.submission?.sandbox && (
+              <span
+                className="px-2 py-0.5 rounded text-xs font-bold normal-case bg-orange-500/20 text-orange-400"
+                title="No real API credentials are configured for this provider — this claim was submitted to the local demo simulator and will not be paid by a real medical aid."
+              >
+                SANDBOX — not a real submission
+              </span>
+            )}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

@@ -1,10 +1,12 @@
-import { Controller, Post, Get, Body, Param, Req, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Req, Query } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { VitalsService } from '../services/vitals.service';
 import { ProactiveAiService } from '../services/proactive-ai.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @ApiTags('Vitals')
 @Controller('vitals')
+@UseGuards(JwtAuthGuard)
 export class VitalsController {
   constructor(
     private readonly vitalsService: VitalsService,

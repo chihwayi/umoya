@@ -132,6 +132,7 @@ export const DoctorMedRecScreen: React.FC<Props> = ({ patientId, patientName, on
                       return (
                         <TouchableOpacity
                           key={d}
+                          testID={`medrec-decision-${m.id}-${d}`}
                           style={[s.decBtn, active && { backgroundColor: dc.color + '22', borderColor: dc.color }]}
                           onPress={() => setDecision(m.id, d)}
                           activeOpacity={0.75}
@@ -149,6 +150,7 @@ export const DoctorMedRecScreen: React.FC<Props> = ({ patientId, patientName, on
           {/* AI check button */}
           {meds.length > 0 && (
             <TouchableOpacity
+              testID="medrec-run-ai-check"
               style={[s.aiBtn, aiLoading && { opacity: 0.7 }]}
               onPress={runAiCheck}
               activeOpacity={0.85}

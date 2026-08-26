@@ -200,7 +200,7 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient, onPress }) => {
   }, [patient.severity]);
 
   return (
-    <TouchableOpacity onPress={() => onPress(patient)} activeOpacity={0.85}>
+    <TouchableOpacity testID={`rounds-patient-${patient.id}`} onPress={() => onPress(patient)} activeOpacity={0.85}>
       <View style={[pCardStyles.card, { borderLeftColor: accentColor, borderLeftWidth: 3 }]}>
         {/* Header row */}
         <View style={pCardStyles.headerRow}>
@@ -520,6 +520,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose, onOpenI
               <Text style={[detailStyles.actionBtnText, { color: C.blue }]}>Imaging Reports</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="rounds-open-medrec"
               style={[detailStyles.actionBtn, { backgroundColor: C.orange + '20', borderColor: C.orange + '40' }]}
               activeOpacity={0.8}
               onPress={() => { handleClose(); setTimeout(() => onOpenMedRec(patient), 300); }}

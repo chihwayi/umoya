@@ -91,11 +91,15 @@ export const NotificationCentre: React.FC<Props> = ({ visible, onClose }) => {
 
   const dismiss = (id: string) => {
     setNotifs(prev => prev.filter(n => n.id !== id));
-    StaffNotificationsService.markRead(id).catch(() => {});
+    StaffNotificationsService.markRead(id).catch((err) => {
+      console.warn('Failed to mark notification read on server', err);
+    });
   };
   const markAllRead = () => {
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
-    StaffNotificationsService.markAllRead().catch(() => {});
+    StaffNotificationsService.markAllRead().catch((err) => {
+      console.warn('Failed to mark all notifications read on server', err);
+    });
   };
   const clearAll = () => setNotifs([]);
 

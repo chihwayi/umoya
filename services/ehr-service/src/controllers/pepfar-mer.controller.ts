@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers, Query } from '@nestjs/common';
 import { PmtctService } from '../services/pmtct.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('hiv/mer')
+@UseGuards(JwtAuthGuard)
 export class PepfarMerController {
   constructor(private readonly svc: PmtctService) {}
 

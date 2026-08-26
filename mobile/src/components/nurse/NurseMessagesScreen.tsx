@@ -21,6 +21,7 @@ interface Message {
   text: string;
   time: string;
   read: boolean;
+  failed?: boolean;
 }
 
 interface Conversation {
@@ -67,8 +68,10 @@ function mapInboxToConversations(msgs: any[]): Conversation[] {
       unread,
       lastMessage: latest.body ?? '',
       lastTime,
-      messages: sorted.map((m: any) => ({
-        id: String(m.id ?? Math.random()),
+      messages: sorted.map((m: any, i: number) => ({
+        // Stable fallback key when the backend omits `id` — Math.random() here
+        // would regenerate on every render and break React's list reconciliation.
+        id: String(m.id ?? `${key}-${m.sentAt ?? m.createdAt ?? i}`),
         from: (m.isOwn ? 'me' : 'them') as 'me' | 'them',
         type: (m.attachments?.length ? 'attachment' : 'text') as MsgType,
         text: m.body ?? '',
@@ -92,51 +95,6 @@ const QUICK_REPLIES = [
   'Escalating now',
 ];
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const CONVERSATIONS: Conversation[] = [
-  {
-    id: 'c1', name: 'Dr. T. Chikwanda', role: 'Attending — Ward C', avatar: 'TC',
-    online: true, unread: 1, lastMessage: 'Aim for Friday discharge if troponin flat.',
-    lastTime: '18 min',
-    messages: [
-      { id: 'm1', from: 'me',   type: 'text', text: 'Good morning Doctor. A patient is asking about his discharge date.', time: '08:12', read: true },
-      { id: 'm2', from: 'them', type: 'text', text: 'Aim for Friday discharge if troponin stays flat. I\'ll speak to him at rounds.', time: '08:15', read: true },
-      { id: 'm3', from: 'me',   type: 'text', text: 'Thank you. His SpO₂ has been 97–99% since 06:00 — looking stable.', time: '08:18', read: true },
-      { id: 'm4', from: 'them', type: 'text', text: 'Good. Also, please send me a voice note after you check Samuel Park\'s IV site.', time: '09:30', read: false },
-    ],
-  },
-  {
-    id: 'c2', name: 'Charge Nurse G. Ncube', role: 'Charge Nurse · Ward C', avatar: 'GN',
-    online: true, unread: 2, lastMessage: 'Shift allocation updated. Check your board.',
-    lastTime: '5 min',
-    messages: [
-      { id: 'm1', from: 'them', type: 'text',       text: 'Morning Amai. Shift allocation has been updated. Please check your assignment board.', time: '06:45', read: true },
-      { id: 'm2', from: 'them', type: 'attachment', text: '📎 Shift_Allocation_22Mar.pdf  ·  62 KB',                                               time: '06:45', read: false },
-      { id: 'm3', from: 'them', type: 'text',       text: 'Also, bed 302 needs a vitals recheck at 10:00.',                                        time: '07:02', read: false },
-    ],
-  },
-  {
-    id: 'c3', name: 'Thomas Ndlovu', role: 'Patient · Bed 305', avatar: 'TN',
-    online: false, unread: 0, lastMessage: 'Thank you nurse, I feel better now.',
-    lastTime: '2 hr',
-    messages: [
-      { id: 'm1', from: 'them', type: 'text', text: 'Nurse, I\'m feeling some chest tightness again.', time: '07:12', read: true },
-      { id: 'm2', from: 'me',   type: 'text', text: 'I\'m coming to you now Thomas. Please try to stay calm and breathe slowly.', time: '07:13', read: true },
-      { id: 'm3', from: 'them', type: 'text', text: 'Thank you nurse, I feel better now.', time: '07:40', read: true },
-    ],
-  },
-  {
-    id: 'c4', name: 'Dr. P. Zungu', role: 'Night Registrar · Handover', avatar: 'PZ',
-    online: false, unread: 0, lastMessage: 'Samuel Park had one desat at 02:15.',
-    lastTime: '6 hr',
-    messages: [
-      { id: 'm1', from: 'them', type: 'text',       text: 'Morning Amai. Samuel Park had a brief desat at 02:15 — resolved with repositioning. Keep a close eye.', time: '02:02', read: true },
-      { id: 'm2', from: 'them', type: 'attachment', text: '📎 Overnight_Nursing_Notes_22Mar.pdf  ·  44 KB', time: '02:03', read: true },
-    ],
-  },
-];
-
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
 const AvatarCircle: React.FC<{ initials: string; online: boolean; size?: number }> = ({ initials, online, size = 42 }) => (
@@ -158,15 +116,25 @@ const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ con
   const send = (msg?: string) => {
     const body = msg ?? text.trim();
     if (!body) return;
+    const id = `m${Date.now()}`;
     const newMsg: Message = {
-      id: `m${Date.now()}`, from: 'me', type: 'text', text: body,
+      id, from: 'me', type: 'text', text: body,
       time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
       read: false,
     };
     setMessages(prev => [...prev, newMsg]);
     setText('');
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
-    MessagesService.send({ recipient_id: convo.id, body }).catch(() => {});
+    MessagesService.send({ recipient_id: convo.id, body }).catch(() => {
+      setMessages(prev => prev.map(m => (m.id === id ? { ...m, failed: true } : m)));
+    });
+  };
+
+  const retrySend = (msg: Message) => {
+    setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, failed: false } : m)));
+    MessagesService.send({ recipient_id: convo.id, body: msg.text }).catch(() => {
+      setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, failed: true } : m)));
+    });
   };
 
   return (
@@ -204,18 +172,27 @@ const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ con
           return (
             <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
               {!isMe && <AvatarCircle initials={convo.avatar} online={false} size={28} />}
-              <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem,
-                msg.type === 'attachment' && styles.bubbleAttachment,
-              ]}>
-                <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe,
-                  msg.type === 'attachment' && styles.bubbleAttachText,
+              <View style={{ flex: 0 }}>
+                <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem,
+                  msg.type === 'attachment' && styles.bubbleAttachment,
+                  msg.failed && styles.bubbleFailed,
                 ]}>
-                  {msg.text}
-                </Text>
-                <View style={styles.bubbleMeta}>
-                  <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{msg.time}</Text>
-                  {isMe && <Text style={styles.readReceipt}>{msg.read ? '✓✓' : '✓'}</Text>}
+                  <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe,
+                    msg.type === 'attachment' && styles.bubbleAttachText,
+                  ]}>
+                    {msg.text}
+                  </Text>
+                  <View style={styles.bubbleMeta}>
+                    <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{msg.time}</Text>
+                    {isMe && !msg.failed && <Text style={styles.readReceipt}>{msg.read ? '✓✓' : '✓'}</Text>}
+                  </View>
                 </View>
+                {msg.failed && (
+                  <TouchableOpacity onPress={() => retrySend(msg)} style={styles.failedRow}>
+                    <Icon name="escalate" size={11} color={C.red} />
+                    <Text style={styles.failedText}>Not delivered · Tap to retry</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           );
@@ -272,12 +249,19 @@ export const NurseMessagesScreen: React.FC = () => {
   const [activeConvo, setActiveConvo] = useState<Conversation | null>(null);
   const [notifVisible, setNotifVisible] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(true);
+  const [inboxError, setInboxError] = useState<string | null>(null);
 
   const loadInbox = useCallback(() => {
+    setInboxLoading(true);
+    setInboxError(null);
     MessagesService.inbox({}).then(msgs => {
-      const mapped = mapInboxToConversations(msgs ?? []);
-      if (mapped.length > 0) setConversations(mapped);
-    }).catch(() => {});
+      setConversations(mapInboxToConversations(msgs ?? []));
+    }).catch(() => {
+      setInboxError('Could not load messages. Check your connection and try again.');
+    }).finally(() => {
+      setInboxLoading(false);
+    });
   }, []);
 
   useEffect(() => { loadInbox(); }, [loadInbox]);
@@ -332,6 +316,20 @@ export const NurseMessagesScreen: React.FC = () => {
         />
       </View>
 
+      {inboxError && (
+        <View style={styles.inboxErrorBanner}>
+          <Icon name="escalate" size={14} color={C.red} />
+          <Text style={styles.inboxErrorText}>{inboxError}</Text>
+          <TouchableOpacity onPress={loadInbox}>
+            <Text style={styles.inboxRetryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {inboxLoading && conversations.length === 0 && !inboxError && (
+        <Text style={styles.inboxLoadingText}>Loading messages…</Text>
+      )}
+
       {/* Conversation list */}
       <FlatList
         data={filtered}
@@ -376,6 +374,11 @@ const styles = StyleSheet.create({
   notifBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },
   notifDot:        { position: 'absolute', top: 0, right: 0, backgroundColor: C.red, borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   notifDotText:    { fontFamily: FONT.uiBd, fontSize: 9, color: '#fff' },
+
+  inboxErrorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 14, marginBottom: 8, padding: 10, borderRadius: RADIUS.md, backgroundColor: C.red + '18', borderWidth: 1, borderColor: C.red + '40' },
+  inboxErrorText:   { flex: 1, fontFamily: FONT.uiMd, fontSize: 12, color: C.red },
+  inboxRetryText:   { fontFamily: FONT.uiBd, fontSize: 12, color: C.red, textDecorationLine: 'underline' },
+  inboxLoadingText: { fontFamily: FONT.uiMd, fontSize: 12, color: C.textMuted, textAlign: 'center', marginBottom: 8 },
 
   searchWrap:  { flexDirection: 'row', alignItems: 'center', gap: 8, margin: 14, marginTop: 8, backgroundColor: C.surface2, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: C.border },
   searchInput: { flex: 1, fontFamily: FONT.ui, fontSize: 13, color: C.text },
@@ -422,6 +425,9 @@ const styles = StyleSheet.create({
   bubbleTime:       { fontFamily: FONT.ui, fontSize: 9, color: C.textMuted },
   bubbleTimeMe:     { color: 'rgba(255,255,255,0.6)' },
   readReceipt:      { fontFamily: FONT.uiBd, fontSize: 10, color: 'rgba(255,255,255,0.7)' },
+  bubbleFailed:     { borderWidth: 1, borderColor: C.red },
+  failedRow:        { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3, alignSelf: 'flex-end' },
+  failedText:       { fontFamily: FONT.uiMd, fontSize: 10, color: C.red },
 
   quickRepliesScroll:   { maxHeight: 40, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.surface },
   quickRepliesContent:  { paddingHorizontal: 12, paddingVertical: 6, gap: 6, flexDirection: 'row' },

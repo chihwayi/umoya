@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
 import { CrossFacilityStockService } from '../services/cross-facility-stock.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('network/stock')
+@UseGuards(JwtAuthGuard)
 export class CrossFacilityStockController {
   constructor(private readonly stock: CrossFacilityStockService) {}
 

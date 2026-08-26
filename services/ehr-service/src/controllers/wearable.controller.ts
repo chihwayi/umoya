@@ -1,8 +1,10 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, Req } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query, Req } from '@nestjs/common';
 import { WearableSyncService, WearableReadingDto } from '../services/wearable-sync.service';
 import { ReadingType } from '../constants/wearable-ranges';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('wearable')
+@UseGuards(JwtAuthGuard)
 export class WearableController {
   constructor(private readonly wearable: WearableSyncService) {}
 

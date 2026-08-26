@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
 import { AutoCodingService } from '../services/auto-coding.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('coding')
+@UseGuards(JwtAuthGuard)
 export class AutoCodingController {
   constructor(private readonly svc: AutoCodingService) {}
 

@@ -8,7 +8,7 @@ export class AnesthesiaVitals {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'anesthesia_record_id' })
+  @Column({ name: 'anesthesia_record_id', type: 'uuid' })
   anesthesiaRecordId: string;
 
   @ManyToOne(() => AnesthesiaRecord, { onDelete: 'CASCADE' })

@@ -1807,6 +1807,18 @@ _JOB_WORKER_POLL_SECONDS = int(os.getenv("CDSS_JOB_WORKER_POLL_SECONDS", "5"))
 _JOB_QUEUE_REDIS: Optional[redis_pkg.Redis] = None
 _JOB_WORKER_THREAD: Optional[threading.Thread] = None
 _JOB_WORKER_STOP = threading.Event()
+_JOB_WORKER_HEARTBEAT_PATH = os.getenv("CDSS_WORKER_HEARTBEAT_PATH", "/tmp/cdss_worker_heartbeat")
+
+
+def _touch_worker_heartbeat() -> None:
+    """Written on every job-worker loop iteration so the container healthcheck
+    (docker-compose.prod.yml's cdss-worker service) can detect a hung/dead
+    loop via the file's mtime — this process has no HTTP server to probe."""
+    try:
+        with open(_JOB_WORKER_HEARTBEAT_PATH, "w") as f:
+            f.write(str(time.time()))
+    except OSError:
+        pass
 # Backward-compatible alias for existing ingest endpoints/UI paths.
 _INGEST_JOBS = _ADMIN_JOBS
 _INGEST_LOCK = _ADMIN_JOBS_LOCK
@@ -1991,6 +2003,7 @@ def _job_worker_loop() -> None:
     """
     last_requeue_at = 0.0
     while not _JOB_WORKER_STOP.is_set():
+        _touch_worker_heartbeat()
         client = _get_queue_redis_client()
         if not client:
             _JOB_WORKER_STOP.wait(timeout=max(1, _JOB_WORKER_POLL_SECONDS))
@@ -12243,46 +12256,23 @@ class RadiologyAnalyzeReq(BaseModel):
     storageKey: str
     context: Optional[Dict[str, Any]] = None
 
-RADIOLOGY_MOCK_FINDINGS: Dict[str, List[Dict[str, Any]]] = {
-    "CXR": [
-        {"label": "Normal chest radiograph", "confidence": 0.70, "severity": "normal", "icd10": None},
-        {"label": "Cardiomegaly", "confidence": 0.65, "severity": "moderate", "region": "cardiac silhouette", "icd10": "I51.7"},
-        {"label": "Pulmonary TB — upper lobe infiltrate", "confidence": 0.78, "severity": "high", "region": "right upper lobe", "icd10": "A15.0"},
-        {"label": "Pneumonia — lower lobe consolidation", "confidence": 0.82, "severity": "high", "region": "right lower lobe", "icd10": "J18.9"},
-        {"label": "Pleural effusion", "confidence": 0.74, "severity": "moderate", "region": "left base", "icd10": "J90"},
-    ],
-    "FUNDUS": [
-        {"label": "Normal fundus", "confidence": 0.72, "severity": "normal", "icd10": None},
-        {"label": "Diabetic retinopathy — moderate NPDR", "confidence": 0.80, "severity": "moderate", "icd10": "E11.359"},
-        {"label": "Proliferative diabetic retinopathy", "confidence": 0.85, "severity": "critical", "icd10": "E11.359"},
-        {"label": "Glaucomatous optic disc changes", "confidence": 0.71, "severity": "moderate", "icd10": "H40.10"},
-    ],
-    "DERM": [
-        {"label": "Benign seborrhoeic keratosis", "confidence": 0.76, "severity": "normal", "icd10": "L82.1"},
-        {"label": "Melanocytic naevus — low risk", "confidence": 0.80, "severity": "low", "icd10": "D22.9"},
-        {"label": "Suspicious lesion — recommend biopsy", "confidence": 0.68, "severity": "high", "icd10": "D48.5"},
-        {"label": "Melanoma — urgent referral required", "confidence": 0.83, "severity": "critical", "icd10": "C43.9"},
-    ],
-}
-
 @app.post("/radiology/analyze")
 def radiology_analyze(req: RadiologyAnalyzeReq):
-    """AI radiology analysis for CXR, fundus photography, and dermatology images."""
-    import random as _random
-    modality_key = req.modality.upper()
-    candidates = RADIOLOGY_MOCK_FINDINGS.get(modality_key, RADIOLOGY_MOCK_FINDINGS["CXR"])
-    # In production: load actual ONNX/TorchScript model and run inference on storageKey image
-    finding = _random.choice(candidates)
-    all_findings = [finding]
+    """AI radiology analysis for CXR, fundus photography, and dermatology images.
 
-    return {
-        "findings": all_findings,
-        "top_finding": finding["label"],
-        "confidence": finding["confidence"],
-        "heatmap_key": f"{req.storageKey}.heatmap.png" if finding["severity"] not in ("normal",) else None,
-        "model_version": f"umoya-{modality_key.lower()}-v1.0",
-        "modality": req.modality,
-    }
+    No ONNX/TorchScript imaging model is deployed in this environment. Rather than
+    fabricate a finding, this returns an explicit 501 so callers show an honest
+    "AI analysis unavailable" state instead of an invented diagnosis. Wire a real
+    model here (and drop this exception) once one is trained and deployed.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail={
+            "error": "radiology_model_not_deployed",
+            "message": f"No AI imaging model is deployed for modality '{req.modality}'.",
+            "modality": req.modality,
+        },
+    )
 
 # ── S99: Symptom Checker ──────────────────────────────────────────────────────
 
@@ -13787,27 +13777,29 @@ def get_model_version(surface: str = "all"):
 @app.post("/feedback/outcome/learning/retrain")
 async def claim_for_learning(payload: dict, background_tasks: BackgroundTasks):
     """
-    Claims approved feedback entries for model retraining.
-    Previously: silently accepted payload with no confirmation.
-    Now: bumps model version, persists to model_deployments, queues background job.
+    Claims approved feedback entries and queues them for a human-reviewed
+    retraining cycle. This does NOT retrain or deploy a new model — no
+    sklearn/XGBoost/LLaMA retraining pipeline is wired up here (see
+    _run_retraining_job). Earlier versions of this endpoint bumped a synthetic
+    "{surface}-v{timestamp}" version string and wrote a `model_deployments` row
+    with status='deployed', method='auto' — which was false: the production
+    model never changed. Fixed (S253, 2026-08-25) to record reality: feedback
+    is queued, not deployed. The real governed retraining path is the
+    federated-learning round pipeline in ehr-service's
+    CdssOutcomeBatchService (FlRound / ModelRegistry / ModelShadowEvaluation).
     """
     entries = payload.get("entries", [])
     surface = payload.get("surface", "general")
-    previous_version = _model_versions.get(surface, {}).get("version", "baseline-v1")
+    current_version = _model_versions.get(surface, {}).get("version", "baseline-v1")
 
     if not entries:
-        return {"status": "no_entries", "model_id": previous_version, "surface": surface}
+        return {"status": "no_entries", "model_id": current_version, "surface": surface}
 
     background_tasks.add_task(_run_retraining_job, surface, entries)
 
-    new_version = f"{surface}-v{int(datetime.now(timezone.utc).timestamp())}"
-    _model_versions[surface] = {
-        "version": new_version,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "entry_count": len(entries),
-    }
-
-    # Persist version to PostgreSQL for audit trail
+    # Persist an honest audit row: feedback was queued for review, not deployed.
+    # The production model_version is intentionally left unchanged — nothing
+    # new is live.
     try:
         conn = _master_pg_conn_sync()
         with conn.cursor() as cur:
@@ -13816,9 +13808,9 @@ async def claim_for_learning(payload: dict, background_tasks: BackgroundTasks):
                    (id, surface, model_version, previous_version, eval_run_id, release_gate_id,
                     deployment_method, status)
                    VALUES (gen_random_uuid(), %s, %s, %s, gen_random_uuid(), gen_random_uuid(),
-                           'auto', 'deployed')
+                           'manual_review_required', 'feedback_queued')
                    ON CONFLICT DO NOTHING""",
-                (surface, new_version, previous_version),
+                (surface, current_version, current_version),
             )
         conn.commit()
         conn.close()
@@ -13826,11 +13818,11 @@ async def claim_for_learning(payload: dict, background_tasks: BackgroundTasks):
         print(f"[retraining] DB write failed for surface={surface}: {e}")
 
     return {
-        "status": "retraining_triggered",
-        "model_id": new_version,
+        "status": "feedback_queued_for_review",
+        "model_id": current_version,
         "surface": surface,
         "entry_count": len(entries),
-        "message": "Model version bumped. Background retraining job queued.",
+        "message": "Feedback entries logged for manual retraining review. No model has been retrained or redeployed.",
     }
 
 
@@ -14829,12 +14821,15 @@ async def recommend_followup_timing(request: FollowUpTimingRequest):
 
 
 # ── Sprint 123: AI Self-Learning Hardening ────────────────────────────────
-
-class ShadowModeRequest(BaseModel):
-    surface: str
-    payload: dict
-    production_response: dict  # what the prod model returned
-    challenger_version: Optional[str] = None
+# NOTE (S253, 2026-08-25): a "/self-learning/shadow-eval" endpoint used to
+# live here. It faked a challenger-model response by cloning the production
+# response and tagging it "_challenger": true — never routed to a real
+# second model. Confirmed zero callers anywhere in the codebase (no frontend
+# component, no worker, no test). Removed rather than fixed: the real,
+# functioning shadow-evaluation governance path is federated-learning-round
+# based, in services/ehr-service/src/services/cdss-outcome-batch.service.ts
+# (FlRound / ModelRegistry / ModelShadowEvaluation entities), which does not
+# call this service at all.
 
 class BiasAuditRequest(BaseModel):
     surface: str
@@ -14845,56 +14840,6 @@ class AuditAnomalyRequest(BaseModel):
     surface: str
     recent_metrics: List[dict]  # [{metric_date, accuracy, abstention_rate, avg_latency_ms, fairness_sdoh_parity}]
     lookback_days: int = 30
-
-
-@app.post("/self-learning/shadow-eval")
-async def shadow_mode_eval(request: ShadowModeRequest):
-    """
-    Run a challenger model alongside production. Logs divergence for human review.
-    Currently a stub — Sprint 123 wire-up: route to challenger model endpoint per surface.
-    """
-    prod = request.production_response
-
-    # Simulate challenger response (same surface, slightly different seed)
-    challenger_response = {**prod, "_challenger": True, "_challenger_version": request.challenger_version or "shadow-v2"}
-
-    # Compute divergence
-    prod_confidence = prod.get("confidence") or prod.get("certainty_level") or 0.0
-    challenger_confidence = challenger_response.get("confidence") or 0.0
-
-    prod_abstained = prod.get("abstained", False)
-    challenger_abstained = challenger_response.get("abstained", False)
-
-    confidence_delta = abs(float(prod_confidence) - float(challenger_confidence))
-    abstention_divergence = prod_abstained != challenger_abstained
-
-    record = {
-        "surface": request.surface,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "production_confidence": prod_confidence,
-        "challenger_confidence": challenger_confidence,
-        "confidence_delta": round(confidence_delta, 3),
-        "abstention_divergence": abstention_divergence,
-        "needs_human_review": confidence_delta > 0.20 or abstention_divergence,
-    }
-
-    # Log to shadow mode journal
-    import pathlib
-    journal = pathlib.Path(f"/tmp/shadow_{request.surface}.jsonl")
-    try:
-        with journal.open("a") as f:
-            f.write(json.dumps(record) + "\n")
-    except Exception:
-        pass
-
-    return {
-        "shadow_record": record,
-        "production_response": prod,
-        "challenger_response": challenger_response,
-        "divergence_flagged": record["needs_human_review"],
-        "model_id": "shadow-eval-v1",
-        "surface": request.surface
-    }
 
 
 @app.post("/self-learning/bias-audit")

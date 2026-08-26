@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
 import { FormularyOptimizationService } from '../services/formulary-optimization.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('formulary')
+@UseGuards(JwtAuthGuard)
 export class FormularyOptimizationController {
   constructor(private readonly svc: FormularyOptimizationService) {}
 

@@ -245,6 +245,7 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRef
               <View style={sheetStyles.refillPendingRow}>
                 <Badge color={C.amber} size="sm">{t('meds.refillPending')}</Badge>
                 <TouchableOpacity
+                  testID={`patient-meds-refill-cancel-${med.id}`}
                   style={sheetStyles.refillCancelBtn}
                   onPress={async () => {
                     setCancellingRefill(true);
@@ -268,6 +269,7 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRef
               </View>
             ) : (
               <TouchableOpacity
+                testID={`patient-meds-refill-request-${med.id}`}
                 style={[sheetStyles.refillBtn, { borderColor: C.teal + '50', backgroundColor: C.teal + '15' }]}
                 onPress={async () => {
                   setRequestingRefill(true);
@@ -295,6 +297,7 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRef
           </Card>
 
           <TouchableOpacity
+            testID={`patient-meds-ask-ai-${med.id}`}
             style={[sheetStyles.askBtn, { borderColor: med.color + '40', backgroundColor: med.color + '15' }]}
             onPress={() => { handleClose(); onAskAI(med.name); }}
             activeOpacity={0.85}
@@ -306,6 +309,7 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRef
           {/* Prescription actions */}
           <View style={sheetStyles.rxActions}>
             <TouchableOpacity
+              testID={`patient-meds-download-${med.id}`}
               style={[sheetStyles.rxBtn, { flex: 1 }]}
               onPress={handleDownload}
               activeOpacity={0.85}
@@ -320,6 +324,7 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRef
             </TouchableOpacity>
 
             <TouchableOpacity
+              testID={`patient-meds-email-open-${med.id}`}
               style={[sheetStyles.rxBtn, { flex: 1 }]}
               onPress={() => setEmailModal(true)}
               activeOpacity={0.85}
@@ -337,6 +342,7 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRef
         <View style={sheetStyles.emailBox}>
           <Text style={sheetStyles.emailTitle}>Send Prescription by Email</Text>
           <TextInput
+            testID="patient-meds-email-input"
             style={sheetStyles.emailInput}
             value={emailInput}
             onChangeText={setEmailInput}
@@ -348,6 +354,7 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRef
           />
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
             <TouchableOpacity
+              testID="patient-meds-email-cancel"
               style={[sheetStyles.emailBtn, { flex: 1, backgroundColor: C.border }]}
               onPress={() => setEmailModal(false)}
               activeOpacity={0.8}
@@ -355,6 +362,7 @@ const MedDetailSheet: React.FC<MedDetailProps> = ({ med, onClose, onAskAI, onRef
               <Text style={[sheetStyles.emailBtnText, { color: C.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="patient-meds-email-send"
               style={[sheetStyles.emailBtn, { flex: 1, backgroundColor: C.blue }]}
               onPress={handleEmailSend}
               disabled={sending || !emailInput.trim()}
@@ -433,7 +441,7 @@ const MedCard: React.FC<MedCardProps> = ({ med, onMark, onDetail }) => {
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <TouchableOpacity onPress={() => onDetail(med)} activeOpacity={0.88}>
+      <TouchableOpacity testID={`patient-meds-item-${med.id}`} onPress={() => onDetail(med)} activeOpacity={0.88}>
         <View style={[styles.medCard, { borderLeftColor: med.color, borderLeftWidth: 3 }]}>
           <View style={styles.medTopRow}>
             <View style={{ flex: 1, gap: 1 }}>
@@ -465,6 +473,7 @@ const MedCard: React.FC<MedCardProps> = ({ med, onMark, onDetail }) => {
           {/* Mark as taken */}
           {!med.takenToday && (
             <TouchableOpacity
+              testID={`patient-meds-mark-taken-${med.id}`}
               style={[styles.markBtn, { backgroundColor: med.color + '20', borderColor: med.color + '40' }]}
               onPress={handleMark}
               activeOpacity={0.8}

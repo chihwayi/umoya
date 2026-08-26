@@ -30,10 +30,10 @@ export class ModelDeployment {
   deployedByUserId: string | null;
 
   @Column({ name: 'deployment_method', type: 'varchar', length: 50, default: 'auto' })
-  deploymentMethod: 'auto' | 'manual';
+  deploymentMethod: 'auto' | 'manual' | 'manual_review_required';
 
   @Column({ name: 'status', type: 'varchar', length: 20, default: 'deployed' })
-  status: 'deployed' | 'rolled_back' | 'failed';
+  status: 'deployed' | 'rolled_back' | 'failed' | 'feedback_queued';
 
   @Column({ name: 'rollback_reason', type: 'text', nullable: true })
   rollbackReason: string | null;

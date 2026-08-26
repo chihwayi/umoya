@@ -1,7 +1,9 @@
-import { Controller, Get, Patch, Param, Query, Req } from '@nestjs/common';
+import { UseGuards, Controller, Get, Patch, Param, Query, Req } from '@nestjs/common';
 import { ProRiskLoopService } from '../services/pro-risk-loop.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('risk')
+@UseGuards(JwtAuthGuard)
 export class ProRiskController {
   constructor(private readonly loop: ProRiskLoopService) {}
 

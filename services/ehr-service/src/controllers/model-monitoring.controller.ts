@@ -1,11 +1,13 @@
-import { Controller, Post, Get, Body, Param, Query, Request, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Query, Request, Headers } from '@nestjs/common';
 import { ModelMonitoringService } from '../services/model-monitoring.service';
 import { RiskStratificationService } from '../services/risk-stratification.service';
 import { OutcomeCollectionService } from '../services/outcome-collection.service';
 import { CdssService } from '../services/cdss.service';
 import { AiSurfaceContractService } from '../services/ai-surface-contract.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('model-monitoring')
+@UseGuards(JwtAuthGuard)
 export class ModelMonitoringController {
   constructor(
     private readonly svc: ModelMonitoringService,

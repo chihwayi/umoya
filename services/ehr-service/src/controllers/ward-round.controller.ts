@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
 import { WardRoundService } from '../services/ward-round.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('ward')
+@UseGuards(JwtAuthGuard)
 export class WardRoundController {
   constructor(private readonly ward: WardRoundService) {}
 

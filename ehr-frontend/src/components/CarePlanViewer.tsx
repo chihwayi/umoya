@@ -55,6 +55,19 @@ interface Intervention {
   outcome_notes?: string;
 }
 
+interface ProgressLogEntry {
+  id: string;
+  goal_id?: string | null;
+  intervention_id?: string | null;
+  progress_date: string;
+  progress_type: string;
+  current_value?: string | null;
+  progress_percentage?: number | null;
+  notes?: string | null;
+  recorded_by?: string | null;
+  created_at: string;
+}
+
 interface CarePlanViewerProps {
   carePlanId: string;
   tenantSlug: string;
@@ -74,11 +87,20 @@ const CarePlanViewer: React.FC<CarePlanViewerProps> = ({
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'goals' | 'interventions' | 'progress'>('overview');
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressLog, setProgressLog] = useState<ProgressLogEntry[]>([]);
+  const [progressLoading, setProgressLoading] = useState(false);
   const { showError, showSuccess } = useNotification();
 
   useEffect(() => {
     loadCarePlan();
   }, [carePlanId]);
+
+  useEffect(() => {
+    if (activeTab === 'progress') {
+      loadProgress();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, carePlanId]);
 
   const loadCarePlan = async () => {
     try {
@@ -90,6 +112,19 @@ const CarePlanViewer: React.FC<CarePlanViewerProps> = ({
       showError('Error', 'Failed to load care plan details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadProgress = async () => {
+    try {
+      setProgressLoading(true);
+      const response = await ehrApi.getCarePlanProgress(carePlanId, token, tenantSlug);
+      setProgressLog(Array.isArray(response.data) ? response.data : response.data?.progress || []);
+    } catch (error: any) {
+      console.error('Failed to load care plan progress:', error);
+      showError('Error', 'Failed to load progress history');
+    } finally {
+      setProgressLoading(false);
     }
   };
 
@@ -453,11 +488,57 @@ const CarePlanViewer: React.FC<CarePlanViewerProps> = ({
                 </button>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                <TrendingUp className="w-12 h-12 mx-auto mb-3 text-blue-500" />
-                <p className="text-blue-800 font-medium">Progress tracking coming soon</p>
-                <p className="text-sm text-blue-600 mt-1">View and record care plan progress updates</p>
-              </div>
+              {progressLoading ? (
+                <div className="text-center py-8 text-slate-500">Loading progress history...</div>
+              ) : progressLog.length === 0 ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                  <TrendingUp className="w-12 h-12 mx-auto mb-3 text-blue-500" />
+                  <p className="text-blue-800 font-medium">No progress recorded yet</p>
+                  <p className="text-sm text-blue-600 mt-1">Use "Record Progress" to log an update</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {progressLog.map((entry) => {
+                    const goal = entry.goal_id ? carePlan.goals.find((g) => g.id === entry.goal_id) : null;
+                    const intervention = entry.intervention_id
+                      ? carePlan.interventions.find((i) => i.id === entry.intervention_id)
+                      : null;
+                    return (
+                      <div key={entry.id} className="bg-white border border-slate-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-semibold uppercase text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                                {entry.progress_type?.replace(/_/g, ' ') || 'update'}
+                              </span>
+                              {goal && (
+                                <span className="text-xs text-slate-500">Goal #{goal.goal_number}: {goal.goal_text}</span>
+                              )}
+                              {intervention && !goal && (
+                                <span className="text-xs text-slate-500">
+                                  Intervention #{intervention.intervention_number}: {intervention.intervention_text}
+                                </span>
+                              )}
+                            </div>
+                            {entry.notes && <p className="text-sm text-slate-700 mt-2">{entry.notes}</p>}
+                          </div>
+                          <div className="text-right shrink-0">
+                            {entry.progress_percentage !== null && entry.progress_percentage !== undefined && (
+                              <p className="text-lg font-bold text-teal-700">{entry.progress_percentage}%</p>
+                            )}
+                            {entry.current_value && (
+                              <p className="text-xs text-slate-500">Value: {entry.current_value}</p>
+                            )}
+                            <p className="text-xs text-slate-400 mt-1">
+                              {new Date(entry.progress_date || entry.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -473,6 +554,7 @@ const CarePlanViewer: React.FC<CarePlanViewerProps> = ({
             onClose={() => {
               setShowProgressModal(false);
               loadCarePlan();
+              if (activeTab === 'progress') loadProgress();
             }}
           />
         )}

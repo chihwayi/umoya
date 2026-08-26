@@ -263,7 +263,6 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
         return;
       }
       const response = await ehrApi.getAvailableSlots(formData.doctorId, apiDate, token, tenantSlug);
-      console.log('Available slots response:', response.data);
       setAvailableSlots(response.data || []);
     } catch (error) {
       console.error('Error fetching available slots:', error);
@@ -320,20 +319,14 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
       
       // Combine date and time - convert dd/mm/yyyy to yyyy-mm-dd first
       const apiDate = formatDateForAPI(formData.appointmentDate);
-      console.log('📅 Selected date:', formData.appointmentDate);
-      console.log('📅 API date:', apiDate);
-      console.log('📅 Selected time:', selectedTime);
-      
+
       // Create date object properly to avoid timezone issues
       const [year, month, day] = apiDate.split('-').map(Number);
       const [hours, minutes] = selectedTime.split(':').map(Number);
-      
+
       // Create date in local timezone, then convert to UTC properly
       const appointmentDateTime = new Date(year, month - 1, day, hours, minutes);
-      console.log('📅 Created appointment date:', appointmentDateTime);
-      console.log('📅 Appointment date local:', appointmentDateTime.toLocaleString());
-      console.log('📅 Appointment date UTC:', appointmentDateTime.toISOString());
-      
+
       const payload = {
         patientId: formData.patientId,
         doctorId: formData.doctorId,
@@ -343,8 +336,6 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
         reason: formData.reason || undefined,
         notes: formData.notes || undefined,
       };
-
-      console.log('📤 Create appointment payload:', payload);
 
       let createdAppointment: any = null;
       
@@ -588,10 +579,7 @@ const CreateAppointmentModal: React.FC<CreateAppointmentModalProps> = ({ onClose
               ) : (
                 <select
                   value={selectedTime}
-                  onChange={(e) => {
-                    console.log('Time selected:', e.target.value);
-                    setSelectedTime(e.target.value);
-                  }}
+                  onChange={(e) => setSelectedTime(e.target.value)}
                   required
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >

@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Body, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Query } from '@nestjs/common';
 import { HimisReportingService } from '../services/himis-reporting.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('himis')
+@UseGuards(JwtAuthGuard)
 export class HimisReportingController {
   constructor(private readonly svc: HimisReportingService) {}
 

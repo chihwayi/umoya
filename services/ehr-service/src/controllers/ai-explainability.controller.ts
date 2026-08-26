@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
 import { AiExplainabilityService } from '../services/ai-explainability.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('ai/explainability')
+@UseGuards(JwtAuthGuard)
 export class AiExplainabilityController {
   constructor(private readonly svc: AiExplainabilityService) {}
 

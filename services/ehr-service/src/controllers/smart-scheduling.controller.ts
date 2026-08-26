@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Param, Headers, Query } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Body, Param, Headers, Query } from '@nestjs/common';
 import { SmartSchedulingService } from '../services/smart-scheduling.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('scheduling/ai')
+@UseGuards(JwtAuthGuard)
 export class SmartSchedulingController {
   constructor(private readonly svc: SmartSchedulingService) {}
 

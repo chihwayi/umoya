@@ -2079,9 +2079,7 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
                       {alert.type === 'treatment_failure' && (
                         <button
                           onClick={() => {
-                            // Navigate to create regimen change request
-                            // This can be implemented later
-                            showSuccess('Info', 'Regimen change request feature coming soon');
+                            openRegimenChangeModalWithContext(alert.enrollment);
                           }}
                           className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 font-semibold"
                         >

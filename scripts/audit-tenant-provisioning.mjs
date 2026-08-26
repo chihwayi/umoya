@@ -303,7 +303,7 @@ function parseAlterTableStatement(statement, tables) {
   tables.set(tableName, table);
 }
 
-async function getTenantEntityRegistry() {
+export async function getTenantEntityRegistry() {
   const source = await fs.readFile(TENANT_SERVICE_PATH, 'utf8');
   const importRegex = /import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+'(\.[^']+\.entity)';/g;
   const importMap = new Map();
@@ -335,7 +335,7 @@ async function getTenantEntityRegistry() {
   };
 }
 
-function findEntityClassBlock(source, entityName) {
+export function findEntityClassBlock(source, entityName) {
   const classMarker = `export class ${entityName}`;
   const classIndex = source.indexOf(classMarker);
   if (classIndex === -1) {
@@ -376,7 +376,7 @@ function findEntityClassBlock(source, entityName) {
   };
 }
 
-function findTopLevelClassProperties(classBlock) {
+export function findTopLevelClassProperties(classBlock) {
   const masked = [];
   let inSingle = false;
   let inDouble = false;

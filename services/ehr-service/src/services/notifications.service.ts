@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
@@ -7,21 +7,23 @@ import { LabOrder } from '../entities/lab-order.entity';
 import { Bill } from '../entities/billing.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
 import { config as envConfig } from '@umoya/config';
+import { SmsService } from './sms.service';
 
 @Injectable()
 export class NotificationsService {
-  
+  constructor(@Optional() private readonly smsService?: SmsService) {}
+
   async sendSms(smsData: { phone: string, message: string, network?: string }, tenantDb?: DataSource) {
     const { phone, message, network } = smsData;
-    
+
     // Detect Zimbabwe network from phone number
     const detectedNetwork = this.detectNetwork(phone);
     const targetNetwork = network || detectedNetwork;
-    
-    // Simulate SMS gateway integration
-    const messageId = `SMS_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Different gateways for different networks
+
+    const truncatedMessage = message.substring(0, 160); // SMS character limit
+
+    // Different gateways for different networks (informational only — the
+    // actual send below always goes through SmsService's configured provider)
     const defaultGateways = {
       econet: envConfig.notifications.sms.econet,
       telecel: envConfig.notifications.sms.telecel,
@@ -52,12 +54,25 @@ export class NotificationsService {
       }
     }
 
+    // Actually send via the real Africa's Talking-backed SmsService rather
+    // than fabricating a "SENT" response. SmsService itself no-ops safely
+    // (logs only) when SMS_ENABLED/AT_API_KEY aren't configured for this
+    // deployment, so this never throws for tenants without SMS configured —
+    // it just won't claim a message was sent when it wasn't.
+    let messageId = `SMS_${Date.now()}_unsent`;
+    let status: 'SENT' | 'SKIPPED' = 'SKIPPED';
+    if (this.smsService) {
+      const result = await this.smsService.sendSms(phone, truncatedMessage);
+      messageId = result.messageId;
+      status = 'SENT';
+    }
+
     return {
       messageId,
-      status: 'SENT',
+      status,
       network: targetNetwork,
       phone,
-      message: message.substring(0, 160), // SMS character limit
+      message: truncatedMessage,
       cost: this.calculateSmsCost(message, targetNetwork),
       gateway: gatewayUrl,
       timestamp: new Date().toISOString()
@@ -142,15 +157,18 @@ export class NotificationsService {
   }
 
   async getDeliveryStatus(messageId: string) {
-    // Simulate delivery status check
-    const statuses = ['SENT', 'DELIVERED', 'FAILED', 'PENDING'];
-    const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-    
+    // No delivery-status webhook or polling integration exists for the
+    // configured SMS provider (Africa's Talking) — SmsService fires sends
+    // and logs the immediate HTTP response only, it does not track per-message
+    // delivery receipts. Report that honestly instead of fabricating a
+    // random status, which would previously (and randomly) claim messages
+    // were "DELIVERED" or "FAILED" with no basis.
     return {
       messageId,
-      status: randomStatus,
-      deliveredAt: randomStatus === 'DELIVERED' ? new Date().toISOString() : null,
-      failureReason: randomStatus === 'FAILED' ? 'Invalid number' : null,
+      status: 'UNKNOWN',
+      deliveredAt: null,
+      failureReason: null,
+      statusNote: 'Delivery status tracking is not available for this provider.',
       cost: 0.05, // USD
       network: 'econet'
     };

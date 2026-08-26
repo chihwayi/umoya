@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
 import { ClinicalTrialMatchingService } from '../services/clinical-trial-matching.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('trials')
+@UseGuards(JwtAuthGuard)
 export class ClinicalTrialMatchingController {
   constructor(private readonly svc: ClinicalTrialMatchingService) {}
 

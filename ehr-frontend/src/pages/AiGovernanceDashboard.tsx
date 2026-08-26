@@ -29,6 +29,21 @@ const StatusBadge: React.FC<{ drift: boolean }> = ({ drift }) =>
     </span>
   );
 
+const ErrorBanner: React.FC<{ message: string | null; onRetry?: () => void }> = ({ message, onRetry }) =>
+  !message ? null : (
+    <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2 text-sm text-red-300">
+        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+        {message}
+      </div>
+      {onRetry && (
+        <button onClick={onRetry} className="text-xs bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded flex-shrink-0">
+          Retry
+        </button>
+      )}
+    </div>
+  );
+
 const AiGovernanceDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const token = localStorage.getItem('ehr_token');
@@ -44,6 +59,13 @@ const AiGovernanceDashboard: React.FC = () => {
   const [fairness, setFairness] = useState<any>(null);
   const [auditLog, setAuditLog] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fairnessLoading, setFairnessLoading] = useState(false);
+  const [loadErrors, setLoadErrors] = useState<Record<TabKey, string | null>>({
+    overview: null, detail: null, calibration: null, fairness: null, audit: null,
+  });
+
+  const setTabError = (key: TabKey, message: string | null) =>
+    setLoadErrors((prev) => ({ ...prev, [key]: message }));
 
   // Review modal state
   const [reviewReason, setReviewReason] = useState('drift_detected');
@@ -56,56 +78,74 @@ const AiGovernanceDashboard: React.FC = () => {
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
+    setTabError('overview', null);
     try {
       const { data } = await ehrAxios.get(`/tenants/${tenantId}/ai/performance`, { headers: hdrs });
       setOverview(data);
       if (!selectedModel && data.models?.length) setSelectedModel(data.models[0].name);
-    } catch { /* silent */ }
+    } catch (err: any) {
+      setTabError('overview', err?.response?.data?.message || 'Failed to load AI performance overview.');
+    }
     setLoading(false);
   }, [tenantId, token]);
 
   const loadDetail = useCallback(async () => {
     if (!selectedModel) return;
+    setTabError('detail', null);
     try {
       const { data } = await ehrAxios.get(
         `/tenants/${tenantId}/ai/performance/${selectedModel}/trend?periods=12`,
         { headers: hdrs },
       );
       setTrend(data);
-    } catch { /* silent */ }
+    } catch (err: any) {
+      setTabError('detail', err?.response?.data?.message || 'Failed to load performance trend.');
+    }
   }, [tenantId, token, selectedModel]);
 
   const loadCalibration = useCallback(async () => {
     if (!selectedModel) return;
+    setTabError('calibration', null);
     try {
       const { data } = await ehrAxios.get(
         `/tenants/${tenantId}/ai/${selectedModel}/calibration?period=${period}`,
         { headers: hdrs },
       );
       setCalibration(data);
-    } catch { /* silent */ }
+    } catch (err: any) {
+      setTabError('calibration', err?.response?.data?.message || 'Failed to load calibration data.');
+    }
   }, [tenantId, token, selectedModel, period]);
 
   const loadFairness = useCallback(async () => {
     if (!selectedModel) return;
+    setFairnessLoading(true);
+    setTabError('fairness', null);
     try {
       const { data } = await ehrAxios.get(
         `/tenants/${tenantId}/ai/${selectedModel}/fairness?period=${period}`,
         { headers: hdrs },
       );
       setFairness(data);
-    } catch { /* silent */ }
+    } catch (err: any) {
+      setFairness(null);
+      setTabError('fairness', err?.response?.data?.message || 'Failed to load fairness data.');
+    }
+    setFairnessLoading(false);
   }, [tenantId, token, selectedModel, period]);
 
   const loadAudit = useCallback(async () => {
     if (!selectedModel) return;
+    setTabError('audit', null);
     try {
       const { data } = await ehrAxios.get(
         `/tenants/${tenantId}/ai/governance/${selectedModel}/history`,
         { headers: hdrs },
       );
       setAuditLog(data);
-    } catch { /* silent */ }
+    } catch (err: any) {
+      setTabError('audit', err?.response?.data?.message || 'Failed to load audit log.');
+    }
   }, [tenantId, token, selectedModel]);
 
   useEffect(() => { loadOverview(); }, []);
@@ -127,7 +167,9 @@ const AiGovernanceDashboard: React.FC = () => {
       setSubmitMsg('Review request submitted.');
       setReviewNotes('');
       loadAudit();
-    } catch { setSubmitMsg('Error submitting review.'); }
+    } catch (err: any) {
+      setSubmitMsg(err?.response?.data?.message || 'Error submitting review.');
+    }
   };
 
   const submitAction = async () => {
@@ -140,7 +182,9 @@ const AiGovernanceDashboard: React.FC = () => {
       setSubmitMsg(`Action "${actionType}" recorded.`);
       setActionNotes('');
       loadAudit();
-    } catch { setSubmitMsg('Error recording action.'); }
+    } catch (err: any) {
+      setSubmitMsg(err?.response?.data?.message || 'Error recording action.');
+    }
   };
 
   const models = overview?.models ?? [];
@@ -239,6 +283,7 @@ const AiGovernanceDashboard: React.FC = () => {
         {/* ── Model Overview ── */}
         {tab === 'overview' && (
           <div className="space-y-4">
+            <ErrorBanner message={loadErrors.overview} onRetry={loadOverview} />
             {loading && <div className="text-slate-400 text-sm">Loading…</div>}
 
             {/* Summary KPIs */}
@@ -325,6 +370,7 @@ const AiGovernanceDashboard: React.FC = () => {
         {/* ── Performance Detail ── */}
         {tab === 'detail' && (
           <div className="space-y-4">
+            <ErrorBanner message={loadErrors.detail} onRetry={loadDetail} />
             {selectedModelData && (
               <div className="bg-slate-800 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-4">
@@ -407,6 +453,7 @@ const AiGovernanceDashboard: React.FC = () => {
         {/* ── Calibration ── */}
         {tab === 'calibration' && (
           <div className="space-y-4">
+            <ErrorBanner message={loadErrors.calibration} onRetry={loadCalibration} />
             <div className="bg-slate-800 rounded-lg p-6">
               <h3 className="text-sm font-semibold text-slate-300 mb-1">Calibration Plot — {selectedModel} ({period})</h3>
               <p className="text-xs text-slate-400 mb-4">
@@ -453,6 +500,7 @@ const AiGovernanceDashboard: React.FC = () => {
         {/* ── Fairness ── */}
         {tab === 'fairness' && (
           <div className="space-y-4">
+            <ErrorBanner message={loadErrors.fairness} onRetry={loadFairness} />
             <div className="bg-slate-800 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-slate-300 mb-1 flex items-center gap-2">
                 <Users className="h-4 w-4 text-teal-400" /> Model Fairness — {selectedModel} ({period})
@@ -461,8 +509,12 @@ const AiGovernanceDashboard: React.FC = () => {
                 AUC gap &gt;0.05 across groups indicates potential demographic bias. Threshold: flag if max AUC gap &gt; 0.05.
               </p>
 
-              {!fairness ? (
+              {fairnessLoading ? (
                 <div className="text-slate-400 text-sm">Loading fairness data…</div>
+              ) : !fairness ? (
+                <div className="text-slate-400 text-sm">
+                  {loadErrors.fairness ? 'Unable to load fairness data.' : 'No fairness data available for this model/period.'}
+                </div>
               ) : (
                 <>
                   {/* By Sex */}
@@ -557,6 +609,7 @@ const AiGovernanceDashboard: React.FC = () => {
         {/* ── Audit Trail ── */}
         {tab === 'audit' && (
           <div className="space-y-4">
+            <ErrorBanner message={loadErrors.audit} onRetry={loadAudit} />
             {/* Governance log */}
             <div className="bg-slate-800 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">

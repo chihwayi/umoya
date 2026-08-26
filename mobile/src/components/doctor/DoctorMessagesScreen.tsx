@@ -22,6 +22,7 @@ interface Message {
   text: string;
   time: string;
   read: boolean;
+  failed?: boolean;
 }
 
 interface Conversation {
@@ -68,8 +69,10 @@ function mapInboxToConversations(msgs: any[]): Conversation[] {
       unread,
       lastMessage: latest.body ?? '',
       lastTime,
-      messages: sorted.map((m: any) => ({
-        id: String(m.id ?? Math.random()),
+      messages: sorted.map((m: any, i: number) => ({
+        // Stable fallback key when the backend omits `id` — Math.random() here
+        // would regenerate on every render and break React's list reconciliation.
+        id: String(m.id ?? `${key}-${m.sentAt ?? m.createdAt ?? i}`),
         from: (m.isOwn ? 'me' : 'them') as 'me' | 'them',
         type: (m.attachments?.length ? 'attachment' : 'text') as MsgType,
         text: m.body ?? '',
@@ -103,15 +106,25 @@ const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ con
   const send = () => {
     const body = text.trim();
     if (!body) return;
+    const id = `m${Date.now()}`;
     const newMsg: Message = {
-      id: `m${Date.now()}`, from: 'me', type: 'text',
+      id, from: 'me', type: 'text',
       text: body, time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
       read: false,
     };
     setMessages(prev => [...prev, newMsg]);
     setText('');
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
-    MessagesService.send({ recipient_id: convo.id, body }).catch(() => {});
+    MessagesService.send({ recipient_id: convo.id, body }).catch(() => {
+      setMessages(prev => prev.map(m => (m.id === id ? { ...m, failed: true } : m)));
+    });
+  };
+
+  const retrySend = (msg: Message) => {
+    setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, failed: false } : m)));
+    MessagesService.send({ recipient_id: convo.id, body: msg.text }).catch(() => {
+      setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, failed: true } : m)));
+    });
   };
 
   return (
@@ -149,19 +162,28 @@ const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ con
           return (
             <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
               {!isMe && <AvatarCircle initials={convo.avatar} online={false} size={28} />}
-              <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem,
-                msg.type === 'attachment' && styles.bubbleAttachment,
-              ]}>
-                <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe,
-                  msg.type === 'voice' && styles.bubbleVoice,
-                  msg.type === 'attachment' && styles.bubbleAttachText,
+              <View style={{ flex: 0 }}>
+                <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem,
+                  msg.type === 'attachment' && styles.bubbleAttachment,
+                  msg.failed && styles.bubbleFailed,
                 ]}>
-                  {msg.text}
-                </Text>
-                <View style={styles.bubbleMeta}>
-                  <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{msg.time}</Text>
-                  {isMe && <Text style={styles.readReceipt}>{msg.read ? '✓✓' : '✓'}</Text>}
+                  <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe,
+                    msg.type === 'voice' && styles.bubbleVoice,
+                    msg.type === 'attachment' && styles.bubbleAttachText,
+                  ]}>
+                    {msg.text}
+                  </Text>
+                  <View style={styles.bubbleMeta}>
+                    <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{msg.time}</Text>
+                    {isMe && !msg.failed && <Text style={styles.readReceipt}>{msg.read ? '✓✓' : '✓'}</Text>}
+                  </View>
                 </View>
+                {msg.failed && (
+                  <TouchableOpacity onPress={() => retrySend(msg)} style={styles.failedRow}>
+                    <Icon name="escalate" size={11} color={C.red} />
+                    <Text style={styles.failedText}>Not delivered · Tap to retry</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           );
@@ -260,12 +282,15 @@ export const DoctorMessagesScreen: React.FC = () => {
   const [activeConvo, setActiveConvo] = useState<Conversation | null>(null);
   const [notifVisible, setNotifVisible] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [inboxError, setInboxError] = useState<string | null>(null);
 
   const loadInbox = useCallback(() => {
+    setInboxError(null);
     MessagesService.inbox({}).then(msgs => {
-      const mapped = mapInboxToConversations(msgs ?? []);
-      if (mapped.length > 0) setConversations(mapped);
-    }).catch(() => {});
+      setConversations(mapInboxToConversations(msgs ?? []));
+    }).catch(() => {
+      setInboxError('Could not load messages. Check your connection and try again.');
+    });
   }, []);
 
   useEffect(() => { loadInbox(); }, [loadInbox]);
@@ -320,6 +345,16 @@ export const DoctorMessagesScreen: React.FC = () => {
         </View>
       </LinearGradient>
 
+      {inboxError && tab === 'direct' && (
+        <View style={styles.inboxErrorBanner}>
+          <Icon name="escalate" size={14} color={C.red} />
+          <Text style={styles.inboxErrorText}>{inboxError}</Text>
+          <TouchableOpacity onPress={loadInbox}>
+            <Text style={styles.inboxRetryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {tab === 'direct'
         ? <DirectTab onOpen={setActiveConvo} conversations={conversations} />
         : <GroupsTab />
@@ -343,6 +378,10 @@ const styles = StyleSheet.create({
   notifBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },
   notifDot:        { position: 'absolute', top: 0, right: 0, backgroundColor: C.red, borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   notifDotText:    { fontFamily: FONT.uiBd, fontSize: 9, color: '#fff' },
+
+  inboxErrorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 14, marginTop: 8, marginBottom: 4, padding: 10, borderRadius: RADIUS.md, backgroundColor: C.red + '18', borderWidth: 1, borderColor: C.red + '40' },
+  inboxErrorText:   { flex: 1, fontFamily: FONT.uiMd, fontSize: 12, color: C.red },
+  inboxRetryText:   { fontFamily: FONT.uiBd, fontSize: 12, color: C.red, textDecorationLine: 'underline' },
 
   tabRow:        { flexDirection: 'row', gap: 4, paddingBottom: 0 },
   tab:           { paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -406,6 +445,9 @@ const styles = StyleSheet.create({
   bubbleTime:       { fontFamily: FONT.ui, fontSize: 9, color: C.textMuted },
   bubbleTimeMe:     { color: 'rgba(255,255,255,0.6)' },
   readReceipt:      { fontFamily: FONT.uiBd, fontSize: 10, color: 'rgba(255,255,255,0.7)' },
+  bubbleFailed:     { borderWidth: 1, borderColor: C.red },
+  failedRow:        { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3, alignSelf: 'flex-end' },
+  failedText:       { fontFamily: FONT.uiMd, fontSize: 10, color: C.red },
 
   compose:       { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.surface },
   composeAction: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },

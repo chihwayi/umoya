@@ -57,6 +57,16 @@ jobs:
           services/cdss-service/tests/test_outbound_guard.py \
           services/cdss-service/tests/test_clinical_safety.py
 
+    - name: CDSS AI release-gate suite (release gate)
+      if: matrix.service == 'ehr-service'
+      run: |
+        cd services/cdss-service
+        PYTHONPATH=. python evaluation/run_release_gate_suite.py
+
+    - name: Tenant entity/provisioning drift audit (release gate)
+      if: matrix.service == 'ehr-service'
+      run: npm run audit:tenant-provisioning
+
     - name: Enforce Frontend CDSS Proxy Boundary
       if: matrix.service == 'ehr-frontend'
       working-directory: ${{ matrix.path }}
@@ -84,6 +94,18 @@ jobs:
     - name: Test
       working-directory: ${{ matrix.path }}
       run: npm test
+
+    - name: Controller auth guard audit (release gate)
+      if: matrix.service == 'ehr-service'
+      run: npm run audit:controller-guards
+
+    - name: Migration sequence audit (release gate)
+      if: matrix.service == 'ehr-service'
+      run: npm run audit:migration-sequence
+
+    - name: Tenant entity FK type-drift audit (release gate)
+      if: matrix.service == 'ehr-service'
+      run: npm run audit:tenant-fk-drift
 
     - name: Red-team adversarial suite (release gate)
       if: matrix.service == 'ehr-service'

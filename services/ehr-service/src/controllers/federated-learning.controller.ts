@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
 import { FederatedLearningService } from '../services/federated-learning.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('fl')
+@UseGuards(JwtAuthGuard)
 export class FederatedLearningController {
   constructor(private readonly svc: FederatedLearningService) {}
 

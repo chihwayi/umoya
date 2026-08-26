@@ -476,6 +476,19 @@ npm run report:soc2-hipaa
 ./scripts/smoke-medical-aid-demo.sh
 ```
 
+Release-gate audits (also enforced in CI on every PR touching `ehr-service`):
+```bash
+npm run audit:tenant-provisioning   # every entity's table/columns exist in a provisioning bundle
+npm run audit:tenant-fk-drift       # every @JoinColumn FK matches its target's PK SQL type (uuid vs text)
+npm run audit:controller-guards     # every controller has an auth guard or @Public()
+npm run audit:migration-sequence    # database/migrations/*.sql numbering has no dupes or gaps
+```
+
+Mobile e2e (Detox, requires an Android emulator or iOS simulator):
+```bash
+cd mobile && npm run test:e2e
+```
+
 ---
 
 ## Runtime Ports

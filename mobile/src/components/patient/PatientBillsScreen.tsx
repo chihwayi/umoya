@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge } from '../ui';
 import { ApiBillQuote, BillingService } from '../../services/billing';
-import { PaymentsService } from '../../services/payments';
+import { PaymentResult, PaymentsService } from '../../services/payments';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { api } from '../../services/api';
 
@@ -52,7 +52,12 @@ const STATUS_BG: Record<string, string> = {
 
 type InvoiceStatus  = 'due' | 'paid' | 'medaid';
 type PaymentMethod  = 'ecocash' | 'onemoney' | 'card' | 'bank';
-type PaymentStep    = 'method' | 'confirm' | 'success';
+type PaymentStep    = 'method' | 'confirm' | 'waiting' | 'success';
+
+const POLL_INTERVAL_MS  = 3000;
+const MAX_POLL_ATTEMPTS = 20; // ~60s of polling before giving up
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface LineItem {
   description: string;
@@ -132,6 +137,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
   const [method, setMethod] = useState<PaymentMethod>('ecocash');
   const [phone, setPhone]   = useState('+263 77 123 4567');
   const [paying, setPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [quote, setQuote]   = useState<ApiBillQuote | null>(invoice?.quote || null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
@@ -139,6 +145,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
     if (invoice) {
       setStep('method');
       setPaying(false);
+      setPaymentError(null);
       setQuote(invoice.quote || null);
       setQuoteLoading(true);
       Animated.spring(slideAnim, { toValue: 0, tension: 55, friction: 11, useNativeDriver: true }).start();
@@ -158,18 +165,61 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
   const selectedMethod = PAYMENT_METHODS.find((m) => m.key === method)!;
   const isMobile = method === 'ecocash' || method === 'onemoney';
 
-  const handleConfirm = async () => {
-    setPaying(true);
-    try {
-      const dto = { billId: invoice.id, amount: invoice.amount, phoneNumber: phone };
-      if (method === 'ecocash')   await PaymentsService.ecocash(dto);
-      else if (method === 'onemoney') await PaymentsService.onemoney(dto);
-      else await BillingService.addPayment(invoice.id, { amount: invoice.amount, method });
-    } catch { /* best-effort — show success anyway for UX */ }
-    setPaying(false);
+  const pollUntilSettled = async (transactionId: string): Promise<PaymentResult> => {
+    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+      const result = await PaymentsService.status(transactionId);
+      if (result.status !== 'PENDING') return result;
+      await sleep(POLL_INTERVAL_MS);
+    }
+    return {
+      transactionId,
+      status: 'EXPIRED',
+      message: 'We could not confirm this payment in time. Check your phone for a prompt, or try again.',
+    };
+  };
+
+  const onConfirmedSuccess = () => {
     setStep('success');
     Animated.spring(successScale, { toValue: 1, tension: 60, friction: 10, useNativeDriver: true }).start();
-    setTimeout(() => { onPaid(invoice.id); }, 2800);
+    setTimeout(() => { onPaid(invoice.id); }, 2000);
+  };
+
+  const handleConfirm = async () => {
+    setPaying(true);
+    setPaymentError(null);
+    try {
+      if (method === 'ecocash' || method === 'onemoney') {
+        const dto = { billId: invoice.id, amount: invoice.amount, phoneNumber: phone };
+        let result = method === 'ecocash'
+          ? await PaymentsService.ecocash(dto)
+          : await PaymentsService.onemoney(dto);
+
+        if (result.status === 'PENDING') {
+          setStep('waiting');
+          result = await pollUntilSettled(result.transactionId);
+        }
+
+        if (result.status === 'COMPLETED') {
+          onConfirmedSuccess();
+        } else {
+          setPaymentError(result.message || `Payment ${result.status.toLowerCase().replace(/_/g, ' ')}. Please try again.`);
+          setStep('confirm');
+        }
+      } else {
+        const payment = await BillingService.addPayment(invoice.id, { amount: invoice.amount, method });
+        if (payment.status === 'completed') {
+          onConfirmedSuccess();
+        } else {
+          setPaymentError('Payment was recorded but is still pending confirmation. Check your bill status shortly.');
+          setStep('confirm');
+        }
+      }
+    } catch (e: any) {
+      setPaymentError(e?.response?.data?.message || e?.message || 'Payment failed. Please try again.');
+      setStep('confirm');
+    } finally {
+      setPaying(false);
+    }
   };
 
   const handleClose = () => {
@@ -183,14 +233,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
 
         {/* Header */}
         <View style={pmStyles.header}>
-          {step !== 'success' && (
-            <TouchableOpacity onPress={handleClose} style={pmStyles.closeBtn} activeOpacity={0.7}>
+          {step !== 'success' && step !== 'waiting' && (
+            <TouchableOpacity testID="patient-bills-payment-close" onPress={handleClose} style={pmStyles.closeBtn} activeOpacity={0.7}>
               <Icon name="close" size={18} color={C.textSecondary} />
             </TouchableOpacity>
           )}
           <Text style={pmStyles.headerTitle}>
             {step === 'method'  ? 'Choose Payment Method' :
-             step === 'confirm' ? 'Confirm Payment' : 'Payment Successful'}
+             step === 'confirm' ? 'Confirm Payment' :
+             step === 'waiting' ? 'Confirming Payment' : 'Payment Successful'}
           </Text>
           <Badge color={C.amber} size="xs">USD</Badge>
         </View>
@@ -222,6 +273,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
               {PAYMENT_METHODS.map((m) => (
                 <TouchableOpacity
                   key={m.key}
+                  testID={`patient-bills-payment-method-${m.key}`}
                   style={[pmStyles.methodRow, method === m.key && { borderColor: m.color, backgroundColor: m.color + '12' }]}
                   onPress={() => setMethod(m.key)}
                   activeOpacity={0.8}
@@ -247,6 +299,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
                 <View style={pmStyles.phoneInput}>
                   <Icon name="phone" size={16} color={C.textMuted} />
                   <TextInput
+                    testID="patient-bills-payment-phone-input"
                     value={phone}
                     onChangeText={setPhone}
                     style={pmStyles.phoneField}
@@ -258,7 +311,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
               </View>
             )}
 
-            <TouchableOpacity style={pmStyles.continueBtn} onPress={() => setStep('confirm')} activeOpacity={0.85}>
+            <TouchableOpacity testID="patient-bills-payment-continue" style={pmStyles.continueBtn} onPress={() => setStep('confirm')} activeOpacity={0.85}>
               <Text style={pmStyles.continueBtnText}>Continue to Review</Text>
               <Icon name="arrow" size={16} color="#000" />
             </TouchableOpacity>
@@ -306,6 +359,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
               </Card>
             )}
 
+            {paymentError && (
+              <Card style={pmStyles.quoteWarningCard}>
+                <Text style={pmStyles.quoteWarningTitle}>Payment not completed</Text>
+                <Text style={pmStyles.quoteWarningText}>{paymentError}</Text>
+              </Card>
+            )}
+
             {/* Method summary */}
             <Card style={pmStyles.methodSummaryCard}>
               <View style={pmStyles.methodSummaryRow}>
@@ -329,6 +389,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
             </View>
 
             <TouchableOpacity
+              testID="patient-bills-payment-confirm"
               style={[pmStyles.payBtn, { backgroundColor: selectedMethod.color }]}
               onPress={handleConfirm}
               activeOpacity={0.85}
@@ -340,11 +401,24 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onClose, onPaid })
               }
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setStep('method')} activeOpacity={0.7} style={pmStyles.backLink}>
+            <TouchableOpacity testID="patient-bills-payment-change-method" onPress={() => setStep('method')} activeOpacity={0.7} style={pmStyles.backLink}>
               <Icon name="back" size={14} color={C.textMuted} />
               <Text style={pmStyles.backLinkText}>Change method</Text>
             </TouchableOpacity>
           </ScrollView>
+        )}
+
+        {/* Step: waiting — mobile money push sent, polling provider for confirmation */}
+        {step === 'waiting' && (
+          <View style={pmStyles.successState}>
+            <ActivityIndicator size="large" color={selectedMethod.color} />
+            <Text style={pmStyles.successTitle}>Check your phone</Text>
+            <Text style={pmStyles.successSub}>
+              {isMobile
+                ? `We sent a payment prompt to ${phone}. Approve it to complete your payment.`
+                : 'Waiting for payment confirmation...'}
+            </Text>
+          </View>
         )}
 
         {/* Step: success */}
@@ -481,7 +555,7 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onPay }) => {
         </View>
       </View>
       {invoice.status === 'due' && (
-        <TouchableOpacity style={invStyles.payBtn} onPress={() => onPay(invoice)} activeOpacity={0.85}>
+        <TouchableOpacity testID={`patient-bills-invoice-pay-${invoice.id}`} style={invStyles.payBtn} onPress={() => onPay(invoice)} activeOpacity={0.85}>
           <Icon name="wallet" size={14} color="#000" />
           <Text style={invStyles.payBtnText}>Pay Now</Text>
         </TouchableOpacity>
@@ -530,15 +604,19 @@ export const PatientBillsScreen: React.FC = () => {
   const [invoices,     setInvoices]     = useState<Invoice[]>([]);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [coverage,     setCoverage]     = useState<InsuranceCoverage | null>(null);
+  const [invoicesError, setInvoicesError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadInvoices = React.useCallback(() => {
     const patientId = user?.patientMrn ?? user?.id;
     if (!patientId) return;
+    setInvoicesError(null);
     BillingService.forCurrentPatient()
       .then(list => setInvoices((list ?? []).map(mapApiBill)))
-      .catch(() => setInvoices([]));
+      .catch(() => setInvoicesError('Could not load your bills. Check your connection and try again.'));
     fetchInsuranceCoverage().then(setCoverage).catch(() => {});
-  }, [user?.id]);
+  }, [user?.id, user?.patientMrn]);
+
+  useEffect(() => { loadInvoices(); }, [loadInvoices]);
 
   const dueInvoices  = invoices.filter((i) => i.status === 'due');
   const doneInvoices = invoices.filter((i) => i.status !== 'due');
@@ -612,6 +690,7 @@ export const PatientBillsScreen: React.FC = () => {
             </View>
             <View style={mainStyles.quickPayBtns}>
               <TouchableOpacity
+                testID="patient-bills-quickpay-ecocash"
                 style={[mainStyles.quickPayBtn, { backgroundColor: '#E31837' }]}
                 onPress={() => setPayingInvoice(dueInvoices[0])}
                 activeOpacity={0.85}
@@ -619,6 +698,7 @@ export const PatientBillsScreen: React.FC = () => {
                 <Text style={mainStyles.quickPayText}>EcoCash</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="patient-bills-quickpay-onemoney"
                 style={[mainStyles.quickPayBtn, { backgroundColor: '#00A651' }]}
                 onPress={() => setPayingInvoice(dueInvoices[0])}
                 activeOpacity={0.85}
@@ -629,26 +709,44 @@ export const PatientBillsScreen: React.FC = () => {
           </LinearGradient>
         )}
 
-        {/* All clear */}
-        {totalDue === 0 && (
+        {/* Load failure — distinct from a genuinely empty bill list */}
+        {invoicesError && (
           <View style={mainStyles.allClear}>
-            <View style={mainStyles.allClearIcon}>
-              <Icon name="check" size={28} color={C.green} />
+            <View style={[mainStyles.allClearIcon, { backgroundColor: C.red + '20', borderColor: C.red + '40' }]}>
+              <Icon name="close" size={28} color={C.red} />
             </View>
-            <Text style={mainStyles.allClearTitle}>All paid up</Text>
-            <Text style={mainStyles.allClearSub}>No outstanding balances.</Text>
+            <Text style={mainStyles.allClearTitle}>Couldn't load bills</Text>
+            <Text style={mainStyles.allClearSub}>{invoicesError}</Text>
+            <TouchableOpacity testID="patient-bills-retry" onPress={loadInvoices} style={mainStyles.retryBtn}>
+              <Text style={mainStyles.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* Empty state — no invoices at all */}
-        {invoices.length === 0 && (
-          <View style={mainStyles.allClear}>
-            <View style={mainStyles.allClearIcon}>
-              <Icon name="check" size={28} color={C.textMuted} />
-            </View>
-            <Text style={mainStyles.allClearTitle}>No invoices</Text>
-            <Text style={mainStyles.allClearSub}>No billing records found.</Text>
-          </View>
+        {!invoicesError && (
+          <>
+            {/* All clear */}
+            {totalDue === 0 && invoices.length > 0 && (
+              <View style={mainStyles.allClear}>
+                <View style={mainStyles.allClearIcon}>
+                  <Icon name="check" size={28} color={C.green} />
+                </View>
+                <Text style={mainStyles.allClearTitle}>All paid up</Text>
+                <Text style={mainStyles.allClearSub}>No outstanding balances.</Text>
+              </View>
+            )}
+
+            {/* Empty state — no invoices at all */}
+            {invoices.length === 0 && (
+              <View style={mainStyles.allClear}>
+                <View style={mainStyles.allClearIcon}>
+                  <Icon name="check" size={28} color={C.textMuted} />
+                </View>
+                <Text style={mainStyles.allClearTitle}>No invoices</Text>
+                <Text style={mainStyles.allClearSub}>No billing records found.</Text>
+              </View>
+            )}
+          </>
         )}
 
         {/* Due invoices */}
@@ -710,4 +808,6 @@ const mainStyles = StyleSheet.create({
   allClearIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.green + '20', borderWidth: 1.5, borderColor: C.green + '40', alignItems: 'center', justifyContent: 'center' },
   allClearTitle: { fontFamily: FONT.uiBk, fontSize: 20, color: C.textPrimary },
   allClearSub: { fontFamily: FONT.ui, fontSize: 13, color: C.textSecondary },
+  retryBtn: { marginTop: 8, paddingVertical: 8, paddingHorizontal: 20, borderRadius: RADIUS.md, backgroundColor: C.red + '20', borderWidth: 1, borderColor: C.red + '50' },
+  retryBtnText: { fontFamily: FONT.uiBd, fontSize: 13, color: C.red },
 });

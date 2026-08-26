@@ -27,6 +27,7 @@ import PharmacyInventory from '../components/PharmacyInventory';
 import PharmacyPurchaseOrders from '../components/PharmacyPurchaseOrders';
 import PharmacyReceipts from '../components/PharmacyReceipts';
 import PharmacySuppliers from '../components/PharmacySuppliers';
+import PharmacyAlerts from '../components/PharmacyAlerts';
 import SharedDocumentsList from '../components/SharedDocumentsList';
 import AdminNavigationShell from '../components/AdminNavigationShell';
 
@@ -759,10 +760,7 @@ const PharmacyDashboard: React.FC = () => {
         )}
 
         {activeTab === 'alerts' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
-            <AlertTriangle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-            <p className="text-slate-500">Alerts management coming soon</p>
-          </div>
+          <PharmacyAlerts />
         )}
 
         {/* Shared Documents Tab */}

@@ -44,6 +44,7 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({
           return (
             <TouchableOpacity
               key={route.key}
+              testID={`tab-${route.name}`}
               onPress={onPress}
               activeOpacity={0.7}
               style={styles.tabBtn}

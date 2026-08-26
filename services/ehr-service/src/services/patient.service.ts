@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException, Logger, Optional } from '@nestjs/common';
+import { randomInt } from 'crypto';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import { PatientSdoh } from '../entities/patient-sdoh.entity';
@@ -785,15 +786,33 @@ export class PatientService {
     }
     
     const patient = patientRepository.create(createPatientDto);
-    
-    // Generate tenant-specific MRN
+
+    // Generate tenant-specific MRN. patientNumber has a DB-level unique
+    // constraint, so a collision (possible under bursty concurrent
+    // registration since the random suffix has limited entropy) fails the
+    // save with a 23505 error rather than corrupting data — retry with a
+    // fresh suffix instead of surfacing that as a hard failure to the caller.
     if (!patient.patientNumber) {
       const tenantCode = tenantSlug.toUpperCase().replace(/-/g, '').substring(0, 3);
       const timestamp = Date.now().toString().slice(-6);
-      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-      patient.patientNumber = `${tenantCode}${timestamp}${random}`;
+      const maxAttempts = 5;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const random = randomInt(0, 1000).toString().padStart(3, '0');
+        patient.patientNumber = `${tenantCode}${timestamp}${random}`;
+        try {
+          return await patientRepository.save(patient);
+        } catch (error: any) {
+          const isUniqueViolation = error?.code === '23505';
+          if (!isUniqueViolation || attempt === maxAttempts) {
+            throw error;
+          }
+          this.logger.warn(
+            `Patient number collision on "${patient.patientNumber}", retrying (attempt ${attempt}/${maxAttempts})`,
+          );
+        }
+      }
     }
-    
+
     return patientRepository.save(patient);
   }
 

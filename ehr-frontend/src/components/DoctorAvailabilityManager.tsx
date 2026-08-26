@@ -65,13 +65,7 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
       
       // Handle different response structures
       let availabilitiesList: DoctorAvailability[] = [];
-      
-      // Debug logging
-      console.log('DoctorAvailabilityManager - API Response:', response);
-      console.log('DoctorAvailabilityManager - response.data:', response.data);
-      console.log('DoctorAvailabilityManager - response.data type:', typeof response.data);
-      console.log('DoctorAvailabilityManager - isArray(response.data):', Array.isArray(response.data));
-      
+
       if (Array.isArray(response.data)) {
         availabilitiesList = response.data;
       } else if (response.data && typeof response.data === 'object') {
@@ -87,7 +81,6 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
         }
       }
       
-      console.log('DoctorAvailabilityManager - Final availabilitiesList:', availabilitiesList);
       setAvailabilities(availabilitiesList);
     } catch (error: any) {
       console.error('Error fetching availabilities:', error);

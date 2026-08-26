@@ -564,7 +564,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                         ...observationsConcepts.map(c => c.term)
                       ];
                       const uniqueSymptoms = Array.from(new Set(symptomsArray.filter((s): s is string => !!s)));
-                      console.log('🔍 Sending symptoms to API:', uniqueSymptoms);
 
                       if (uniqueSymptoms.length === 0) {
                         setDiagnosisSuggestions({
@@ -583,21 +582,14 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                         age: patientAge,
                         gender: patient.gender,
                       }, token, tenantSlug);
-                      
-                      console.log('🔍 Diagnosis suggestions full response:', result);
-                      console.log('🔍 Diagnosis suggestions data:', result.data);
-                      
+
                       // Handle response - it might be nested
                       const suggestionsData = result.data || result;
-                      
-                      console.log('🔍 Processed suggestionsData:', suggestionsData);
-                      
+
                       // Ensure proper structure
                       if (suggestionsData.suggested_diagnoses && suggestionsData.suggested_diagnoses.length > 0) {
-                        console.log('✅ Using suggested_diagnoses format');
                         setDiagnosisSuggestions(suggestionsData);
                       } else if (suggestionsData.differentialDiagnoses && Array.isArray(suggestionsData.differentialDiagnoses)) {
-                        console.log('⚠️ Using fallback differentialDiagnoses format, count:', suggestionsData.differentialDiagnoses.length);
                         const convertedDiagnoses = suggestionsData.differentialDiagnoses.map((d: any) => ({
                           diagnosis: d.condition || d.diagnosis || 'Unknown',
                           probability: d.probability || 0.5,

@@ -264,10 +264,12 @@ function mapPortalVitals(rawVitals: any[]): VitalEntry[] {
 
 function mapApiLabs(orders: any[]): LabResult[] {
   const results: LabResult[] = [];
-  (orders ?? []).forEach((order: any) => {
-    (order.results ?? []).forEach((r: any) => {
+  (orders ?? []).forEach((order: any, orderIdx: number) => {
+    (order.results ?? []).forEach((r: any, resultIdx: number) => {
       results.push({
-        id: String(r.id ?? Math.random()),
+        // Stable fallback key when the backend omits `id` — Math.random() here
+        // would regenerate on every render and break React's list reconciliation.
+        id: String(r.id ?? `${order.id ?? orderIdx}-${r.testName ?? resultIdx}-${r.resultDate ?? ''}`),
         name: r.testName ?? "Unknown",
         value: Number(r.value ?? 0),
         unit: r.unit ?? "",
@@ -291,8 +293,10 @@ function mapApiLabs(orders: any[]): LabResult[] {
 function mapApiDocuments(docs: any[]): MedDocument[] {
   if (!docs?.length) return [];
   const validTypes = ["discharge", "lab", "prescription", "referral", "imaging", "consent"];
-  return docs.map((d: any) => ({
-    id: String(d.id ?? Math.random()),
+  return docs.map((d: any, i: number) => ({
+    // Stable fallback key when the backend omits `id` — Math.random() here
+    // would regenerate on every render and break React's list reconciliation.
+    id: String(d.id ?? `${d.documentName ?? d.title ?? 'doc'}-${d.uploadedAt ?? d.createdAt ?? i}`),
     title: d.documentName ?? d.title ?? "Document",
     type: (validTypes.includes(d.documentType ?? d.type ?? "") ? (d.documentType ?? d.type) : "lab") as MedDocument["type"],
     date: (d.uploadedAt ?? d.createdAt)
@@ -360,6 +364,7 @@ const SubTabBar: React.FC<{ active: SubTab; onChange: (t: SubTab) => void }> = (
       {TABS.map(t => (
         <TouchableOpacity
           key={t.key}
+          testID={`patient-health-tab-${t.key}`}
           style={[styles.tab, active === t.key && styles.tabActive]}
           onPress={() => onChange(t.key)}
         >
@@ -490,6 +495,7 @@ const ProfileTab: React.FC<{
 
     {/* Family Access link */}
     <TouchableOpacity
+      testID="patient-health-family-access-link"
       style={profileLinkStyles.row}
       onPress={() => navigation.navigate('PHFamilyAccess')}
       activeOpacity={0.85}
@@ -523,7 +529,7 @@ const VitalsTab: React.FC<{ vitals: VitalEntry[]; loading: boolean }> = ({ vital
         const status = vitalStatus(v, latest);
         const isOpen = expanded === v.label;
         return (
-          <TouchableOpacity key={v.label} onPress={() => setExpanded(isOpen ? null : v.label)} activeOpacity={0.85}>
+          <TouchableOpacity testID={`patient-health-vital-${v.label}`} key={v.label} onPress={() => setExpanded(isOpen ? null : v.label)} activeOpacity={0.85}>
             <Card style={[styles.vitalCard, { borderLeftColor: v.accent, borderLeftWidth: 3 }]}>
               <View style={styles.vitalCardRow}>
                 <View style={{ flex: 1 }}>
@@ -595,7 +601,7 @@ const LabsTab: React.FC<{
             {labs.filter(l => l.panel === panel).map(lab => {
               const aiInterp = lab.aiNote || labInterpretations[lab.id];
               return (
-              <TouchableOpacity key={lab.id} onPress={() => openSheet(lab)} activeOpacity={0.85}>
+              <TouchableOpacity testID={`patient-health-lab-${lab.id}`} key={lab.id} onPress={() => openSheet(lab)} activeOpacity={0.85}>
                 <Card style={[styles.labCard, { borderLeftColor: flagColor(lab.flag), borderLeftWidth: 3 }]}>
                   <View style={styles.labCardRow}>
                     <View style={{ flex: 1 }}>
@@ -710,6 +716,7 @@ const ServicesTab: React.FC = () => {
             <Text style={styles.serviceSync}>Answer health surveys from your care team</Text>
           </View>
           <TouchableOpacity
+            testID="patient-health-questionnaires-open"
             style={[styles.connectBtn, { backgroundColor: C.teal + "22", borderColor: C.teal + "55" }]}
             onPress={() => navigation.navigate("PHQuestionnaires")}
           >

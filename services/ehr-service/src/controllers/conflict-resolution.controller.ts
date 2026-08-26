@@ -1,10 +1,12 @@
-import { Controller, Get, Patch, Post, Param, Body, Req } from '@nestjs/common';
+import { UseGuards, Controller, Get, Patch, Post, Param, Body, Req } from '@nestjs/common';
 import {
   ClinicalConflictResolutionService,
   SyncConflict,
 } from '../services/clinical-conflict-resolution.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('conflict-queue')
+@UseGuards(JwtAuthGuard)
 export class ConflictResolutionController {
   constructor(private readonly svc: ClinicalConflictResolutionService) {}
 

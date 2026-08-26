@@ -250,6 +250,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             {ROLES.map(r => (
               <TouchableOpacity
                 key={r.key}
+                testID={`login-role-${r.key}`}
                 onPress={() => handleRoleChange(r.key)}
                 activeOpacity={0.75}
                 style={[
@@ -274,6 +275,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <View style={[styles.inputBox, { borderColor: email ? accent + '60' : C.border }]}>
                     <Icon name="inbox" size={16} color={C.textMuted} />
                     <TextInput
+                      testID="login-email-input"
                       style={styles.input}
                       placeholder="your@email.com"
                       placeholderTextColor={C.textMuted}
@@ -291,6 +293,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <View style={[styles.inputBox, { borderColor: password ? accent + '60' : C.border }]}>
                     <Icon name="shield" size={16} color={C.textMuted} />
                     <TextInput
+                      testID="login-password-input"
                       style={styles.input}
                       placeholder="••••••••"
                       placeholderTextColor={C.textMuted}
@@ -305,6 +308,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 </View>
 
                 <TouchableOpacity
+                  testID="login-submit-staff"
                   style={[styles.primaryBtn, loading && styles.btnDisabled]}
                   onPress={loginStaff}
                   activeOpacity={0.85}
@@ -344,6 +348,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <View style={[styles.inputBox, { borderColor: email ? C.blue + '60' : C.border }]}>
                     <Icon name="inbox" size={16} color={C.textMuted} />
                     <TextInput
+                      testID="login-patient-email-input"
                       style={styles.input}
                       placeholder="you@example.com"
                       placeholderTextColor={C.textMuted}
@@ -360,6 +365,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   <View style={[styles.inputBox, { borderColor: password ? C.blue + '60' : C.border }]}>
                     <Icon name="shield" size={16} color={C.textMuted} />
                     <TextInput
+                      testID="login-patient-password-input"
                       style={styles.input}
                       placeholder="••••••••"
                       placeholderTextColor={C.textMuted}
@@ -376,6 +382,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   Sign in with the same patient portal email and password used on the web portal.
                 </Text>
                 <TouchableOpacity
+                  testID="login-submit-patient"
                   style={[styles.primaryBtn, loading && styles.btnDisabled]}
                   onPress={loginPatient}
                   activeOpacity={0.85}

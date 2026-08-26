@@ -63,12 +63,9 @@ const PatientProViewer: React.FC<PatientProViewerProps> = ({
         ehrApi.getPatientQuestionnaireHistory(patientId, token, tenantSlug, { limit: 20 }),
         ehrApi.getProTrends(patientId, token, tenantSlug, { limit: 20 }),
       ]);
-      console.log('📊 PatientProViewer - History response:', historyResponse);
-      console.log('📊 PatientProViewer - Trends response:', trendsResponse);
       setHistory(historyResponse.data || []);
       // Handle both camelCase and snake_case response formats
       const trendsData = trendsResponse.data || trendsResponse || [];
-      console.log('📊 PatientProViewer - Processed trends data:', trendsData);
       setTrends(trendsData);
     } catch (error) {
       console.error('Failed to load PRO data:', error);
@@ -129,18 +126,12 @@ const PatientProViewer: React.FC<PatientProViewerProps> = ({
   // Calculate unique questionnaires BEFORE chartData (needed by chartData)
   const uniqueQuestionnaires = React.useMemo(() => {
     const codes = trends.map(t => t.code || t.questionnaireCode).filter(Boolean);
-    const unique = Array.from(new Set(codes));
-    console.log('📊 PatientProViewer - uniqueQuestionnaires calculated:', unique, 'from trends:', trends.map(t => ({ code: t.code || t.questionnaireCode, score: t.totalScore || t.total_score })));
-    return unique;
+    return Array.from(new Set(codes));
   }, [trends]);
 
   // Group trends by questionnaire code for charting
   const chartData = React.useMemo(() => {
-    console.log('📊 PatientProViewer - Processing chartData, trends:', trends);
-    console.log('📊 PatientProViewer - selectedQuestionnaire:', selectedQuestionnaire);
-    
     if (trends.length === 0) {
-      console.log('📊 PatientProViewer - No trends data available');
       return [];
     }
     
@@ -197,10 +188,6 @@ const PatientProViewer: React.FC<PatientProViewerProps> = ({
         return data;
       });
       
-      console.log('📊 PatientProViewer - Chart data (all questionnaires):', result);
-      console.log('📊 PatientProViewer - uniqueQuestionnaires:', uniqueQuestionnaires);
-      console.log('📊 PatientProViewer - grouped codes:', Object.keys(grouped));
-      console.log('📊 PatientProViewer - All dates:', sortedDateKeys);
       return result;
     } else {
       // Show only selected questionnaire
@@ -225,7 +212,6 @@ const PatientProViewer: React.FC<PatientProViewerProps> = ({
           date: formatDateForChart(t.completed_at),
           score: t.totalScore || t.total_score,
         }));
-      console.log('📊 PatientProViewer - Chart data (selected questionnaire):', filtered);
       return filtered;
     }
   }, [trends, selectedQuestionnaire]);

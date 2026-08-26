@@ -1026,8 +1026,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
         const token = localStorage.getItem('ehr_token');
         if (!token) return;
 
-        console.log('🔍 Fetching matching lab results for patient:', enrollment.patient_id, 'visit date:', form.visitDate);
-
         const response = await ehrApi.getMatchingLabResults(
           enrollment.patient_id,
           form.visitDate,
@@ -1035,10 +1033,7 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           tenantSlug
         );
 
-        console.log('📊 Lab results matching response:', response.data);
-
         if (response.data?.matched && response.data.viralLoad !== null) {
-          console.log('✅ Auto-populating viral load:', response.data.viralLoad);
           setForm(prev => ({
             ...prev,
             viralLoad: response.data.viralLoad?.toString() || '',
@@ -1048,7 +1043,6 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
           setViralLoadSource('lab_system');
           setViralLoadAutoPopulated(true);
         } else {
-          console.log('❌ No matching lab results found');
           // No match found, reset if it was previously auto-populated
           if (viralLoadAutoPopulated && viralLoadSource === 'lab_system') {
             setForm(prev => ({

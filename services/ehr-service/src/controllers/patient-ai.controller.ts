@@ -1,7 +1,12 @@
-import { Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { PatientAiService } from '../services/patient-ai.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
+// Used by both staff (mobile clinician view) and patients (self-service symptom
+// checker/adherence chat) under the same JWT issuer, so this intentionally accepts
+// any authenticated role rather than PatientJwtAuthGuard's patient-only restriction.
 @Controller('patient-ai')
+@UseGuards(JwtAuthGuard)
 export class PatientAiController {
   constructor(private readonly svc: PatientAiService) {}
 

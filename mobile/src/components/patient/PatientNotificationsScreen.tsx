@@ -43,6 +43,7 @@ const NotifRow: React.FC<{
 
   return (
     <TouchableOpacity
+      testID={`patient-notifications-item-${item.id}`}
       style={[styles.row, !item.isRead && styles.rowUnread]}
       onPress={() => onPress(item.id)}
       activeOpacity={0.85}
@@ -96,12 +97,16 @@ export const PatientNotificationsScreen: React.FC<PatientNotificationsScreenProp
 
   const handlePress = useCallback(async (id: string) => {
     setItems(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    PatientPortalService.markNotificationRead(id).catch(() => {});
+    PatientPortalService.markNotificationRead(id).catch((err) => {
+      console.warn('Failed to mark notification read on server', err);
+    });
   }, []);
 
   const handleMarkAll = useCallback(async () => {
     setItems(prev => prev.map(n => ({ ...n, isRead: true })));
-    PatientPortalService.markAllRead().catch(() => {});
+    PatientPortalService.markAllRead().catch((err) => {
+      console.warn('Failed to mark all notifications read on server', err);
+    });
   }, []);
 
   const unreadCount = items.filter(n => !n.isRead).length;
@@ -114,7 +119,7 @@ export const PatientNotificationsScreen: React.FC<PatientNotificationsScreenProp
         onBack={() => navigation?.goBack?.()}
         rightSlot={
           unreadCount > 0 ? (
-            <TouchableOpacity onPress={handleMarkAll} activeOpacity={0.8} style={styles.markAllBtn}>
+            <TouchableOpacity testID="patient-notifications-mark-all" onPress={handleMarkAll} activeOpacity={0.8} style={styles.markAllBtn}>
               <Text style={styles.markAllText}>Mark all read</Text>
             </TouchableOpacity>
           ) : null

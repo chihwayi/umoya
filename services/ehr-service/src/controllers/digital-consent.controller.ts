@@ -1,11 +1,15 @@
-import { Controller, Get, Post, Param, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Req, UseGuards } from '@nestjs/common';
 import { DigitalConsentService } from '../services/digital-consent.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('consent')
 export class DigitalConsentController {
   constructor(private readonly consent: DigitalConsentService) {}
 
+  // form/:token routes stay unguarded by design — the token itself is the
+  // credential (patient signs a consent form via a shared link, no login).
   @Post('request')
+  @UseGuards(JwtAuthGuard)
   createRequest(
     @Req() req: any,
     @Body() body: { encounterId: string; patientId: string; templateId: string },
@@ -33,11 +37,13 @@ export class DigitalConsentController {
   }
 
   @Get('encounter/:encounterId')
+  @UseGuards(JwtAuthGuard)
   getEncounterConsents(@Req() req: any, @Param('encounterId') id: string) {
     return this.consent.getEncounterConsents(req.tenantDb, id);
   }
 
   @Get('requests/:id/pdf')
+  @UseGuards(JwtAuthGuard)
   getPdfUrl(@Req() req: any, @Param('id') id: string) {
     return this.consent.getConsentPdfUrl(req.tenantDb, id).then((url) => ({ url }));
   }

@@ -8,6 +8,7 @@ interface CardProps {
   accent?: string;
   accentSide?: boolean;
   padding?: number;
+  testID?: string;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -16,8 +17,10 @@ export const Card: React.FC<CardProps> = ({
   accent,
   accentSide = false,
   padding = 14,
+  testID,
 }) => (
   <View
+    testID={testID}
     style={[
       styles.card,
       accent && accentSide && { borderLeftColor: accent, borderLeftWidth: 3 },

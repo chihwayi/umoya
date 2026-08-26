@@ -264,22 +264,13 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
               <button
                 key={bed.id}
                 onClick={async () => {
-                  console.log('🔍 Bed clicked:', {
-                    bedNumber: bed.bedNumber,
-                    status: bed.status,
-                    hasCurrentPatient: !!bed.currentPatient,
-                    currentPatient: bed.currentPatient,
-                  });
-                  
                   if (bed.status === 'occupied' && bed.currentPatient) {
-                    console.log('✅ Bed is occupied, loading admission...');
                     try {
                       const response = await ehrAxios.get(`/beds/admissions`, {
                         headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
                         params: { patientId: bed.currentPatient.id },
                       });
-                      console.log('📊 Admission response:', response.data);
-                      
+
                       if (response.data && response.data.length > 0) {
                         const admissionData = {
                           ...response.data[0],
@@ -289,20 +280,16 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
                           bed_number: bed.bedNumber,
                           ward_name: bed.wardName,
                         };
-                        console.log('✅ Navigating to patient page');
                         navigate(`/ehr/${tenantSlug}/admitted-patient`, { state: { admission: admissionData } });
                       } else {
                         showError('Info', 'No active admission found for this patient');
                       }
                     } catch (error) {
-                      console.error('❌ Failed to load admission:', error);
+                      console.error('Failed to load admission:', error);
                       showError('Error', 'Failed to load admission details');
                     }
-                  } else {
-                    console.log('ℹ️ Bed not occupied or no patient assigned');
-                    if (bed.status === 'available') {
-                      showError('Info', 'This bed is available. Admit a patient first.');
-                    }
+                  } else if (bed.status === 'available') {
+                    showError('Info', 'This bed is available. Admit a patient first.');
                   }
                 }}
                 className="relative overflow-hidden rounded-xl shadow-lg hover:shadow-2xl transition-all duration-200 transform hover:scale-105 aspect-square"

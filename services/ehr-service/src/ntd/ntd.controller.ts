@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Headers, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Headers, Query, UseGuards } from '@nestjs/common';
 import { NtdService } from './ntd.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('ntd')
+@UseGuards(JwtAuthGuard)
 export class NtdController {
   constructor(private readonly ntdService: NtdService) {}
 

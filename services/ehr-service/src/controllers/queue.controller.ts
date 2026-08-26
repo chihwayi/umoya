@@ -1,8 +1,10 @@
-import { Controller, Post, Get, Patch, Param, Body, Req } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Param, Body, Req } from '@nestjs/common';
 import { QueueService } from '../services/queue.service';
 import { QueueGateway } from '../gateways/queue.gateway';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('queue')
+@UseGuards(JwtAuthGuard)
 export class QueueController {
   constructor(
     private readonly queue: QueueService,

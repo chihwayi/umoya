@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { CbhiHousehold } from '../cbhi/entities/cbhi-household.entity';
@@ -137,7 +138,7 @@ export class CbhiService {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const repo = db.getRepository(CbhiClaim);
     const patientRepo = db.getRepository(Patient);
-    const claimNumber = `CLM-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const claimNumber = `CLM-${Date.now()}-${randomBytes(3).toString('hex').toUpperCase()}`;
     const entity = repo.create({
       ...dto,
       claimNumber,

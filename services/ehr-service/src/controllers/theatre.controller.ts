@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, Req } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query, Req } from '@nestjs/common';
 import { TheatreService } from '../services/theatre.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('theatre')
+@UseGuards(JwtAuthGuard)
 export class TheatreController {
   constructor(private readonly theatre: TheatreService) {}
 

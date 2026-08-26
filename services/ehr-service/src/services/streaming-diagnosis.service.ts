@@ -53,14 +53,13 @@ export class StreamingDiagnosisService {
       res.write('event: done\ndata: {}\n\n');
       res.end();
     } catch (e: any) {
-      this.logger.warn(`Streaming diagnosis governed CDSS path unavailable: ${e?.message}`);
-      const mock = [
-        { rank: 1, diagnosis: 'Upper respiratory tract infection', confidence: 0.72, icd10: 'J06.9', red_flags: [] },
-        { rank: 2, diagnosis: 'Influenza', confidence: 0.45, icd10: 'J11.1', red_flags: ['fever > 39°C'] },
-        { rank: 3, diagnosis: 'COVID-19', confidence: 0.38, icd10: 'U07.1', red_flags: ['oxygen saturation < 94%'] },
-      ];
-      res.write(`data: ${JSON.stringify({ differential: mock, partial: false })}\n\n`);
-      res.write('event: done\ndata: {}\n\n');
+      this.logger.error(`Streaming diagnosis unavailable, CDSS call failed: ${e?.message}`);
+      res.write(
+        `event: error\ndata: ${JSON.stringify({
+          error: 'diagnosis_unavailable',
+          message: 'AI diagnosis assist is temporarily unavailable. Please retry or proceed with manual assessment.',
+        })}\n\n`,
+      );
       res.end();
     }
   }

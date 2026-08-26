@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
 import { MultilingualEducationService } from '../services/multilingual-education.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('education')
+@UseGuards(JwtAuthGuard)
 export class MultilingualEducationController {
   constructor(private readonly svc: MultilingualEducationService) {}
 

@@ -1,6 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException, Logger, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Optional, Inject } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
 import { AlertDeliveryService } from './alert-delivery.service';
+import { TenantService } from './tenant.service';
+
+// Step types with no real backend action to perform: the target config
+// (arbitrary entityType/role, or a generic task/order shape) doesn't map
+// onto any single concrete table in the schema, so a "real" implementation
+// would have to guess. Reject them at creation time rather than accepting a
+// step that always fails once a workflow actually fires.
+const UNIMPLEMENTED_STEP_TYPES = new Set(['assign_role', 'create_task', 'create_order']);
 
 export interface WorkflowStepConfig {
   assignRole?: { role: string; entityId: string; entityType: string };
@@ -18,7 +27,10 @@ export interface WorkflowStepConfig {
 export class ClinicalWorkflowService {
   private readonly logger = new Logger(ClinicalWorkflowService.name);
 
-  constructor(@Optional() private readonly alertDelivery?: AlertDeliveryService) {}
+  constructor(
+    @Optional() private readonly alertDelivery?: AlertDeliveryService,
+    @Optional() @Inject(TenantService) private readonly tenantService?: TenantService,
+  ) {}
 
   private ensureTenantDb(tenantDb: DataSource) {
     if (!tenantDb) {
@@ -246,6 +258,12 @@ export class ClinicalWorkflowService {
   async addWorkflowStep(workflowId: string, stepData: any, tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
+    if (UNIMPLEMENTED_STEP_TYPES.has(stepData.stepType)) {
+      throw new BadRequestException(
+        `Step type '${stepData.stepType}' has no real backend implementation and would silently do nothing when the workflow runs. Use 'send_notification', 'send_message', 'update_status', 'assign_appointment', 'wait', or 'condition' instead.`,
+      );
+    }
+
     // Get current max step_order
     const maxOrderResult = await tenantDb.query(
       `SELECT COALESCE(MAX(step_order), 0) as max_order FROM workflow_steps WHERE workflow_id = $1`,
@@ -280,6 +298,11 @@ export class ClinicalWorkflowService {
     let paramIndex = 1;
 
     if (updates.stepType !== undefined) {
+      if (UNIMPLEMENTED_STEP_TYPES.has(updates.stepType)) {
+        throw new BadRequestException(
+          `Step type '${updates.stepType}' has no real backend implementation and would silently do nothing when the workflow runs. Use 'send_notification', 'send_message', 'update_status', 'assign_appointment', 'wait', or 'condition' instead.`,
+        );
+      }
       updateFields.push(`step_type = $${paramIndex++}`);
       values.push(updates.stepType);
     }
@@ -481,28 +504,56 @@ export class ClinicalWorkflowService {
     return result[0];
   }
 
-  private async executeWorkflowSteps(workflowId: string, executionId: string, triggerData: any, tenantDb: DataSource) {
+  private async executeWorkflowSteps(
+    workflowId: string,
+    executionId: string,
+    triggerData: any,
+    tenantDb: DataSource,
+    resumeFromStepOrder: number = 0,
+  ) {
     try {
-      // Update execution status to running
+      // Update execution status to running (idempotent — also true on resume)
       await tenantDb.query(
-        `UPDATE workflow_executions SET status = 'running', started_at = NOW() WHERE id = $1`,
+        `UPDATE workflow_executions SET status = 'running', started_at = COALESCE(started_at, NOW()) WHERE id = $1`,
         [executionId],
       );
 
-      // Get workflow steps
-      const steps = await this.getWorkflowSteps(workflowId, tenantDb);
+      // Get workflow steps, skipping any already executed before a pause/resume
+      const steps = (await this.getWorkflowSteps(workflowId, tenantDb)).filter(
+        (step: any) => step.step_order > resumeFromStepOrder,
+      );
 
       // Execute each step sequentially
       for (const step of steps) {
         const stepExecution = await this.createStepExecution(executionId, step.id, step.step_order, tenantDb);
 
         try {
-          await this.executeStep(step, triggerData, tenantDb, stepExecution.id);
+          const result = await this.executeStep(step, triggerData, tenantDb, stepExecution.id, workflowId);
+
+          if (result?.paused) {
+            // 'wait' step — durably persist the resume time and stop processing
+            // this execution now. A cron job resumes it later; nothing is held
+            // in-process, so a restart mid-wait no longer abandons the workflow.
+            await tenantDb.query(
+              `UPDATE workflow_step_executions SET resume_at = $1, updated_at = NOW() WHERE id = $2`,
+              [result.resumeAt, stepExecution.id],
+            );
+            this.logger.log(
+              `Workflow execution ${executionId} paused at step ${step.id} until ${result.resumeAt.toISOString()}`,
+            );
+            return;
+          }
+
+          if (result?.skipped) {
+            await this.updateStepExecutionStatus(stepExecution.id, 'skipped', tenantDb);
+            continue;
+          }
+
           await this.updateStepExecutionStatus(stepExecution.id, 'completed', tenantDb);
         } catch (error: any) {
           this.logger.error(`Error executing step ${step.id}: ${error.message}`);
           await this.updateStepExecutionStatus(stepExecution.id, 'failed', tenantDb, error.message);
-          
+
           if (step.is_required) {
             // Required step failed, mark execution as failed
             await tenantDb.query(
@@ -528,14 +579,72 @@ export class ClinicalWorkflowService {
     }
   }
 
-  private async executeStep(step: any, triggerData: any, tenantDb: DataSource, stepExecutionId: string) {
+  /**
+   * Runs every minute, resuming any workflow 'wait' steps whose durable
+   * resume_at timestamp has passed. Replaces the old in-process
+   * setTimeout(...) block, which silently abandoned any wait step still
+   * pending when the process restarted.
+   */
+  @Cron(process.env.CLINICAL_WORKFLOW_RESUME_CRON || '* * * * *')
+  async resumeDueWorkflowWaits(): Promise<void> {
+    if (!this.tenantService) {
+      return;
+    }
+
+    const tenants = await this.tenantService.getAllActiveTenants();
+    for (const tenant of tenants) {
+      try {
+        const tenantDb = await this.tenantService.getTenantDatabase(tenant.subdomain);
+        if (!tenantDb) continue;
+        if (!(await this.hasTable(tenantDb, 'workflow_step_executions'))) continue;
+
+        const due = await tenantDb.query(
+          `SELECT wse.id AS step_execution_id, wse.execution_id, wse.step_order,
+                  we.workflow_id, we.trigger_entity_type, we.trigger_entity_id,
+                  we.patient_id, we.execution_data
+             FROM workflow_step_executions wse
+             JOIN workflow_executions we ON we.id = wse.execution_id
+            WHERE wse.status = 'running'
+              AND wse.resume_at IS NOT NULL
+              AND wse.resume_at <= NOW()
+              AND we.status = 'running'`,
+        );
+
+        for (const row of due) {
+          await this.updateStepExecutionStatus(row.step_execution_id, 'completed', tenantDb);
+          const triggerData = {
+            entityType: row.trigger_entity_type,
+            entityId: row.trigger_entity_id,
+            patientId: row.patient_id,
+            data: typeof row.execution_data === 'string' ? JSON.parse(row.execution_data || '{}') : (row.execution_data || {}),
+          };
+          await this.executeWorkflowSteps(row.workflow_id, row.execution_id, triggerData, tenantDb, row.step_order);
+        }
+      } catch (error: any) {
+        this.logger.error(`Error resuming workflow waits for tenant ${tenant.subdomain}: ${error.message}`);
+      }
+    }
+  }
+
+  private async executeStep(
+    step: any,
+    triggerData: any,
+    tenantDb: DataSource,
+    stepExecutionId: string,
+    workflowId: string,
+  ): Promise<{ paused: boolean; skipped?: boolean; resumeAt?: Date } | undefined> {
     const config = step.stepConfig || {};
 
+    if (UNIMPLEMENTED_STEP_TYPES.has(step.step_type)) {
+      // Belt-and-suspenders: addWorkflowStep/updateWorkflowStep already reject
+      // these at creation time, but a step created before that guard existed
+      // must fail loudly here rather than silently no-op and report success.
+      throw new Error(
+        `Step type '${step.step_type}' has no real backend implementation — this step cannot run.`,
+      );
+    }
+
     switch (step.step_type) {
-      case 'assign_role':
-        // Implementation would assign entity to role
-        this.logger.log(`Assigning ${config.entityType} ${config.entityId} to role ${config.role}`);
-        break;
 
       case 'send_notification':
         if (config.userIds && Array.isArray(config.userIds)) {
@@ -572,22 +681,12 @@ export class ClinicalWorkflowService {
         }
         break;
 
-      case 'create_task':
-        // Create task in system (would need task service)
-        this.logger.log(`Creating task: ${config.title} for user ${config.assignedTo}`);
-        break;
-
       case 'update_status':
         // Update entity status
         await tenantDb.query(
           `UPDATE ${config.entityType} SET status = $1, updated_at = NOW() WHERE id = $2`,
           [config.status, config.entityId],
         );
-        break;
-
-      case 'create_order':
-        // Create order (lab/imaging)
-        this.logger.log(`Creating ${config.orderType} order`);
         break;
 
       case 'assign_appointment':
@@ -598,22 +697,68 @@ export class ClinicalWorkflowService {
         );
         break;
 
-      case 'send_message':
-        // Send message (would need messaging service)
-        this.logger.log(`Sending message to ${config.recipientId}`);
+      case 'send_message': {
+        if (!config.recipientId && !config.recipientRole) {
+          this.logger.warn(`Workflow send_message step has no recipientId/recipientRole; skipping`);
+          break;
+        }
+        const workflow = await tenantDb.query(
+          `SELECT created_by FROM clinical_workflows WHERE id = $1`,
+          [workflowId],
+        );
+        const senderId = workflow[0]?.created_by;
+        if (!senderId) {
+          throw new Error(
+            `Cannot send workflow message: workflow ${workflowId} has no created_by user to send as`,
+          );
+        }
+        await tenantDb.query(
+          `INSERT INTO provider_messages
+             (sender_id, recipient_id, recipient_role, subject, message_text, message_type, priority, patient_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 'notification', $6, $7, NOW(), NOW())`,
+          [
+            senderId,
+            config.recipientId ?? null,
+            config.recipientRole ?? null,
+            config.subject ?? 'Workflow notification',
+            config.message ?? 'Workflow step executed',
+            config.priority ?? 'normal',
+            triggerData.patientId ?? null,
+          ],
+        );
+        this.logger.log(`Workflow message sent to ${config.recipientId ?? config.recipientRole}`);
         break;
+      }
 
       case 'wait':
-        // Wait for duration
+        // Durable wait: signal the caller to persist a resume_at timestamp and
+        // stop processing now, instead of blocking this request/process for
+        // the full duration. A cron job (resumeDueWorkflowWaits) picks it back
+        // up when due — survives restarts/redeploys, unlike an in-process
+        // setTimeout, which silently lost any pending wait on process exit.
         if (config.durationMinutes) {
-          await new Promise((resolve) => setTimeout(resolve, config.durationMinutes * 60 * 1000));
+          return {
+            paused: true,
+            resumeAt: new Date(Date.now() + config.durationMinutes * 60 * 1000),
+          };
         }
         break;
 
-      case 'condition':
-        // Conditional logic
-        this.logger.log(`Evaluating condition: ${config.field} ${config.operator} ${config.value}`);
+      case 'condition': {
+        // Branching to a specific thenStep/elseStep isn't supported by the
+        // sequential step runner; this evaluates the condition and skips the
+        // step (continuing to the next one in order) when it isn't met,
+        // rather than the previous behavior of always logging and continuing
+        // regardless of the outcome.
+        const matched = this.evaluateStepCondition(config, triggerData.data || {});
+        this.logger.log(
+          `Workflow condition ${config.field} ${config.operator} ${config.value} evaluated to ${matched}`,
+        );
+        if (!matched) {
+          return { paused: false, skipped: true };
+        }
         break;
+      }
 
       default:
         this.logger.warn(`Unknown step type: ${step.step_type}`);
@@ -655,6 +800,36 @@ export class ClinicalWorkflowService {
       }
     }
     return true;
+  }
+
+  private evaluateStepCondition(config: { field?: string; operator?: string; value?: any }, data: any): boolean {
+    if (!config.field) {
+      return true;
+    }
+
+    const actual = data[config.field];
+    switch (config.operator) {
+      case 'eq':
+      case undefined:
+        return actual === config.value;
+      case 'neq':
+        return actual !== config.value;
+      case 'gt':
+        return actual > config.value;
+      case 'gte':
+        return actual >= config.value;
+      case 'lt':
+        return actual < config.value;
+      case 'lte':
+        return actual <= config.value;
+      case 'contains':
+        return Array.isArray(actual) ? actual.includes(config.value) : String(actual ?? '').includes(String(config.value));
+      case 'exists':
+        return actual !== undefined && actual !== null;
+      default:
+        this.logger.warn(`Unknown condition operator: ${config.operator}`);
+        return false;
+    }
   }
 
   // ==================== WORKFLOW EXECUTIONS ====================
@@ -1231,7 +1406,7 @@ export class ClinicalWorkflowService {
 
     // Execute the step
     try {
-      await this.executeStep(step[0], execution[0].trigger_data, tenantDb, stepExecutionId);
+      await this.executeStep(step[0], execution[0].trigger_data, tenantDb, stepExecutionId, execution[0].workflow_id);
       
       return {
         success: true,

@@ -209,34 +209,35 @@ export class OutcomeCollectionService {
         `, [surface]);
         this.logger.log(`Release gate passed for ${surface} tenant ${tenantId}. Learning batch approved.`);
 
-        // Trigger CDSS retraining and verify new model version
+        // Queue approved feedback for a human-reviewed retraining cycle. This does
+        // NOT deploy a new model — there is no automated retrain/redeploy pipeline
+        // wired up (see cdss-service's claim_for_learning). Record the outcome
+        // honestly rather than fabricating a new model version.
+        let confirmedVersion = 'unknown';
         try {
           const claimRes = await this.cdssService.triggerOutcomeLearningRetraining(surface, [
             { tenant_id: tenantId, approved: true },
           ], tenantId);
-          const newModelId = (claimRes as any)?.model_id ?? 'unknown';
-          this.logger.log(`[retraining] Surface "${surface}" tenant "${tenantId}" → new model: ${newModelId}`);
+          this.logger.log(`[retraining] Surface "${surface}" tenant "${tenantId}": ${(claimRes as any)?.message ?? 'feedback queued'}`);
 
-          // Confirm version is readable back
           const versionRes = await this.cdssService.getModelVersion(surface, tenantId);
-          const confirmedVersion = (versionRes as any)?.version ?? 'unknown';
-          this.logger.log(`[retraining] Confirmed model version for ${surface}: ${confirmedVersion}`);
+          confirmedVersion = (versionRes as any)?.version ?? 'unknown';
         } catch (err) {
-          this.logger.warn(`[retraining] Could not trigger or verify retraining for ${surface}: ${err}`);
+          this.logger.warn(`[retraining] Could not queue feedback or read model version for ${surface}: ${err}`);
         }
 
-        // Record deployment
+        // Record that feedback was queued for review — not a deployment.
         const deploymentRepo = tenantDb.getRepository(ModelDeployment);
         await deploymentRepo.save(deploymentRepo.create({
           surface,
-          modelVersion: `v${Date.now()}`,
-          previousVersion: null,
+          modelVersion: confirmedVersion,
+          previousVersion: confirmedVersion,
           evalRunId: crypto.randomUUID(),
           releaseGateId: crypto.randomUUID(),
           accuracyBefore: prevAccuracy,
           accuracyAfter: accuracy,
-          deploymentMethod: 'auto',
-          status: 'deployed',
+          deploymentMethod: 'manual_review_required',
+          status: 'feedback_queued',
         }));
       }
     }

@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Param, Query, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, Req, UseGuards } from '@nestjs/common';
 import { InAppPaymentService } from '../services/in-app-payment.service';
+import { PatientJwtAuthGuard } from '../guards/patient-jwt-auth.guard';
 
 @Controller('payments/patient')
+@UseGuards(PatientJwtAuthGuard)
 export class InAppPaymentController {
   constructor(private readonly pay: InAppPaymentService) {}
 

@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
 import { SupplyChainAiService } from '../services/supply-chain-ai.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('supply-chain')
+@UseGuards(JwtAuthGuard)
 export class SupplyChainAiController {
   constructor(private readonly svc: SupplyChainAiService) {}
 

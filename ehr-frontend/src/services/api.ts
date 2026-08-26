@@ -5429,6 +5429,21 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  amendImagingReport: async (
+    tenantSlug: string,
+    token: string,
+    reportId: string,
+    amendmentData: { amendment_reason: string; findings: string; impression: string },
+  ) => {
+    const response = await ehrAxios.post(`/imaging/reports/${reportId}/amend`, amendmentData, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   // ===== ONCOLOGY API =====
 
   getOncologyCases: async (tenantSlug: string, token: string, params: any = {}) => {
@@ -10269,7 +10284,6 @@ export const documentManagementApi = {
   },
 
   getDocuments: async (patientId: string, filters: any, token: string, tenantSlug: string) => {
-    console.log('🔍 getDocuments called - NEW VERSION LOADED!', { patientId, filters });
     const response = await ehrAxios.get('/documents', {
       params: { patientId, ...filters },
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
@@ -12459,8 +12473,7 @@ export const cdssApi = {
   getFollowUpTiming: (payload: any, token: string, tenantSlug: string) =>
     ehrAxios.post('/cdss/discharge/follow-up-timing', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
   // ── Sprint 123: AI Self-Learning Hardening ────────────────────────────
-  runShadowEval: (payload: any, token: string, tenantSlug: string) =>
-    ehrAxios.post('/cdss/self-learning/shadow-eval', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
+  // (runShadowEval removed in S253 — was dead, unused, fabricated challenger data)
   runBiasAudit: (payload: any, token: string, tenantSlug: string) =>
     ehrAxios.post('/cdss/self-learning/bias-audit', payload, { headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug } }),
   detectAuditAnomalies: (payload: any, token: string, tenantSlug: string) =>

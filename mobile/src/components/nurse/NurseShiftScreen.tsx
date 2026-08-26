@@ -253,6 +253,7 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
               {SEV_OPTIONS.map((s) => (
                 <TouchableOpacity
                   key={s.key}
+                  testID={`escalate-severity-${s.key}`}
                   style={[
                     escStyles.sevChip,
                     severity === s.key && { backgroundColor: s.color + '22', borderColor: s.color },
@@ -276,6 +277,7 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
               ) : doctors.map((d) => (
                 <TouchableOpacity
                   key={d.id}
+                  testID={`escalate-doctor-${d.id}`}
                   style={[
                     escStyles.doctorRow,
                     doctor?.id === d.id && { borderColor: C.teal + '60', backgroundColor: C.teal + '10' },
@@ -303,6 +305,7 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
             <SectionHeader>Clinical Finding</SectionHeader>
             <Card style={escStyles.findingCard}>
               <TextInput
+                testID="escalate-finding-input"
                 value={finding}
                 onChangeText={setFinding}
                 placeholder="Describe the clinical finding requiring escalation..."
@@ -320,6 +323,7 @@ export const EscalateModal: React.FC<EscalateModalProps> = ({
 
             {/* Send */}
             <TouchableOpacity
+              testID="escalate-send"
               style={[
                 escStyles.sendBtn,
                 { backgroundColor: severity === 'CRITICAL' ? C.red : severity === 'HIGH' ? C.amber : C.blue },
@@ -439,6 +443,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onToggle, onEscalate }) => {
             <Text style={taskStyles.meta}>{task.bed} · {task.ward}</Text>
           </View>
           <TouchableOpacity
+            testID={`shift-task-checkbox-${task.id}`}
             style={[taskStyles.checkbox, task.done && { backgroundColor: C.teal, borderColor: C.teal }]}
             onPress={handleToggle}
             activeOpacity={0.75}
@@ -461,6 +466,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onToggle, onEscalate }) => {
           </View>
           {task.escalatable && !task.done && !task.escalated && (
             <TouchableOpacity
+              testID={`shift-task-escalate-${task.id}`}
               style={taskStyles.escalateBtn}
               onPress={() => onEscalate(task)}
               activeOpacity={0.8}
@@ -759,6 +765,7 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients, onSbar, onFall
             </View>
             <View style={triStyles.aiActions}>
               <TouchableOpacity
+                testID={`triage-sbar-${p.id}`}
                 style={triStyles.aiActionBtn}
                 onPress={() => onSbar({ id: p.id, name: p.name, age: p.age, complaint: p.complaint })}
                 activeOpacity={0.8}
@@ -767,6 +774,7 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients, onSbar, onFall
                 <Text style={[triStyles.aiActionText, { color: C.blue }]}>SBAR</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID={`triage-fallrisk-${p.id}`}
                 style={triStyles.aiActionBtn}
                 onPress={() => onFallRisk({ id: p.id, name: p.name, age: p.age, complaint: p.complaint })}
                 activeOpacity={0.8}
@@ -774,7 +782,7 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients, onSbar, onFall
                 <Icon name="escalate" size={12} color={C.amber} />
                 <Text style={[triStyles.aiActionText, { color: C.amber }]}>Fall Risk</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => openAssess(p)} activeOpacity={0.8} style={{ marginLeft: 'auto' }}>
+              <TouchableOpacity testID={`triage-assess-${p.id}`} onPress={() => openAssess(p)} activeOpacity={0.8} style={{ marginLeft: 'auto' }}>
                 <Text style={triStyles.assessLink}>Assess →</Text>
               </TouchableOpacity>
             </View>
@@ -794,7 +802,7 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients, onSbar, onFall
             <Text style={triStyles.assessComplaint}>{assessing.complaint}</Text>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={triStyles.assessContent}>
               <Text style={triStyles.assessField}>Chief complaint pre-filled from triage entry.</Text>
-              <TouchableOpacity style={triStyles.aiBtn} onPress={getAiSuggestion} activeOpacity={0.85} disabled={aiLoading}>
+              <TouchableOpacity testID="triage-assess-suggest-esi" style={triStyles.aiBtn} onPress={getAiSuggestion} activeOpacity={0.85} disabled={aiLoading}>
                 {aiLoading
                   ? <ActivityIndicator color="#000" size="small" />
                   : <><AiBadge text="AI Copilot" /><Text style={triStyles.aiBtnText}>Suggest ESI Score</Text></>
@@ -805,10 +813,10 @@ const TriageTab: React.FC<TriageProps> = ({ onEscalate, patients, onSbar, onFall
                   <Text style={[triStyles.aiEsiNum, { color: ESI_COLOR[aiESI] }]}>ESI {aiESI}</Text>
                   <Text style={triStyles.aiEsiLabel}>{ESI_LABEL[aiESI]} — AI-suggested based on presenting complaint</Text>
                   <View style={triStyles.aiEsiActions}>
-                    <TouchableOpacity style={triStyles.confirmBtn} onPress={closeAssess} activeOpacity={0.85}>
+                    <TouchableOpacity testID="triage-assess-confirm" style={triStyles.confirmBtn} onPress={closeAssess} activeOpacity={0.85}>
                       <Text style={triStyles.confirmBtnText}>Confirm & Submit</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={triStyles.overrideBtn} activeOpacity={0.8}>
+                    <TouchableOpacity testID="triage-assess-override" style={triStyles.overrideBtn} activeOpacity={0.8}>
                       <Text style={triStyles.overrideBtnText}>Override</Text>
                     </TouchableOpacity>
                   </View>
@@ -941,14 +949,22 @@ export const NurseShiftScreen: React.FC = () => {
   }, []);
 
   const toggleTask = useCallback((id: string) => {
+    let markedDone = false;
     setTasks((prev) => {
       const updated = prev.map((t) => t.id === id ? { ...t, done: !t.done } : t);
-      const task = updated.find(t => t.id === id);
-      if (task?.done) {
-        NurseWorklistService.completeTask(id).catch(() => {});
-      }
+      markedDone = updated.find(t => t.id === id)?.done ?? false;
       return updated;
     });
+
+    if (markedDone) {
+      NurseWorklistService.completeTask(id).catch(() => {
+        // Revert the optimistic checkmark — the backend never recorded this
+        // as complete, so leaving it checked would lie to the nurse about
+        // the task's real state.
+        setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: false } : t)));
+        Alert.alert('Task not saved', 'Could not mark this task complete. Please try again.');
+      });
+    }
   }, []);
 
   const openEscalate = useCallback((nameOrTask: string | ShiftTask) => {
@@ -1029,6 +1045,7 @@ export const NurseShiftScreen: React.FC = () => {
           return (
             <TouchableOpacity
               key={tab.key}
+              testID={`shift-tab-${tab.key}`}
               style={[mainStyles.tabChip, isActive && { backgroundColor: C.purple + '20', borderColor: C.purple + '60' }]}
               onPress={() => setActiveTab(tab.key)}
               activeOpacity={0.75}
@@ -1054,7 +1071,7 @@ export const NurseShiftScreen: React.FC = () => {
       />
 
       {/* ── SBAR Sheet ─────────────────────────────────────────────────────── */}
-      <Modal visible={!!sbarPatient} transparent animationType="slide" onRequestClose={() => setSbarPatient(null)}>
+      <Modal testID="sbar-modal" visible={!!sbarPatient} transparent animationType="slide" onRequestClose={() => setSbarPatient(null)}>
         <View style={aiSheetStyles.backdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSbarPatient(null)} />
           <View style={[aiSheetStyles.sheet, { paddingBottom: insets.bottom + 16 }]}>

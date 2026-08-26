@@ -1,8 +1,10 @@
-import { Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
 import { ModelRegistryService, ShadowEvaluationReviewRequest } from '../services/model-registry.service';
 import { FederatedLearningService } from '../services/federated-learning.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('model-registry')
+@UseGuards(JwtAuthGuard)
 export class ModelRegistryController {
   constructor(
     private readonly registry: ModelRegistryService,

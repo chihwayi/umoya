@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, Inject, forwardRef, BadRequestException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { DataSource } from 'typeorm';
 import { LabResultsMatchingService } from './lab-results-matching.service';
 import { HivMonitoringService } from './hiv-monitoring.service';
@@ -365,7 +366,7 @@ export class HivService {
       throw new BadRequestException('testResult is required');
     }
 
-    const testNumber = `HIV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const testNumber = `HIV-${Date.now()}-${randomBytes(5).toString('hex')}`;
     const kitExpiryValue = testKitExpiry ? testKitExpiry : null;
     const recencyExpiryValue = recencyKitExpiry ? recencyKitExpiry : null;
     const nextTestDateValue = nextTestDueDate ? nextTestDueDate : null;
@@ -756,7 +757,7 @@ export class HivService {
       return existing[0];
     }
 
-    const enrollmentNumber = `ENR-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const enrollmentNumber = `ENR-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`;
 
     const result = await tenantDb.query(
       `

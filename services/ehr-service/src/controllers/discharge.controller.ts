@@ -1,7 +1,10 @@
-import { Controller, Post, Get, Param, Req } from '@nestjs/common';
+import { Controller, Post, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { DischargeDocumentService } from '../services/discharge-document.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { PatientJwtAuthGuard } from '../guards/patient-jwt-auth.guard';
 
 @Controller('encounters/:encounterId/discharge')
+@UseGuards(JwtAuthGuard)
 export class DischargeController {
   constructor(private readonly discharge: DischargeDocumentService) {}
 
@@ -17,6 +20,7 @@ export class DischargeController {
 }
 
 @Controller('patient/discharge-documents')
+@UseGuards(PatientJwtAuthGuard)
 export class PatientDischargeController {
   constructor(private readonly discharge: DischargeDocumentService) {}
 

@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
 import { PgxService } from '../services/pgx.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('pgx')
+@UseGuards(JwtAuthGuard)
 export class PgxController {
   constructor(private readonly svc: PgxService) {}
 

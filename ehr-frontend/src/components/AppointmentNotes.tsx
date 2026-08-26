@@ -186,7 +186,6 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
           
         } catch (parseError) {
           // If JSON parsing fails, treat as plain text
-          console.log('Notes are not in JSON format, treating as plain text');
           setNotes(appointment.notes || '');
         }
       } else {
@@ -326,12 +325,9 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
         parentAppointmentId: appointment.id, // Link to original appointment
         createdBy: currentUser.id
       };
-      console.log('🔍 Creating follow-up appointment:', followUpData);
-      
       // Create the follow-up appointment
-      const response = await ehrApi.createAppointment(followUpData, token, tenantSlug);
-      
-      console.log('✅ Follow-up appointment created:', response.data);
+      await ehrApi.createAppointment(followUpData, token, tenantSlug);
+
       showSuccess('Success', 'Follow-up appointment created successfully');
       
     } catch (error) {

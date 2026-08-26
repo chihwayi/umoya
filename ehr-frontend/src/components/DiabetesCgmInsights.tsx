@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Clock3, RadioTower, RefreshCw, Waves, Zap } from 'lucide-react';
+import { Activity, Clock3, RefreshCw, Waves, Zap } from 'lucide-react';
 import { diabetesApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
@@ -21,14 +21,12 @@ const DiabetesCgmInsights: React.FC<DiabetesCgmInsightsProps> = ({
   tenantSlug,
   token,
   registryId,
-  patientId,
   initialSummaries,
   onUpdated,
 }) => {
-  const { showError, showSuccess } = useNotification();
+  const { showError } = useNotification();
   const [summaries, setSummaries] = useState<any[]>(initialSummaries ?? []);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
 
   const latest = summaries[0] ?? null;
 
@@ -57,35 +55,6 @@ const DiabetesCgmInsights: React.FC<DiabetesCgmInsightsProps> = ({
   useEffect(() => {
     fetchSummaries();
   }, [fetchSummaries]);
-
-  const handleSync = async () => {
-    if (!registryId || !patientId || !tenantSlug || !token) {
-      showError('Missing registry', 'Select a registry before syncing CGM data.');
-      return;
-    }
-    setSyncing(true);
-    try {
-      const now = Date.now();
-      const entries = Array.from({ length: 5 }).map((_, index) => ({
-        value: 90 + Math.round(Math.random() * 70),
-        timestamp: new Date(now - index * 5 * 60 * 1000).toISOString(),
-        trend: index === 0 ? 'flat' : index % 2 ? 'rise' : 'fall',
-      }));
-      await diabetesApi.syncCgmData(registryId, token, tenantSlug, {
-        patientId,
-        deviceType: latest?.device_type ?? 'cgm',
-        deviceId: latest?.device_id ?? undefined,
-        entries,
-      });
-      showSuccess('CGM data synced', 'Fresh sensor data has been ingested.');
-      await fetchSummaries();
-    } catch (error) {
-      console.error('Failed to sync CGM data', error);
-      showError('Unable to sync CGM data', 'Please retry shortly.');
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const tir = clampPercent(latest?.time_in_range_70_180);
   const above = clampPercent(latest?.time_above_range_180);
@@ -158,14 +127,6 @@ const DiabetesCgmInsights: React.FC<DiabetesCgmInsightsProps> = ({
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow hover:bg-emerald-500 disabled:opacity-50"
-          >
-            <RadioTower className="h-3.5 w-3.5" />
-            Sync CGM
-          </button>
         </div>
       </div>
 
@@ -178,7 +139,9 @@ const DiabetesCgmInsights: React.FC<DiabetesCgmInsightsProps> = ({
 
       {!loading && !summaries.length && (
         <div className="p-6 text-sm text-slate-500">
-          No CGM summaries found. Connect a device or record a summary to unlock this view.
+          No CGM summaries found yet. This view aggregates readings recorded through glucose
+          monitoring entries or a connected device below — no automatic vendor sync is
+          configured for this tenant.
         </div>
       )}
 

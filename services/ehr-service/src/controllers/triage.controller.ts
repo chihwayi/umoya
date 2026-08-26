@@ -1,7 +1,9 @@
-import { Controller, Post, Get, Body, Param, Req } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Req } from '@nestjs/common';
 import { TriageService } from '../services/triage.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('triage')
+@UseGuards(JwtAuthGuard)
 export class TriageController {
   constructor(private readonly triageService: TriageService) {}
 

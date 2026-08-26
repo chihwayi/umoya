@@ -191,6 +191,7 @@ const ThreadView: React.FC<{
 
       <View style={styles.composeBar}>
         <TextInput
+          testID="patient-messages-compose-input"
           style={styles.composeInput}
           placeholder="Write a secure reply…"
           placeholderTextColor={C.textMuted}
@@ -199,6 +200,7 @@ const ThreadView: React.FC<{
           multiline
         />
         <TouchableOpacity
+          testID="patient-messages-send"
           style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
           onPress={send}
           disabled={!text.trim()}
@@ -252,7 +254,9 @@ export const PatientMessagesScreen: React.FC<PatientMessagesScreenProps> = ({ na
       .map(message => message.id);
 
     for (const id of unreadIds) {
-      MessagesService.patientMarkRead(id).catch(() => {});
+      MessagesService.patientMarkRead(id).catch((err) => {
+        console.warn('Failed to mark message read on server', err);
+      });
     }
 
     if (unreadIds.length > 0) {
@@ -297,7 +301,7 @@ export const PatientMessagesScreen: React.FC<PatientMessagesScreenProps> = ({ na
             </Card>
           }
           renderItem={({ item }) => (
-            <TouchableOpacity style={styles.conversationRow} onPress={() => openConversation(item)} activeOpacity={0.85}>
+            <TouchableOpacity testID={`patient-messages-conversation-${item.id}`} style={styles.conversationRow} onPress={() => openConversation(item)} activeOpacity={0.85}>
               <Avatar initials={item.initials} />
               <View style={styles.conversationMeta}>
                 <View style={styles.conversationTop}>

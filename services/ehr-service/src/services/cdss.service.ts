@@ -5039,10 +5039,7 @@ export class CdssService {
   }
 
   // ── Sprint 123: AI Self-Learning Hardening ────────────────────────────
-  async runShadowEval(payload: any, tenantId?: string): Promise<any> {
-    try { return await this.postWithPolicy<any>('self_learning', '/self-learning/shadow-eval', payload, 5000, tenantId); }
-    catch { return { divergence_flagged: false, abstained: true }; }
-  }
+  // (runShadowEval removed in S253 — dead code, see cdss.controller.ts note)
 
   async runBiasAudit(payload: any, tenantId?: string): Promise<any> {
     try { return await this.postWithPolicy<any>('self_learning', '/self-learning/bias-audit', payload, 6000, tenantId); }

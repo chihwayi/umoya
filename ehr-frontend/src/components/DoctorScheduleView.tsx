@@ -58,27 +58,22 @@ const DoctorScheduleView: React.FC<DoctorScheduleViewProps> = ({
   const fetchAppointments = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('🔍 DoctorScheduleView - Fetching appointments independently');
-      
+
       // For now, we'll fetch appointments for the current date only
       // The backend API only supports single date filtering, not date ranges
       const response = await ehrApi.getAppointments(token, tenantSlug, {
         date: formatDateForAPI(formatDateForInput(currentDate))
       });
-      
-      console.log('🔍 DoctorScheduleView - All appointments from API:', response.data.appointments);
-      
+
       // Get current user from localStorage for filtering
       const userData = localStorage.getItem('ehr_user');
       const currentUser = userData ? JSON.parse(userData) : null;
-      console.log('🔍 DoctorScheduleView - Current user:', currentUser);
-      
+
       // Filter by doctor if user is available
-      const filteredAppointments = currentUser 
+      const filteredAppointments = currentUser
         ? response.data.appointments.filter((apt: any) => apt.doctor.id === currentUser.id)
         : response.data.appointments;
-      
-      console.log('🔍 DoctorScheduleView - Filtered appointments:', filteredAppointments);
+
       setAppointments(filteredAppointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);

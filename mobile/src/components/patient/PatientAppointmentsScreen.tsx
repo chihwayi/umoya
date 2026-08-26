@@ -135,7 +135,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
     const color = STATUS_COLOR[item.status] ?? C.textMuted;
     const { date, time } = formatDateTime(item);
     return (
-      <Card style={[s.card, { borderLeftColor: color, borderLeftWidth: 3 }]}>
+      <Card testID={`patient-appointments-item-${item.id}`} style={[s.card, { borderLeftColor: color, borderLeftWidth: 3 }]}>
         <View style={s.cardRow}>
           <View style={[s.iconBox, { backgroundColor: color + '20' }]}>
             <Icon name={item.isTelemedicine ? 'telehealth' : 'calendar'} size={20} color={color} />
@@ -159,7 +159,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
           </View>
         )}
         {canCancel(item.status) && (
-          <TouchableOpacity style={s.cancelBtn} onPress={() => handleCancel(item.id)} activeOpacity={0.7}>
+          <TouchableOpacity testID={`patient-appointments-cancel-${item.id}`} style={s.cancelBtn} onPress={() => handleCancel(item.id)} activeOpacity={0.7}>
             <Text style={s.cancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         )}
@@ -194,7 +194,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
       )}
 
       {/* FAB */}
-      <TouchableOpacity style={[s.fab, { bottom: insets.bottom + 24 }]} onPress={() => setShowBook(true)} activeOpacity={0.85}>
+      <TouchableOpacity testID="patient-appointments-book-fab" style={[s.fab, { bottom: insets.bottom + 24 }]} onPress={() => setShowBook(true)} activeOpacity={0.85}>
         <Icon name="plus" size={24} color="#fff" />
       </TouchableOpacity>
 
@@ -211,6 +211,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
               {TYPE_OPTIONS.map(t => (
                 <TouchableOpacity
                   key={t}
+                  testID={`patient-appointments-book-type-${t}`}
                   style={[s.typeChip, bookType === t && s.typeChipActive]}
                   onPress={() => setBookType(t)}
                   activeOpacity={0.8}
@@ -222,6 +223,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
 
             <Text style={s.fieldLabel}>Preferred Date</Text>
             <TextInput
+              testID="patient-appointments-book-date-input"
               style={s.input}
               placeholder="e.g. 2026-04-10"
               placeholderTextColor={C.textMuted}
@@ -240,7 +242,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
               numberOfLines={3}
             />
 
-            <TouchableOpacity style={s.submitBtn} onPress={handleBook} activeOpacity={0.85} disabled={bookLoading}>
+            <TouchableOpacity testID="patient-appointments-book-submit" style={s.submitBtn} onPress={handleBook} activeOpacity={0.85} disabled={bookLoading}>
               {bookLoading
                 ? <ActivityIndicator color="#fff" />
                 : <Text style={s.submitText}>{t('common.submit')}</Text>

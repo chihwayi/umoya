@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { HouseholdRiskService } from '../services/household-risk.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('household')
+@UseGuards(JwtAuthGuard)
 export class HouseholdRiskController {
   constructor(private readonly household: HouseholdRiskService) {}
 

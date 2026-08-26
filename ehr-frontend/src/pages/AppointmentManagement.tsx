@@ -150,13 +150,9 @@ const AppointmentManagement: React.FC = () => {
 
   const fetchAppointments = async () => {
     try {
-      console.log('🔄 Frontend: fetchAppointments called');
       const token = localStorage.getItem('ehr_token');
-      console.log('🔑 Token exists:', !!token);
-      console.log('🏢 Tenant slug:', tenantSlug);
-      
+
       if (!token || !tenantSlug) {
-        console.log('❌ Missing token or tenant slug');
         return;
       }
       
@@ -192,21 +188,14 @@ const AppointmentManagement: React.FC = () => {
       }
       
       if (statusFilter !== 'all') params.status = statusFilter;
-      
-      console.log('📋 Request params:', params);
-      console.log('🌐 Making API call...');
-      
+
       const response = await ehrApi.getAppointments(token, tenantSlug, params);
-      console.log('✅ API response:', response);
-      console.log('📊 Response data:', response.data);
-      console.log('📊 Appointments in response:', response.data.appointments || response.data || []);
-      
+
       let allAppointments = response.data.appointments || response.data || [];
-      
+
       // Filter appointments by current doctor if user is a doctor
       if (currentUser && currentUser.role === 'doctor') {
         allAppointments = allAppointments.filter((apt: Appointment) => apt.doctor.id === currentUser.id);
-        console.log('🔍 Filtered appointments for doctor:', allAppointments.length);
       }
       
       setAppointments(allAppointments);

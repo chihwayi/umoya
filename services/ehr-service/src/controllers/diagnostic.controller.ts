@@ -1,8 +1,13 @@
-import { Controller, Get, Post, Param, Res } from '@nestjs/common';
+import { Controller, Get, Post, Param, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { TenantService } from '../services/tenant.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 
 @Controller('diagnostic')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin', 'super_admin')
 export class DiagnosticController {
   constructor(private tenantService: TenantService) {}
 

@@ -66,4 +66,27 @@ describe('StreamingDiagnosisService', () => {
     expect(res.write).toHaveBeenCalledWith('event: done\ndata: {}\n\n');
     expect(res.end).toHaveBeenCalled();
   });
+
+  it('emits a real error event instead of fabricated diagnoses when CDSS fails', async () => {
+    const cdssService = {
+      diagnosisAssist: jest.fn().mockRejectedValue(new Error('CDSS service unreachable')),
+    };
+    const service = new StreamingDiagnosisService(cdssService as any);
+    const res = {
+      setHeader: jest.fn(),
+      flushHeaders: jest.fn(),
+      write: jest.fn(),
+      end: jest.fn(),
+    } as any;
+
+    await service.streamDifferential('cough and fever', 'patient-1', 'session-1', res, 'tenant-a');
+
+    const writtenPayloads = res.write.mock.calls.map((call: any[]) => call[0]).join('');
+    expect(writtenPayloads).toContain('event: error');
+    expect(writtenPayloads).toContain('diagnosis_unavailable');
+    expect(writtenPayloads).not.toContain('Upper respiratory tract infection');
+    expect(writtenPayloads).not.toContain('Influenza');
+    expect(writtenPayloads).not.toContain('COVID-19');
+    expect(res.end).toHaveBeenCalled();
+  });
 });

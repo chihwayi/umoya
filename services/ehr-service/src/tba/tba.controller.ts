@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Headers, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Headers, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { TbaService } from './tba.service';
 import { TbaRegister } from './entities/tba-register.entity';
 import { HomeBirthRecord } from './entities/home-birth-record.entity';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('tba')
+@UseGuards(JwtAuthGuard)
 export class TbaController {
   constructor(private readonly tbaService: TbaService) {}
 

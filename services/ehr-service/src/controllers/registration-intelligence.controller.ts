@@ -1,11 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { UseGuards, Body, Controller, Get, Param, Patch, Post, Query, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RegistrationIntelligenceService } from '../services/registration-intelligence.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @ApiTags('Registration Intelligence')
 @Controller('registration-intelligence')
+@UseGuards(JwtAuthGuard)
 export class RegistrationIntelligenceController {
   constructor(private readonly registrationIntelligenceService: RegistrationIntelligenceService) {}
 

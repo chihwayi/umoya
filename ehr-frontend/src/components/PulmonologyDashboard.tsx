@@ -37,6 +37,7 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
   const [peakFlow, setPeakFlow] = useState<any[]>([]);
   const [oxygen, setOxygen] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // CDSS
   const [spiroResult, setSpiroResult] = useState<any>(null);
@@ -54,16 +55,29 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const [sp, cp, as_, pf, ox] = await Promise.all([
-        cdssApi.getPulmonologySpirometry(patientId, tenantSubdomain),
-        cdssApi.getPulmonologyCopd(patientId, tenantSubdomain),
-        cdssApi.getPulmonologyAsthma(patientId, tenantSubdomain),
-        cdssApi.getPulmonologyPeakFlow(patientId, tenantSubdomain),
-        cdssApi.getPulmonologyOxygen(patientId, tenantSubdomain),
-      ]);
-      setSpirometry(sp); setCopd(cp); setAsthma(as_); setPeakFlow(pf); setOxygen(ox);
-    } catch { /* ignore */ }
+    setLoadError(null);
+    const labels = ['spirometry', 'COPD', 'asthma', 'peak flow', 'oxygen therapy'];
+    const results = await Promise.allSettled([
+      cdssApi.getPulmonologySpirometry(patientId, tenantSubdomain),
+      cdssApi.getPulmonologyCopd(patientId, tenantSubdomain),
+      cdssApi.getPulmonologyAsthma(patientId, tenantSubdomain),
+      cdssApi.getPulmonologyPeakFlow(patientId, tenantSubdomain),
+      cdssApi.getPulmonologyOxygen(patientId, tenantSubdomain),
+    ]);
+
+    const setters = [setSpirometry, setCopd, setAsthma, setPeakFlow, setOxygen];
+    const failedLabels: string[] = [];
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        setters[i](result.value);
+      } else {
+        failedLabels.push(labels[i]);
+      }
+    });
+
+    if (failedLabels.length > 0) {
+      setLoadError(`Failed to load: ${failedLabels.join(', ')}. Data shown may be incomplete.`);
+    }
     setLoading(false);
   }, [patientId, tenantSubdomain]);
 
@@ -81,6 +95,17 @@ export default function PulmonologyDashboard({ patientId, providerId, tenantSubd
 
   return (
     <div>
+      {loadError && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            {loadError}
+          </div>
+          <button onClick={load} className="text-xs font-semibold text-red-700 hover:underline flex-shrink-0">
+            Retry
+          </button>
+        </div>
+      )}
       {/* Tabs */}
       <div className="flex gap-1 flex-wrap mb-6 border-b border-slate-200">
         {(['overview', 'spirometry', 'copd', 'asthma', 'peakflow', 'oxygen'] as Tab[]).map(t => (

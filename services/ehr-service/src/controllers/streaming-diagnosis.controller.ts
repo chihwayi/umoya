@@ -1,9 +1,11 @@
-import { Controller, Post, Body, Headers, Res, Get, Query, Request } from '@nestjs/common';
+import { UseGuards, Controller, Post, Body, Headers, Res, Get, Query, Request } from '@nestjs/common';
 import { Response } from 'express';
 import { StreamingDiagnosisService } from '../services/streaming-diagnosis.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('diagnosis')
+@UseGuards(JwtAuthGuard)
 export class StreamingDiagnosisController {
   constructor(private readonly svc: StreamingDiagnosisService) {}
 

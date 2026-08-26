@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Param, Headers, Query } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Body, Param, Headers, Query } from '@nestjs/common';
 import { SmartDefaultsService } from '../services/smart-defaults.service';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('forms/intelligence')
+@UseGuards(JwtAuthGuard)
 export class SmartDefaultsController {
   constructor(private readonly svc: SmartDefaultsService) {}
 

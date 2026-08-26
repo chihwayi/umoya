@@ -26,6 +26,7 @@ export function PatientHomeScreen({ navigation }: Props) {
       {pendingQuery.loading && <Text style={styles.loadingText}>{t("common.loading")}</Text>}
       {(pendingQuery.data?.length ?? 0) > 0 && (
         <TouchableOpacity
+          testID="patient-home-pending-questionnaires"
           onPress={() => navigation.navigate("PHQuestionnaires")}
           style={styles.pendingQuestBanner}
         >
@@ -39,6 +40,7 @@ export function PatientHomeScreen({ navigation }: Props) {
         {navItems.map((item) => (
           <TouchableOpacity
             key={item.route}
+            testID={`patient-home-nav-${item.route}`}
             style={styles.navCard}
             onPress={() => navigation.navigate(item.route)}
             activeOpacity={0.85}

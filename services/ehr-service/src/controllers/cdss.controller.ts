@@ -327,11 +327,8 @@ export class CdssController {
   }
 
   // ── Sprint 123: AI Self-Learning Hardening ────────────────────────────
-  @Post('self-learning/shadow-eval')
-  @Roles('nurse', 'doctor', 'admin')
-  async runShadowEval(@Body() body: any, @Request() req: RequestWithTenant) {
-    return this.cdssService.runShadowEval(body, req.tenantId);
-  }
+  // (self-learning/shadow-eval removed in S253 — see cdss-service/main.py note;
+  // real shadow evaluation is the FL-round-based CdssOutcomeBatchService pipeline)
 
   @Post('self-learning/bias-audit')
   @Roles('nurse', 'doctor', 'admin')
