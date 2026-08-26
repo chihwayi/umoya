@@ -2154,13 +2154,6 @@ export class DatabaseProvisioningService {
         statements: () => this.getSprint61CdssOutcomeFeedbackStatements(),
       },
       {
-        id: 'sprint62_proactive_care_gaps',
-        label: 'Sprint 62 - Proactive Care Gap Engine',
-        version: '2026.03.18',
-        description: 'care_gaps, care_gap_rules, care_gap_actions tables for proactive population health',
-        statements: () => this.getSprint62ProactiveCareGapsStatements(),
-      },
-      {
         id: 'sprint63_ambient_ai',
         label: 'Sprint 63 - Ambient AI Transcription',
         version: '2026.03.18',
@@ -7904,6 +7897,21 @@ export class DatabaseProvisioningService {
         version: '2026.06.29.1',
         description: 'MDSR committee reviews, audit classifications, action plans, and closure tracking',
         statements: () => [
+          // maternity_deliveries never had a CREATE TABLE anywhere — mdsr.service.ts
+          // was querying a phantom table (found via test:smoke, 2026-08-26). This is
+          // a standalone MDSR register, distinct from the clinical `deliveries` table
+          // (which has no tenant_id and a different column shape).
+          `CREATE TABLE IF NOT EXISTS maternity_deliveries (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id       TEXT NOT NULL,
+            patient_id      UUID NOT NULL,
+            delivery_date   DATE,
+            baby_outcome    TEXT,
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_maternity_deliveries_tenant ON maternity_deliveries(tenant_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_maternity_deliveries_patient ON maternity_deliveries(patient_id)`,
           `ALTER TABLE maternity_deliveries ADD COLUMN IF NOT EXISTS maternal_outcome TEXT`,
           `ALTER TABLE maternity_deliveries ADD COLUMN IF NOT EXISTS death_date DATE`,
           `ALTER TABLE maternity_deliveries ADD COLUMN IF NOT EXISTS death_cause_primary TEXT`,
@@ -7960,10 +7968,16 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_care_gap_tracking',
         label: 'Care Gap Closure Tracking',
-        version: '2026.06.29.1',
+        version: '2026.08.26.1',
         description: 'Tracks whether population health care gaps are resolved',
         statements: () => [
-          `CREATE TABLE IF NOT EXISTS care_gaps (
+          // Renamed from care_gaps/care_gap_interventions (2026-08-26): that name
+          // collided with the unrelated, separately-schemad care_gaps table used
+          // by care-gap-engine.service.ts (Sprint 182) — CREATE TABLE IF NOT EXISTS
+          // meant whichever bundle ran first silently won, breaking the other
+          // feature. Found via test:smoke. See also the removed, fully-unused
+          // sprint62_proactive_care_gaps bundle, which was also colliding here.
+          `CREATE TABLE IF NOT EXISTS population_care_gaps (
             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             tenant_id       TEXT NOT NULL,
             patient_id      UUID NOT NULL,
@@ -7979,12 +7993,12 @@ export class DatabaseProvisioningService {
             closure_method  TEXT,
             auto_detected   BOOLEAN DEFAULT TRUE
           )`,
-          `CREATE INDEX IF NOT EXISTS idx_gap_patient ON care_gaps(patient_id, gap_type)`,
-          `CREATE INDEX IF NOT EXISTS idx_gap_status ON care_gaps(status, detected_at)`,
-          `CREATE INDEX IF NOT EXISTS idx_gap_tenant ON care_gaps(tenant_id, detected_at)`,
-          `CREATE UNIQUE INDEX IF NOT EXISTS idx_gap_open_unique ON care_gaps(tenant_id, patient_id, gap_type)
+          `CREATE INDEX IF NOT EXISTS idx_pop_gap_patient ON population_care_gaps(patient_id, gap_type)`,
+          `CREATE INDEX IF NOT EXISTS idx_pop_gap_status ON population_care_gaps(status, detected_at)`,
+          `CREATE INDEX IF NOT EXISTS idx_pop_gap_tenant ON population_care_gaps(tenant_id, detected_at)`,
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_pop_gap_open_unique ON population_care_gaps(tenant_id, patient_id, gap_type)
             WHERE status NOT IN ('gap_closed','patient_declined','cannot_contact','clinically_excluded')`,
-          `CREATE TABLE IF NOT EXISTS care_gap_interventions (
+          `CREATE TABLE IF NOT EXISTS population_care_gap_interventions (
             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             gap_id          UUID NOT NULL,
             tenant_id       TEXT NOT NULL,
@@ -7994,7 +8008,7 @@ export class DatabaseProvisioningService {
             outcome         TEXT,
             notes           TEXT
           )`,
-          `CREATE INDEX IF NOT EXISTS idx_gap_interventions_gap ON care_gap_interventions(gap_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_pop_gap_interventions_gap ON population_care_gap_interventions(gap_id)`,
         ],
       },
 
@@ -8054,7 +8068,7 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_ai_governance_log',
         label: 'AI Model Governance Audit Log',
-        version: 1,
+        version: '1',
         description: 'Formal review workflow for AI model drift, retraining, and retirement',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS ai_model_governance_log (
@@ -8075,7 +8089,7 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_equity_analytics',
         label: 'Equity Analytics Dimensions',
-        version: 1,
+        version: '1',
         description: 'Equity disaggregation results and heat matrix caching',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS equity_kpi_results (
@@ -8113,7 +8127,7 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_benchmarking',
         label: 'Multi-Facility Benchmarking Snapshots',
-        version: 1,
+        version: '1',
         description: 'Per-facility metric snapshots for percentile benchmarking against district/national peers',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS facility_benchmark_snapshots (
@@ -8141,7 +8155,7 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_dhis2_validation',
         label: 'DHIS2 Validation Feedback Cache',
-        version: 1,
+        version: '1',
         description: 'Stores pulled DHIS2 data values and outlier comparison results',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS dhis2_validation_snapshots (
@@ -8166,7 +8180,7 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_s243_research_portal',
         label: 'De-identified Research Data Portal (S243)',
-        version: 1,
+        version: '1',
         description: 'Research query definitions, time-limited tokens, and access audit log for HIPAA Safe Harbor exports',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS research_queries (
@@ -8212,15 +8226,15 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_oncology_outcomes',
         label: 'Oncology Outcome Tracking (S239)',
-        version: 1,
+        version: '1',
         description: 'Survival cohorts, treatment abandonment, chemotherapy near-miss events',
         statements: () => [
-          `ALTER TABLE oncology_patients ADD COLUMN IF NOT EXISTS diagnosis_date DATE`,
-          `ALTER TABLE oncology_patients ADD COLUMN IF NOT EXISTS cancer_stage TEXT`,
-          `ALTER TABLE oncology_patients ADD COLUMN IF NOT EXISTS cancer_type_icd10 TEXT`,
-          `ALTER TABLE oncology_patients ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'`,
-          `ALTER TABLE oncology_patients ADD COLUMN IF NOT EXISTS last_status_date DATE`,
-          `ALTER TABLE oncology_patients ADD COLUMN IF NOT EXISTS overall_survival_days INT`,
+          `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS diagnosis_date DATE`,
+          `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS cancer_stage TEXT`,
+          `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS cancer_type_icd10 TEXT`,
+          `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'`,
+          `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS last_status_date DATE`,
+          `ALTER TABLE oncology_cases ADD COLUMN IF NOT EXISTS overall_survival_days INT`,
           `CREATE TABLE IF NOT EXISTS oncology_treatment_abandonments (
             id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             patient_id       UUID NOT NULL,
@@ -8253,7 +8267,7 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_oem_longitudinal',
         label: 'Occupational Medicine — Longitudinal & Incidents (S239)',
-        version: 1,
+        version: '1',
         description: 'Hearing loss trajectory, lung function decline, workplace incident root cause',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS oem_longitudinal_measurements (
@@ -8287,19 +8301,19 @@ export class DatabaseProvisioningService {
       {
         id: 'nc_pharmacy_intelligence',
         label: 'Pharmacy Intelligence Reports (S240)',
-        version: 1,
+        version: '1',
         description: 'Formulary adherence columns, waste events, AMS approvals, cost tracking',
         statements: () => [
-          `ALTER TABLE drug_dispensing ADD COLUMN IF NOT EXISTS prescribed_drug_code TEXT`,
-          `ALTER TABLE drug_dispensing ADD COLUMN IF NOT EXISTS dispensed_drug_code TEXT`,
-          `ALTER TABLE drug_dispensing ADD COLUMN IF NOT EXISTS substitution_reason TEXT`,
-          `ALTER TABLE drug_dispensing ADD COLUMN IF NOT EXISTS on_formulary BOOLEAN NOT NULL DEFAULT TRUE`,
-          `ALTER TABLE drug_dispensing ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(10,2)`,
-          `ALTER TABLE drug_dispensing ADD COLUMN IF NOT EXISTS drug_class TEXT`,
-          `ALTER TABLE pharmacy_stock_items ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(10,2)`,
-          `ALTER TABLE pharmacy_stock_items ADD COLUMN IF NOT EXISTS drug_class TEXT`,
-          `ALTER TABLE pharmacy_stock_items ADD COLUMN IF NOT EXISTS on_formulary BOOLEAN NOT NULL DEFAULT TRUE`,
-          `ALTER TABLE pharmacy_stock_items ADD COLUMN IF NOT EXISTS atc_code TEXT`,
+          `ALTER TABLE pharmacy_dispensing_items ADD COLUMN IF NOT EXISTS prescribed_drug_code TEXT`,
+          `ALTER TABLE pharmacy_dispensing_items ADD COLUMN IF NOT EXISTS dispensed_drug_code TEXT`,
+          `ALTER TABLE pharmacy_dispensing_items ADD COLUMN IF NOT EXISTS substitution_reason TEXT`,
+          `ALTER TABLE pharmacy_dispensing_items ADD COLUMN IF NOT EXISTS on_formulary BOOLEAN NOT NULL DEFAULT TRUE`,
+          `ALTER TABLE pharmacy_dispensing_items ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(10,2)`,
+          `ALTER TABLE pharmacy_dispensing_items ADD COLUMN IF NOT EXISTS drug_class TEXT`,
+          `ALTER TABLE pharmacy_inventory ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(10,2)`,
+          `ALTER TABLE pharmacy_inventory ADD COLUMN IF NOT EXISTS drug_class TEXT`,
+          `ALTER TABLE pharmacy_inventory ADD COLUMN IF NOT EXISTS on_formulary BOOLEAN NOT NULL DEFAULT TRUE`,
+          `ALTER TABLE pharmacy_inventory ADD COLUMN IF NOT EXISTS atc_code TEXT`,
           `CREATE TABLE IF NOT EXISTS pharmacy_waste_events (
             id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             tenant_id         TEXT NOT NULL,
@@ -21713,44 +21727,6 @@ RECOMMENDATIONS:
     ];
   }
 
-  private getSprint62ProactiveCareGapsStatements(): string[] {
-    return [
-      `CREATE TABLE IF NOT EXISTS care_gap_rules (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        rule_code TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        description TEXT,
-        condition_type TEXT,
-        logic JSONB NOT NULL DEFAULT '{}',
-        priority TEXT CHECK (priority IN ('low','medium','high','critical')) DEFAULT 'medium',
-        is_active BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )`,
-      `CREATE TABLE IF NOT EXISTS care_gaps (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        patient_id UUID NOT NULL,
-        rule_id UUID REFERENCES care_gap_rules(id) ON DELETE SET NULL,
-        rule_code TEXT,
-        gap_description TEXT,
-        due_date DATE,
-        status TEXT CHECK (status IN ('open','in_progress','resolved','dismissed')) DEFAULT 'open',
-        priority TEXT CHECK (priority IN ('low','medium','high','critical')) DEFAULT 'medium',
-        assigned_to UUID,
-        resolved_at TIMESTAMPTZ,
-        resolution_note TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )`,
-      `CREATE INDEX IF NOT EXISTS idx_care_gaps_patient ON care_gaps (patient_id, status)`,
-      `CREATE TABLE IF NOT EXISTS care_gap_actions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        gap_id UUID REFERENCES care_gaps(id) ON DELETE CASCADE,
-        action_type TEXT,
-        performed_by UUID,
-        performed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        notes TEXT
-      )`,
-    ];
-  }
 
   private getSprint63AmbientAiStatements(): string[] {
     return [
