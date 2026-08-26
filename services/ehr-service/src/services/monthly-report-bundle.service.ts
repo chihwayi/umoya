@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import * as AdmZip from 'adm-zip';
+import AdmZip = require('adm-zip');
 import { ReportExportService, ReportDefinition } from './report-export.service';
 
 @Injectable()

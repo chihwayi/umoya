@@ -981,6 +981,7 @@ export class Dhis2Service {
     profile: AggregateProfileKey,
     tenantDb: DataSource,
     period: string,
+    tenantId?: string,
   ): Promise<Record<string, number>> {
     const { startDate, endDate } = this.resolveMonthlyPeriodBounds(period);
 
@@ -2371,14 +2372,14 @@ export class Dhis2Service {
 
     // ── S238: Care Gap profile ────────────────────────────────────────────────
     if (profile === 'care_gap_monthly') {
-      const period = startDate.toISOString().slice(0, 7).replace('-', '');
+      const period = startDate.slice(0, 7).replace('-', '');
       const [openRow, closedRow, avgRow] = await Promise.all([
-        tenantDb.query(`SELECT COUNT(*)::int AS n FROM care_gaps WHERE tenant_id=$1 AND status='open'`, [context.tenantId]).catch(() => [{ n: 0 }]),
-        tenantDb.query(`SELECT COUNT(*)::int AS n FROM care_gaps WHERE tenant_id=$1 AND TO_CHAR(closed_at,'YYYYMM')=$2`, [context.tenantId, period]).catch(() => [{ n: 0 }]),
+        tenantDb.query(`SELECT COUNT(*)::int AS n FROM population_care_gaps WHERE tenant_id=$1 AND status='open'`, [tenantId]).catch(() => [{ n: 0 }]),
+        tenantDb.query(`SELECT COUNT(*)::int AS n FROM population_care_gaps WHERE tenant_id=$1 AND TO_CHAR(closed_at,'YYYYMM')=$2`, [tenantId, period]).catch(() => [{ n: 0 }]),
         tenantDb.query(
-          `SELECT ROUND(AVG(EXTRACT(DAY FROM (closed_at - opened_at))))::int AS avg_days
-           FROM care_gaps WHERE tenant_id=$1 AND TO_CHAR(closed_at,'YYYYMM')=$2`,
-          [context.tenantId, period]).catch(() => [{ avg_days: 0 }]),
+          `SELECT ROUND(AVG(EXTRACT(DAY FROM (closed_at - detected_at))))::int AS avg_days
+           FROM population_care_gaps WHERE tenant_id=$1 AND TO_CHAR(closed_at,'YYYYMM')=$2`,
+          [tenantId, period]).catch(() => [{ avg_days: 0 }]),
       ]);
       const totalOpenGaps = Number(openRow[0]?.n ?? 0);
       const gapsClosedThisMonth = Number(closedRow[0]?.n ?? 0);
@@ -2393,12 +2394,12 @@ export class Dhis2Service {
 
     // ── S238: Equity profile ──────────────────────────────────────────────────
     if (profile === 'equity_monthly') {
-      const period = startDate.toISOString().slice(0, 7).replace('-', '');
+      const equityPeriod = startDate.slice(0, 7).replace('-', '');
       const rows = await tenantDb.query(
         `SELECT kpi_name, MIN(rate) AS worst, MAX(rate) AS best
          FROM equity_kpi_results WHERE tenant_id=$1 AND period=$2
          GROUP BY kpi_name`,
-        [context.tenantId, period],
+        [tenantId, equityPeriod],
       ).catch(() => []);
       const getRatio = (kpi: string) => {
         const r = rows.find((x: any) => x.kpi_name === kpi);
@@ -2416,17 +2417,17 @@ export class Dhis2Service {
 
     // ── S238: AI Performance profile ─────────────────────────────────────────
     if (profile === 'ai_performance_monthly') {
-      const period = startDate.toISOString().slice(0, 7);
+      const aiPeriod = startDate.slice(0, 7);
       const [snapRows, predRow] = await Promise.all([
         tenantDb.query(
           `SELECT model_name, f1_score, auc_roc, drift_flag
            FROM ai_model_performance_snapshots WHERE tenant_id=$1 AND snapshot_period=$2`,
-          [context.tenantId, period],
+          [tenantId, aiPeriod],
         ).catch(() => []),
         tenantDb.query(
           `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE actual_outcome IS NOT NULL)::int AS verified
            FROM ai_predictions WHERE tenant_id=$1 AND TO_CHAR(prediction_date,'YYYY-MM')=$2`,
-          [context.tenantId, period],
+          [tenantId, aiPeriod],
         ).catch(() => [{ total: 0, verified: 0 }]),
       ]);
       const avgF1 = snapRows.length > 0
@@ -3688,7 +3689,7 @@ export class Dhis2Service {
         ...(report.dataElements || {}),
       };
 
-      const computedMetrics = await this.computeAggregateMetrics(profile, tenantDb, period);
+      const computedMetrics = await this.computeAggregateMetrics(profile, tenantDb, period, tenantId);
 
       const payloadDataValues =
         Array.isArray(report.dataValues) && report.dataValues.length > 0

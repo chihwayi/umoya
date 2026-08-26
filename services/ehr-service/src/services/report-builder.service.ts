@@ -8,7 +8,7 @@ import {
 } from '../dto/analytics.dto';
 import { ReportTemplate } from '../entities/report-template.entity';
 import { ReportExecution, ExecutionType, ExecutionStatus } from '../entities/report-execution.entity';
-import { ReportExportService } from './report-export.service';
+import { ReportExportService, ReportDefinition } from './report-export.service';
 import { FileStorageService } from './file-storage.service';
 
 @Injectable()
@@ -24,6 +24,43 @@ export class ReportBuilderService {
     if (!tenantDb) {
       throw new BadRequestException('Tenant database connection unavailable');
     }
+  }
+
+  private normalizeColumns(columns: any[]): { key: string; label: string }[] {
+    return columns.map((column) =>
+      typeof column === 'string'
+        ? { key: column, label: column }
+        : { key: column.key, label: column.label ?? column.key },
+    );
+  }
+
+  private buildReportDefinition(title: string, columns: any[], data: Record<string, any>[]): ReportDefinition {
+    return {
+      title,
+      facility: 'N/A',
+      period: new Date().toISOString().slice(0, 7),
+      generatedBy: 'Report Builder',
+      generatedAt: new Date(),
+      sections: [
+        {
+          type: 'table',
+          title,
+          columns: this.normalizeColumns(columns),
+          rows: data,
+        },
+      ],
+    };
+  }
+
+  private buildCsv(columns: any[], data: Record<string, any>[]): string {
+    const normalized = this.normalizeColumns(columns);
+    const escapeCell = (value: any) => {
+      const text = value === null || value === undefined ? '' : String(value);
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const header = normalized.map((column) => escapeCell(column.label)).join(',');
+    const rows = data.map((row) => normalized.map((column) => escapeCell(row[column.key])).join(','));
+    return [header, ...rows].join('\n');
   }
 
   /**
@@ -257,20 +294,17 @@ export class ReportBuilderService {
         try {
           switch (format) {
             case 'pdf':
-              fileBuffer = await this.reportExportService.exportToPdf(data, columns, template.name, {
-                templateId,
-                executionId,
-              });
+              fileBuffer = await this.reportExportService.generatePdf(
+                this.buildReportDefinition(template.name, columns, data),
+              );
               break;
             case 'excel':
-              fileBuffer = await this.reportExportService.exportToExcel(data, columns, template.name, {
-                templateId,
-                executionId,
-              });
+              fileBuffer = await this.reportExportService.generateXlsx(
+                this.buildReportDefinition(template.name, columns, data),
+              );
               break;
             case 'csv':
-              const csvContent = await this.reportExportService.exportToCsv(data, columns, template.name);
-              fileBuffer = Buffer.from(csvContent, 'utf-8');
+              fileBuffer = Buffer.from(this.buildCsv(columns, data), 'utf-8');
               break;
           }
 
