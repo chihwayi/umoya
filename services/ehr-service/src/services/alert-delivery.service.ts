@@ -28,14 +28,14 @@ export class AlertDeliveryService {
 
   // ── Main broadcast ─────────────────────────────────────────────────────────
 
-  async broadcastCriticalAlert(subdomain: string, alert: AlertPayload): Promise<void> {
+  async broadcastCriticalAlert(subdomain: string, alert: AlertPayload): Promise<{ delivered: boolean; recipientCount: number }> {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
 
     // Find on-call staff for this patient
     const staff = await this.getOnCallStaff(ds, alert.patientId);
     if (!staff.length) {
       this.logger.warn(`No on-call staff found for patient ${alert.patientId}`);
-      return;
+      return { delivered: false, recipientCount: 0 };
     }
 
     for (const member of staff) {
@@ -71,6 +71,8 @@ export class AlertDeliveryService {
         smsSent,
       });
     }
+
+    return { delivered: true, recipientCount: staff.length };
   }
 
   async acknowledge(subdomain: string, alertId: string, userId: string): Promise<ClinicalAlertDelivery | null> {

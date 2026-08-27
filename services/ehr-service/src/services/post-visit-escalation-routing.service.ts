@@ -14,7 +14,10 @@ export class PostVisitEscalationRoutingService {
   private readonly logger = new Logger(PostVisitEscalationRoutingService.name);
 
   constructor(
-    @Optional() private readonly alertDelivery?: AlertDeliveryService,
+    // Not @Optional() — both are always registered in ehr.module.ts. Making alertDelivery
+    // optional meant a module-wiring mistake would silently disable critical/high alert
+    // delivery at runtime instead of failing loudly at startup (S264).
+    private readonly alertDelivery: AlertDeliveryService,
     @Optional() private readonly tenantService?: TenantService,
   ) {}
 
@@ -74,27 +77,8 @@ export class PostVisitEscalationRoutingService {
 
     const escalationId: string = esc?.id ?? null;
 
-    if (
-      this.alertDelivery &&
-      (signal.escalationLevel === 'critical' || signal.escalationLevel === 'high')
-    ) {
-      const subdomain = await this.resolveTenantSubdomain(db);
-      if (subdomain) {
-        const alertPayload: AlertPayload = {
-          alertType: 'post_visit_escalation',
-          sourceEntityId: sessionId,
-          patientId,
-          severity: signal.escalationLevel,
-          message: signal.summary,
-          payload: {
-            findings: signal.findings,
-            taskId,
-            escalationId,
-            sourceService: 'PostVisitEscalationRoutingService',
-          },
-        };
-        await this.alertDelivery.broadcastCriticalAlert(subdomain, alertPayload);
-      }
+    if (signal.escalationLevel === 'critical' || signal.escalationLevel === 'high') {
+      await this.deliverAlert(sessionId, patientId, escalationId, taskId, signal, db);
     }
 
     this.logger.log(
@@ -152,6 +136,67 @@ export class PostVisitEscalationRoutingService {
        )`,
       [escalationId, userId],
     );
+  }
+
+  /**
+   * Delivers the critical/high-severity alert and records the outcome on the escalation
+   * row rather than letting a failure vanish. Deliberately does NOT rethrow — the nurse
+   * task and escalation DB record already exist and must stand regardless of whether the
+   * push/SMS/websocket fan-out succeeds; a nurse can still find the task by working the
+   * open-escalations list even if the alert failed to reach anyone in real time.
+   */
+  private async deliverAlert(
+    sessionId: string,
+    patientId: string,
+    escalationId: string,
+    taskId: string,
+    signal: EscalationSignal,
+    db: any,
+  ): Promise<void> {
+    let failureReason: string | null = null;
+
+    const subdomain = await this.resolveTenantSubdomain(db);
+    if (!subdomain) {
+      failureReason = 'Could not resolve tenant subdomain for alert delivery';
+    } else {
+      const alertPayload: AlertPayload = {
+        alertType: 'post_visit_escalation',
+        sourceEntityId: sessionId,
+        patientId,
+        severity: signal.escalationLevel,
+        message: signal.summary,
+        payload: {
+          findings: signal.findings,
+          taskId,
+          escalationId,
+          sourceService: 'PostVisitEscalationRoutingService',
+        },
+      };
+      try {
+        const result = await this.alertDelivery.broadcastCriticalAlert(subdomain, alertPayload);
+        if (!result.delivered) {
+          failureReason = 'No on-call staff found to receive the alert';
+        }
+      } catch (err: any) {
+        failureReason = err?.message || 'broadcastCriticalAlert threw an unknown error';
+      }
+    }
+
+    if (failureReason) {
+      this.logger.error(
+        `Alert delivery failed for escalation ${escalationId} (session ${sessionId}, level ${signal.escalationLevel}): ${failureReason}`,
+      );
+      await db
+        .query(
+          `UPDATE post_visit_escalations
+           SET alert_delivery_failed = true, alert_delivery_error = $2, updated_at = now()
+           WHERE id = $1`,
+          [escalationId, failureReason],
+        )
+        .catch((updateErr: any) =>
+          this.logger.error(`Also failed to record the alert-delivery failure itself: ${updateErr?.message}`),
+        );
+    }
   }
 
   private async resolveTenantSubdomain(db: any): Promise<string | null> {

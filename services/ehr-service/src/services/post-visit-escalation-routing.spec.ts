@@ -6,7 +6,7 @@ describe('PostVisitEscalationRoutingService', () => {
   let db: any;
 
   beforeEach(() => {
-    alertDelivery = { broadcastCriticalAlert: jest.fn().mockResolvedValue(undefined) };
+    alertDelivery = { broadcastCriticalAlert: jest.fn().mockResolvedValue({ delivered: true, recipientCount: 1 }) };
     db = {
       query: jest.fn().mockResolvedValue([{ id: 'uuid-1' }]),
       options: { database: 'clinic_test_db' },
@@ -52,6 +52,39 @@ describe('PostVisitEscalationRoutingService', () => {
       findings: ['borderline glucose'],
     }, db);
     expect(alertDelivery.broadcastCriticalAlert).not.toHaveBeenCalled();
+  });
+
+  it('records the failure instead of losing it when broadcastCriticalAlert throws (S264)', async () => {
+    alertDelivery.broadcastCriticalAlert = jest.fn().mockRejectedValue(new Error('gateway unreachable'));
+
+    const id = await service.routeEscalation('session-1', 'patient-1', {
+      escalationLevel: 'critical',
+      summary: 'Critical finding',
+      findings: ['severe hypoxaemia'],
+    }, db);
+
+    // The escalation record itself must still exist — delivery failing shouldn't undo it.
+    expect(id).toBeDefined();
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('alert_delivery_failed = true'),
+      expect.arrayContaining([id, 'gateway unreachable']),
+    );
+  });
+
+  it('records the failure when no on-call staff are found (S264)', async () => {
+    alertDelivery.broadcastCriticalAlert = jest.fn().mockResolvedValue({ delivered: false, recipientCount: 0 });
+
+    const id = await service.routeEscalation('session-1', 'patient-1', {
+      escalationLevel: 'high',
+      summary: 'High finding',
+      findings: ['tachycardia'],
+    }, db);
+
+    expect(id).toBeDefined();
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('alert_delivery_failed = true'),
+      expect.arrayContaining([id, 'No on-call staff found to receive the alert']),
+    );
   });
 
   it('acknowledges escalation and updates nurse task', async () => {

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import 'multer';
 import axios from 'axios';
@@ -316,6 +316,7 @@ interface PostVisitMobileEvent {
 
 @Injectable()
 export class PostVisitService {
+  private readonly logger = new Logger(PostVisitService.name);
   private readonly postVisitSchemaReady = new WeakSet<DataSource>();
   private readonly postVisitSchemaInFlight = new WeakMap<DataSource, Promise<void>>();
 
@@ -6895,7 +6896,13 @@ export class PostVisitService {
         findings: Array.isArray(detection.triggerTerms) ? detection.triggerTerms : [],
         recommendedAction: detection.recommendedAction,
       };
-      await this.escalationRouter.routeEscalation(sessionId, patientId, signal, tenantDb).catch(() => {});
+      // Not rethrown — the patient must still get an answer even if the secondary
+      // nurse-task/alert routing fails — but no longer silently invisible (S264).
+      await this.escalationRouter.routeEscalation(sessionId, patientId, signal, tenantDb).catch((err: any) => {
+        this.logger.error(
+          `Escalation routing failed for session ${sessionId} (severity ${signal.escalationLevel}): ${err?.message}`,
+        );
+      });
     }
 
     const assistantAnswer = await this.buildGroundedCompanionAnswer({

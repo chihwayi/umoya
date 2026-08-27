@@ -520,7 +520,7 @@ export class DatabaseProvisioningService {
       {
         id: 'post_visit_escalations',
         label: 'Post-Visit AI Escalation Routing',
-        version: '2026.05.27.1',
+        version: '2026.08.26.1',
         description: 'Tracks escalation signals from AI post-visit classification — routed to nurse tasks and alerts',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS post_visit_escalations (
@@ -546,6 +546,12 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_pve_patient ON post_visit_escalations (patient_id, created_at DESC)`,
           `CREATE INDEX IF NOT EXISTS idx_pve_status ON post_visit_escalations (status) WHERE status IN ('detected','routed')`,
           `CREATE INDEX IF NOT EXISTS idx_pve_session ON post_visit_escalations (post_visit_session_id)`,
+          // S264 (2026-08-26): alert-delivery failures (broadcastCriticalAlert throwing, or
+          // finding no on-call staff) previously vanished into a blanket .catch(() => {}) in
+          // the caller with no trace anywhere. These columns make delivery outcome queryable.
+          `ALTER TABLE post_visit_escalations ADD COLUMN IF NOT EXISTS alert_delivery_failed BOOLEAN NOT NULL DEFAULT false`,
+          `ALTER TABLE post_visit_escalations ADD COLUMN IF NOT EXISTS alert_delivery_error TEXT`,
+          `CREATE INDEX IF NOT EXISTS idx_pve_alert_failed ON post_visit_escalations (alert_delivery_failed) WHERE alert_delivery_failed = true`,
         ],
       },
       {
