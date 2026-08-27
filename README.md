@@ -518,6 +518,9 @@ cd mobile && npm run test:e2e
 | [docs/PROVISIONING_GUIDE.md](./docs/PROVISIONING_GUIDE.md) | Tenant/system DB provisioning workflow |
 | [docs/CDSS_GUIDELINE_SEARCH_TUNING.md](./docs/CDSS_GUIDELINE_SEARCH_TUNING.md) | Guideline-search RAG tuning + GPU-time tweaks |
 | [docs/UMOYA_BRAND.md](./docs/UMOYA_BRAND.md) | Brand and design guidelines |
+| [docs/AI-INTELLIGENCE-AUDIT-ROADMAP.md](./docs/AI-INTELLIGENCE-AUDIT-ROADMAP.md) | S262+ roadmap — 22 findings across CDSS/PostVisit AI/Voice-Ambient/AI-recommendation subsystems |
+| [docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md](./docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md) | S274+ roadmap — COHSASA-accreditation-aligned gaps (incident reporting, staff credentialing, rostering, biomedical equipment) |
+| [docs/COMBINED-SPRINT-SEQUENCING.md](./docs/COMBINED-SPRINT-SEQUENCING.md) | Execution order for S262–S278 across both roadmaps above — single source of truth for what's next |
 | [DEMO_CREDENTIALS.md](./DEMO_CREDENTIALS.md) | Demo accounts provisioned per tenant |
 | [.env.example](./.env.example) | All required environment variables |
 

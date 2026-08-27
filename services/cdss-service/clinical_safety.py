@@ -56,7 +56,7 @@ def extract_vitals(vitals: Optional[Dict[str, Any]]) -> Dict[str, Optional[float
         "systolic": systolic,
         "diastolic": diastolic,
         "spo2": _to_float(v.get("spo2") or v.get("oxygenSaturation") or v.get("oxygen_saturation")),
-        "heart_rate": _to_float(v.get("heartRate") or v.get("pulse") or v.get("heart_rate")),
+        "heart_rate": _to_float(v.get("heartRate") or v.get("pulse") or v.get("heart_rate") or v.get("hr")),
         "temperature": _to_float(v.get("temperature") or v.get("temp")),
         "respiratory_rate": _to_float(v.get("respiratoryRate") or v.get("respiratory_rate") or v.get("rr")),
         "glucose": _normalize_glucose_mmol(_to_float(v.get("bloodGlucose") or v.get("glucose") or v.get("bgl"))),

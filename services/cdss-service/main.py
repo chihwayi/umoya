@@ -4315,14 +4315,25 @@ async def suggest_diagnosis(request: DiagnosisRequest):
         age=request.age,
         gender=request.gender
     )
-    
+
+    red_flags = list(result['red_flags'])
+    acute_safety = None
+    try:
+        from clinical_safety import evaluate
+        acute_safety = evaluate(request.vitals or {})
+        if acute_safety.get("acute_deterioration"):
+            red_flags.insert(0, "ACUTE DETERIORATION DETECTED — immediate clinician review required before acting on these diagnosis suggestions.")
+    except Exception as _gov_err:  # never let the governor break the endpoint
+        print(f"[CDSS] safety governor skipped in /diagnosis/suggest: {_gov_err}")
+
     return {
         "suggested_diagnoses": result['suggested_diagnoses'],
         "confidence_scores": result['confidence_scores'],
         "recommended_tests": result['recommended_tests'],
-        "red_flags": result['red_flags'],
+        "red_flags": red_flags,
         "vitals_clues": result.get('vitals_clues', []),
-        "source": "rule_based_cdss"
+        "source": "rule_based_cdss",
+        "acute_safety": acute_safety,
     }
 
 
@@ -4431,11 +4442,22 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
             source="safe_fallback",
             model_trace=fallback_trace,
         )
+        fallback_red_flags = []
+        fallback_acute_safety = None
+        try:
+            from clinical_safety import evaluate
+            fallback_acute_safety = evaluate(request.vitals or {})
+            if fallback_acute_safety.get("acute_deterioration"):
+                fallback_red_flags.append("ACUTE DETERIORATION DETECTED — immediate clinician review required. The AI diagnosis assistant is unavailable; this deterministic check still applies.")
+        except Exception as _gov_err:
+            print(f"[CDSS] safety governor skipped in /diagnosis/suggest/intelligent fallback: {_gov_err}")
+
         return {
             "suggested_diagnoses": [],
             "confidence": transparency["confidence"],
             "recommended_tests": [],
-            "red_flags": [],
+            "red_flags": fallback_red_flags,
+            "acute_safety": fallback_acute_safety,
             "vitals_clues": [],
             "guideline_citations": [],
             "source": "safe_fallback",
@@ -4476,11 +4498,22 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         model_trace=result.get("model_trace", {}),
     )
 
+    red_flags = list(result.get('red_flags', []))
+    acute_safety = None
+    try:
+        from clinical_safety import evaluate
+        acute_safety = evaluate(request.vitals or {})
+        if acute_safety.get("acute_deterioration"):
+            red_flags.insert(0, "ACUTE DETERIORATION DETECTED — immediate clinician review required before acting on these diagnosis suggestions. This is distinct from the AI governance safety_gate below.")
+    except Exception as _gov_err:  # never let the governor break the endpoint
+        print(f"[CDSS] safety governor skipped in /diagnosis/suggest/intelligent: {_gov_err}")
+
     return {
         "suggested_diagnoses": result.get('suggested_diagnoses', []),
         "confidence": transparency["confidence"],
         "recommended_tests": result.get('recommended_tests', []),
-        "red_flags": result.get('red_flags', []),
+        "red_flags": red_flags,
+        "acute_safety": acute_safety,
         "vitals_clues": result.get('vitals_clues', []),
         "guideline_citations": result.get('guideline_citations', []),
         "source": result.get('source', 'hybrid_cdss_ai'),
@@ -14756,6 +14789,23 @@ async def discharge_intelligence(request: DischargeIntelligenceRequest):
         interventions.append("Consider transitional care management (TCM) billing enrollment")
         interventions.append("Home health referral if eligible")
 
+    # ── Phase-0 patient-safety governor ───────────────────────────────────────
+    # LACE+ only scores 30-day readmission risk from admission-time factors — it has
+    # no vitals input, so a patient who is acutely decompensating AT the moment of
+    # discharge can still score "low readmission risk". Block discharge-readiness
+    # framing while the patient is acutely deteriorating, same as /risk/calculate.
+    acute_safety = None
+    discharge_safe = True
+    try:
+        from clinical_safety import evaluate
+        acute_safety = evaluate(request.vitals_at_discharge or {})
+        if acute_safety.get("acute_deterioration"):
+            discharge_safe = False
+            interventions.insert(0, "ACUTE DETERIORATION DETECTED at discharge vitals — do not discharge. Immediate clinician review required.")
+            interventions += [a["action"] for a in acute_safety.get("syndrome_alerts", [])]
+    except Exception as _gov_err:  # never let the governor break the endpoint
+        print(f"[CDSS] safety governor skipped in /discharge/intelligence: {_gov_err}")
+
     return {
         "readmission_risk": readmission_risk,
         "readmission_probability_30d": round(readmission_probability, 2),
@@ -14766,7 +14816,9 @@ async def discharge_intelligence(request: DischargeIntelligenceRequest):
         "abstained": False,
         "model_id": "discharge-intelligence-v1",
         "surface": "discharge_intelligence",
-        "citations": [{"title": "LACE+ Readmission Risk Index", "source": "van Walraven C et al., CMAJ 2010", "isPrimary": True}]
+        "citations": [{"title": "LACE+ Readmission Risk Index", "source": "van Walraven C et al., CMAJ 2010", "isPrimary": True}],
+        "acute_safety": acute_safety,
+        "discharge_safe": discharge_safe,
     }
 
 
