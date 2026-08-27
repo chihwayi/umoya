@@ -440,3 +440,39 @@ def apply_safety_governor(response_data: Dict[str, Any], vitals: Optional[Dict[s
         "Resolve the acute episode before discharge planning."
     )
     return response_data
+
+
+# ── diagnosis/discharge safety checks (S262) ────────────────────────────────────────
+# apply_safety_governor() above is shaped specifically for the readmission-risk payload
+# (risk_level/overall_score/readmission_assessment). /diagnosis/suggest,
+# /diagnosis/suggest/intelligent, and /discharge/intelligence have different response
+# shapes, so these two lightweight helpers reuse the same underlying evaluate() without
+# assuming those fields exist. Deliberately pure (no FastAPI/main.py imports) so they can
+# be unit-tested without pulling in the full ML dependency stack main.py loads.
+def diagnosis_acute_check(vitals: Optional[Dict[str, Any]],
+                          altered_mentation: bool = False) -> Dict[str, Any]:
+    """For /diagnosis/suggest and /diagnosis/suggest/intelligent. Returns the acute_safety
+    evaluation plus a red-flag string to prepend when the patient is acutely deteriorating
+    (None otherwise)."""
+    ev = evaluate(vitals, altered_mentation)
+    warning = (
+        "ACUTE DETERIORATION DETECTED — immediate clinician review required before "
+        "acting on these diagnosis suggestions."
+        if ev["acute_deterioration"] else None
+    )
+    return {"acute_safety": ev, "warning": warning}
+
+
+def discharge_acute_check(vitals_at_discharge: Optional[Dict[str, Any]],
+                          altered_mentation: bool = False) -> Dict[str, Any]:
+    """For /discharge/intelligence. LACE+ only scores 30-day readmission risk from
+    admission-time factors — it has no vitals input, so a patient who is acutely
+    decompensating AT the moment of discharge can still score "low readmission risk".
+    Returns whether discharge is currently safe plus interventions to prepend."""
+    ev = evaluate(vitals_at_discharge, altered_mentation)
+    if not ev["acute_deterioration"]:
+        return {"acute_safety": ev, "discharge_safe": True, "interventions": []}
+
+    interventions = ["ACUTE DETERIORATION DETECTED at discharge vitals — do not discharge. Immediate clinician review required."]
+    interventions += [a["action"] for a in ev.get("syndrome_alerts", [])]
+    return {"acute_safety": ev, "discharge_safe": False, "interventions": interventions}

@@ -16,7 +16,7 @@ Within each phase, sprints are additionally ordered to respect **file overlap**:
 |---|---|---|---|---|---|
 | **Phase 1 — Critical AI/safety fixes** | | | | | |
 | 1 | S262 | CDSS safety governor universal enforcement | AI-INTELLIGENCE | — | **Done (2026-08-26)** |
-| 2 | S263 | Real LLM SOAP note generation | AI-INTELLIGENCE | S262 (same file) | Not started |
+| 2 | S263 | Real LLM SOAP note generation | AI-INTELLIGENCE | S262 (same file) | **Done (2026-08-26)** |
 | 3 | S264 | PostVisit escalation delivery reliability | AI-INTELLIGENCE | — | Not started |
 | 4 | S265 | PostVisit escalation schema consolidation | AI-INTELLIGENCE | S264 (same files) | Not started |
 | 5 | S266 | PostVisit ingestion cron hardening | AI-INTELLIGENCE | — | Not started |

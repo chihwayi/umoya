@@ -4319,10 +4319,11 @@ async def suggest_diagnosis(request: DiagnosisRequest):
     red_flags = list(result['red_flags'])
     acute_safety = None
     try:
-        from clinical_safety import evaluate
-        acute_safety = evaluate(request.vitals or {})
-        if acute_safety.get("acute_deterioration"):
-            red_flags.insert(0, "ACUTE DETERIORATION DETECTED — immediate clinician review required before acting on these diagnosis suggestions.")
+        from clinical_safety import diagnosis_acute_check
+        check = diagnosis_acute_check(request.vitals or {})
+        acute_safety = check["acute_safety"]
+        if check["warning"]:
+            red_flags.insert(0, check["warning"])
     except Exception as _gov_err:  # never let the governor break the endpoint
         print(f"[CDSS] safety governor skipped in /diagnosis/suggest: {_gov_err}")
 
@@ -4445,10 +4446,11 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
         fallback_red_flags = []
         fallback_acute_safety = None
         try:
-            from clinical_safety import evaluate
-            fallback_acute_safety = evaluate(request.vitals or {})
-            if fallback_acute_safety.get("acute_deterioration"):
-                fallback_red_flags.append("ACUTE DETERIORATION DETECTED — immediate clinician review required. The AI diagnosis assistant is unavailable; this deterministic check still applies.")
+            from clinical_safety import diagnosis_acute_check
+            fallback_check = diagnosis_acute_check(request.vitals or {})
+            fallback_acute_safety = fallback_check["acute_safety"]
+            if fallback_check["warning"]:
+                fallback_red_flags.append(fallback_check["warning"] + " The AI diagnosis assistant is unavailable; this deterministic check still applies.")
         except Exception as _gov_err:
             print(f"[CDSS] safety governor skipped in /diagnosis/suggest/intelligent fallback: {_gov_err}")
 
@@ -4501,10 +4503,11 @@ async def intelligent_diagnosis(request: IntelligentDiagnosisRequest, req: Reque
     red_flags = list(result.get('red_flags', []))
     acute_safety = None
     try:
-        from clinical_safety import evaluate
-        acute_safety = evaluate(request.vitals or {})
-        if acute_safety.get("acute_deterioration"):
-            red_flags.insert(0, "ACUTE DETERIORATION DETECTED — immediate clinician review required before acting on these diagnosis suggestions. This is distinct from the AI governance safety_gate below.")
+        from clinical_safety import diagnosis_acute_check
+        check = diagnosis_acute_check(request.vitals or {})
+        acute_safety = check["acute_safety"]
+        if check["warning"]:
+            red_flags.insert(0, check["warning"] + " This is distinct from the AI governance safety_gate below.")
     except Exception as _gov_err:  # never let the governor break the endpoint
         print(f"[CDSS] safety governor skipped in /diagnosis/suggest/intelligent: {_gov_err}")
 
@@ -5008,28 +5011,48 @@ async def transcription_stream(request: AmbientChunkRequest):
         try:
             # Use the diagnosis engine to extract clinical entities
             diag_result = await run_in_threadpool(
-                diagnostic_assistant.suggest_diagnoses,
-                symptoms=transcript_text,
-                context=request.context or {},
+                diagnostic_assistant.suggest_diagnosis,
+                symptoms=[transcript_text],
             )
-            raw_diagnoses = diag_result.get("diagnoses", []) if isinstance(diag_result, dict) else []
+            raw_diagnoses = diag_result.get("suggested_diagnoses", []) if isinstance(diag_result, dict) else []
             entities["diagnoses"] = [
-                {"text": d.get("name", ""), "icd": d.get("icd_code"), "confidence": d.get("confidence", 0.5)}
+                {"text": d.get("diagnosis", ""), "icd": d.get("icd10"), "confidence": d.get("probability", 0.5)}
                 for d in raw_diagnoses[:5]
             ]
         except Exception as e:
             print(f"[AmbientStream] entity extraction error: {e}")
 
-        # Simple keyword-based draft note update (production would use LLM)
-        lower = transcript_text.lower()
-        if any(w in lower for w in ["complain", "present", "feeling", "pain", "symptom"]):
-            draft_note["subjective"] = transcript_text.strip()
-        if any(w in lower for w in ["exam", "appears", "vital", "blood pressure", "temperature"]):
-            draft_note["objective"] = transcript_text.strip()
-        if any(w in lower for w in ["diagnosis", "assess", "impression", "likely", "consistent"]):
-            draft_note["assessment"] = transcript_text.strip()
-        if any(w in lower for w in ["prescribe", "order", "refer", "follow", "plan", "recommend"]):
-            draft_note["plan"] = transcript_text.strip()
+        # LLM-based SOAP draft-note update (S263 — was previously naive keyword matching
+        # that dumped the same raw transcript text into whichever SOAP field a keyword
+        # happened to match, sometimes into multiple fields at once). On LLM failure the
+        # fields are left as-is rather than falling back to the keyword-matching stub —
+        # an empty field is honest; a keyword-guessed one looks real but isn't.
+        try:
+            soap_prompt = f"""You are extracting structured SOAP note fields from a live
+clinical encounter transcript fragment. Only include content the clinician actually said —
+never infer or fabricate findings.
+
+Existing draft note (may be partially filled from earlier fragments in this session):
+Subjective: {draft_note['subjective'] or '(empty)'}
+Objective: {draft_note['objective'] or '(empty)'}
+Assessment: {draft_note['assessment'] or '(empty)'}
+Plan: {draft_note['plan'] or '(empty)'}
+
+New transcript fragment to incorporate:
+"{transcript_text.strip()}"
+
+Return JSON with exactly these keys: "subjective", "objective", "assessment", "plan".
+Each value is the UPDATED full text for that section (existing content plus anything new
+from this fragment relevant to it), or the existing value unchanged if this fragment has
+nothing relevant to that section. Do not put the same content in multiple sections unless
+it is genuinely relevant to both."""
+            soap_result = await call_governed_json(soap_prompt, surface="ambient_soap_draft", phi_present=True)
+            for key in ("subjective", "objective", "assessment", "plan"):
+                value = soap_result.get(key)
+                if isinstance(value, str) and value.strip():
+                    draft_note[key] = value.strip()
+        except Exception as e:
+            print(f"[AmbientStream] SOAP draft generation error: {e}")
 
     return {
         "transcript": transcript_text,
@@ -14797,12 +14820,11 @@ async def discharge_intelligence(request: DischargeIntelligenceRequest):
     acute_safety = None
     discharge_safe = True
     try:
-        from clinical_safety import evaluate
-        acute_safety = evaluate(request.vitals_at_discharge or {})
-        if acute_safety.get("acute_deterioration"):
-            discharge_safe = False
-            interventions.insert(0, "ACUTE DETERIORATION DETECTED at discharge vitals — do not discharge. Immediate clinician review required.")
-            interventions += [a["action"] for a in acute_safety.get("syndrome_alerts", [])]
+        from clinical_safety import discharge_acute_check
+        check = discharge_acute_check(request.vitals_at_discharge or {})
+        acute_safety = check["acute_safety"]
+        discharge_safe = check["discharge_safe"]
+        interventions[0:0] = check["interventions"]
     except Exception as _gov_err:  # never let the governor break the endpoint
         print(f"[CDSS] safety governor skipped in /discharge/intelligence: {_gov_err}")
 
