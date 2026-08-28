@@ -170,12 +170,15 @@ export class AiPerformanceService {
     notes?: string,
   ): Promise<void> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
+    // F16 fix (S270) — was .catch(() => {}): a failed review-request write looked
+    // identical to a successful one to the caller. Let it propagate as a real HTTP
+    // error instead.
     await db.query(
       `INSERT INTO ai_model_governance_log
          (tenant_id, model_name, event_type, reason, performed_by, notes)
        VALUES ($1,$2,'review_requested',$3,$4,$5)`,
       [tenantId, modelName, reason, raisedBy, notes ?? null],
-    ).catch(() => {});
+    );
   }
 
   async updateModelStatus(
@@ -186,28 +189,34 @@ export class AiPerformanceService {
     notes: string,
   ): Promise<void> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
+    // F16 fix (S270) — same as requestModelReview above.
     await db.query(
       `INSERT INTO ai_model_governance_log
          (tenant_id, model_name, event_type, reason, performed_by, notes)
        VALUES ($1,$2,$3,NULL,$4,$5)`,
       [tenantId, modelName, action, reviewedBy, notes],
-    ).catch(() => {});
+    );
   }
 
   async getGovernanceHistory(tenantId: string, modelName: string): Promise<any[]> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
+    // F16 fix (S270) — was .catch(() => []): an operator couldn't tell "no
+    // governance events" from "the query crashed." Let it propagate — the
+    // frontend (AiGovernanceDashboard.tsx) already has ErrorBanner/retry UI built
+    // for exactly this, it just never fired because this never threw.
     const rows = await db.query(
       `SELECT event_type, reason, performed_by, notes, created_at
        FROM ai_model_governance_log
        WHERE tenant_id=$1 AND model_name=$2
        ORDER BY created_at DESC LIMIT 50`,
       [tenantId, modelName],
-    ).catch(() => []);
+    );
     return rows;
   }
 
   async getCalibrationPlot(tenantId: string, modelName: string, period: string): Promise<any[]> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
+    // F16 fix (S270) — was .catch(() => []); same rationale as getGovernanceHistory.
     const rows = await db.query(
       `SELECT
          CONCAT(FLOOR(predicted_probability * 10) * 10, '–', FLOOR(predicted_probability * 10) * 10 + 10, '%') AS predicted_bin,
@@ -222,7 +231,7 @@ export class AiPerformanceService {
        GROUP BY bin_idx, predicted_bin
        ORDER BY bin_idx`,
       [tenantId, modelName, period],
-    ).catch(() => []);
+    );
     return rows.map((r: any) => ({
       predicted_bin: r.predicted_bin,
       actual_rate: r.total > 0 ? Number((r.positives / r.total).toFixed(4)) : null,
@@ -232,6 +241,9 @@ export class AiPerformanceService {
 
   async getModelFairness(tenantId: string, modelName: string, period: string): Promise<any> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
+    // F16 fix (S270) — was .catch(() => []) on both queries; same rationale as
+    // getGovernanceHistory above. A crashed fairness-audit query must not look
+    // like "no fairness concerns for this model."
     const [sexRows, ageRows] = await Promise.all([
       db.query(
         `SELECT
@@ -248,7 +260,7 @@ export class AiPerformanceService {
            AND TO_CHAR(ai.prediction_date,'YYYY-MM') = $3
          GROUP BY p.sex`,
         [tenantId, modelName, period],
-      ).catch(() => []),
+      ),
       db.query(
         `SELECT
            CASE
@@ -268,7 +280,7 @@ export class AiPerformanceService {
            AND TO_CHAR(ai.prediction_date,'YYYY-MM') = $3
          GROUP BY group_val`,
         [tenantId, modelName, period],
-      ).catch(() => []),
+      ),
     ]);
 
     const toMetrics = (rows: any[]) => rows.map((r: any) => {
