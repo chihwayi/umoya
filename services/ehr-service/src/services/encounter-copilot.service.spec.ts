@@ -233,6 +233,54 @@ describe('EncounterCopilotService', () => {
     }));
   });
 
+  // F14 (S269) — order-pipeline saves used to be log-and-forget: the session still
+  // reported suggestedOrders as generated with zero signal that they were never
+  // actually persisted into the pipeline a clinician approves/rejects from.
+  it('surfaces order-pipeline save failures on the session governance field instead of silently dropping them', async () => {
+    const smartDefaultsService = buildSmartDefaultsService();
+    const sessionRepo = { ...buildRepo(), update: jest.fn().mockResolvedValue(undefined) };
+    const pathwayInstanceRepo = buildRepo();
+    const resultFollowupRepo = { find: jest.fn().mockResolvedValue([]) };
+    const clinicalPathwayRepo = { find: jest.fn().mockResolvedValue([]) };
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM patients')) {
+          return [{ id: 'patient-1', patient_number: 'P001', first_name: 'Jane', last_name: 'Doe', date_of_birth: '1990-01-10', gender: 'female' }];
+        }
+        if (sql.includes('FROM ambient_sessions')) {
+          return [{ id: 'ambient-1', draft_note: {}, ai_suggested_orders: [{ name: 'Basic metabolic panel', type: 'lab_test', priority: 'normal' }], ai_suggested_diagnoses: [], alerts_raised: [] }];
+        }
+        return [];
+      }),
+      getRepository: jest.fn((entity: any) => {
+        if (entity === EncounterCopilotSession) return sessionRepo;
+        if (entity === TreatmentPathwayInstance) return pathwayInstanceRepo;
+        if (entity === ResultFollowupTask) return resultFollowupRepo;
+        if (entity === ClinicalPathway) return clinicalPathwayRepo;
+        throw new Error(`Unexpected repository request: ${entity?.name}`);
+      }),
+    } as any;
+
+    const aiOrderPipeline = {
+      saveSuggestions: jest.fn().mockRejectedValue(new Error('order pipeline unavailable')),
+    };
+
+    const service = new EncounterCopilotService(smartDefaultsService as any, aiSurfaceContractService as any, aiOrderPipeline as any);
+    await service.generateSession('kids-clinic', tenantDb, { patientId: 'patient-1', appointmentId: 'appt-1' }, 'user-1');
+
+    expect(aiOrderPipeline.saveSuggestions).toHaveBeenCalled();
+    expect(sessionRepo.update).toHaveBeenCalledWith(
+      'session-1',
+      expect.objectContaining({
+        governance: expect.objectContaining({
+          orderPipelineSaved: false,
+          orderPipelineSaveError: 'order pipeline unavailable',
+        }),
+      }),
+    );
+  });
+
   it('persists order appropriateness reviews with duplicate-medication caution and copilot alignment', async () => {
     const smartDefaultsService = buildSmartDefaultsService();
     const reviewRepo = buildRepo();

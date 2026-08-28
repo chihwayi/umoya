@@ -231,9 +231,19 @@ export class EncounterCopilotService {
           suggestedByModel: 'encounter_copilot',
         }));
       if (mappedSuggestions.length > 0) {
-        await this.aiOrderPipeline
-          .saveSuggestions(payload.patientId, 'encounter_copilot', session.id, mappedSuggestions, tenantDb)
-          .catch((e: any) => this.logger.warn(`AI order pipeline save failed: ${e?.message}`));
+        // F14 fix (S269) — this used to log-and-forget: the session record would
+        // show suggestedOrders as generated with no signal that they were never
+        // actually persisted into the order pipeline a clinician approves/rejects
+        // from. Surface the outcome on the session's existing governance JSONB
+        // field (no new column needed) so a dashboard/UI can tell the difference.
+        try {
+          await this.aiOrderPipeline.saveSuggestions(payload.patientId, 'encounter_copilot', session.id, mappedSuggestions, tenantDb);
+        } catch (e: any) {
+          this.logger.error(`AI order pipeline save failed for session ${session.id}: ${e?.message}`);
+          await tenantDb.getRepository(EncounterCopilotSession).update(session.id, {
+            governance: { ...(session.governance || {}), orderPipelineSaved: false, orderPipelineSaveError: e?.message || 'unknown error' },
+          } as any);
+        }
       }
     }
 

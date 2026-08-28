@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PostVisitController } from './post-visit.controller';
 import { PostVisitService } from '../services/post-visit.service';
 import { UploadSecurityService } from '../services/upload-security.service';
-import { FollowUpRecommendationService } from '../services/followup-recommendation.service';
 
 describe('PostVisitController', () => {
   let controller: PostVisitController;
@@ -67,10 +66,6 @@ describe('PostVisitController', () => {
     assertCleanUpload: jest.fn(),
   };
 
-  const followUpServiceMock = {
-    generateRecommendation: jest.fn().mockResolvedValue({}),
-  };
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PostVisitController],
@@ -82,10 +77,6 @@ describe('PostVisitController', () => {
         {
           provide: UploadSecurityService,
           useValue: uploadSecurityServiceMock,
-        },
-        {
-          provide: FollowUpRecommendationService,
-          useValue: followUpServiceMock,
         },
       ],
     }).compile();

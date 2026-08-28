@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { AiRecommendationAudit } from '../entities/ai-recommendation-audit.entity';
 
@@ -13,6 +13,8 @@ export interface ExplainedRecommendation<T> {
 
 @Injectable()
 export class AiExplainabilityService {
+  private readonly logger = new Logger(AiExplainabilityService.name);
+
   constructor(private readonly tenantService: TenantService) {}
 
   /**
@@ -40,8 +42,12 @@ export class AiExplainabilityService {
       override_logged: false,
     };
 
-    // Persist audit asynchronously (fire-and-forget)
-    this.persistAudit(subdomain, recommendationType, meta, explained).catch(() => {});
+    // F18 fix (S269) — audit persistence is still fire-and-forget (the caller must
+    // not block on it), but a failure here used to vanish completely with zero
+    // trace anywhere, same root cause as F7. Now logged at error level.
+    this.persistAudit(subdomain, recommendationType, meta, explained).catch((e: any) =>
+      this.logger.error(`AI recommendation audit persistence failed for ${recommendationType} (patient ${meta.patientId || 'unknown'}): ${e?.message}`),
+    );
 
     return explained;
   }

@@ -48,7 +48,6 @@ import {
 } from '../dto/post-visit.dto';
 import { PostVisitService } from '../services/post-visit.service';
 import { UploadSecurityService } from '../services/upload-security.service';
-import { FollowUpRecommendationService } from '../services/followup-recommendation.service';
 
 @ApiTags('Post Visit AI Companion')
 @ApiSecurity('tenant-key')
@@ -59,7 +58,6 @@ export class PostVisitController {
   constructor(
     private readonly postVisitService: PostVisitService,
     private readonly uploadSecurityService: UploadSecurityService,
-    private readonly followUpService: FollowUpRecommendationService,
   ) {}
 
   private resolveUserId(req: RequestWithTenant) {
@@ -77,34 +75,20 @@ export class PostVisitController {
       actorUserId: this.resolveUserId(req),
     });
 
-    // Fire follow-up recommendation generation async — does not block the response
-    if (body.patientId) {
-      (async () => {
-        try {
-          // Fetch minimal patient context needed by the follow-up service
-          const [riskRow] = await req.tenantDb.query(
-            `SELECT latest_risk_level FROM patients WHERE id = $1 LIMIT 1`,
-            [body.patientId],
-          ).catch(() => [null]);
-          const riskBand = (['low','moderate','high','critical'] as const).find(
-            r => r === riskRow?.latest_risk_level,
-          ) ?? 'low';
-
-          await this.followUpService.generateRecommendation(req.tenantDb, {
-            patientId: Number(body.patientId) || 0,
-            encounterId: Number(body.consultationId ?? body.appointmentId) || undefined,
-            encounterType: (body as any).sourceType === 'telemedicine' ? 'telemedicine' : 'consultation',
-            riskBand,
-            diagnoses: [],
-            openCareGapsCount: 0,
-            medicationsChanged: false,
-            subdomain: req.tenantId ?? '',
-          });
-        } catch {
-          // non-critical — nightly sweep is the safety net
-        }
-      })();
-    }
+    // F15 investigation (S269): this used to fire-and-forget a call into
+    // FollowUpRecommendationService with a comment claiming "nightly sweep is the
+    // safety net" — verified that claim is false (the only cron in that service,
+    // sweepOverdueFollowUps, alerts on already-existing overdue rows; it has no
+    // mechanism to backfill a recommendation that was never created). Worse:
+    // FollowUpRecommendationService's entire schema/API expects an INTEGER
+    // patientId (followup_recommendations.patient_id, parseInt() at every read),
+    // fundamentally incompatible with this codebase's UUID patient IDs — every
+    // "successful" call here was silently inserting a corrupted patient_id=0 row,
+    // not actually recording a real per-patient follow-up recommendation. This
+    // whole subsystem also has zero frontend caller anywhere. Removed rather than
+    // building a bigger sweep on top of broken data — a real fix needs a UUID
+    // migration of FollowUpRecommendationService as its own dedicated piece of
+    // work, not a side effect of a silent-catch sweep.
 
     return session;
   }

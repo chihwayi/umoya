@@ -3889,4 +3889,45 @@ describe('PostVisitService', () => {
     expect(result.answer).toContain('No summary artifact found');
     expect(result.abstained).toBe(true);
   });
+
+  // F11 (S269) — routeEscalationToWorkflow previously returned a workflowKey
+  // unconditionally even when the INSERT failed, creating a "ghost workflow"
+  // reference. Must now return null and log the failure instead.
+  describe('routeEscalationToWorkflow', () => {
+    it('returns null and logs an error when the workflow-state insert fails', async () => {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const errorSpy = jest.spyOn((service as any).logger, 'error');
+      const tenantDb = {
+        query: jest.fn().mockRejectedValue(new Error('constraint violation')),
+      } as any;
+
+      const result = await (service as any).routeEscalationToWorkflow(tenantDb, {
+        escalationId: 'esc-1',
+        sessionId: 'session-1',
+        patientId: 'patient-1',
+        routeTarget: 'doctor',
+        severity: 'high',
+      });
+
+      expect(result).toBeNull();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('esc-1'));
+    });
+
+    it('returns the workflowKey when the insert succeeds', async () => {
+      const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+      const tenantDb = {
+        query: jest.fn().mockResolvedValue(undefined),
+      } as any;
+
+      const result = await (service as any).routeEscalationToWorkflow(tenantDb, {
+        escalationId: 'esc-1',
+        sessionId: 'session-1',
+        patientId: 'patient-1',
+        routeTarget: 'doctor',
+        severity: 'high',
+      });
+
+      expect(result).toEqual(expect.stringContaining('post_visit_escalation:esc-1:'));
+    });
+  });
 });

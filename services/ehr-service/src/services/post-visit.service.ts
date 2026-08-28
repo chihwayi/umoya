@@ -10799,35 +10799,44 @@ Object.assign(PostVisitService.prototype as any, {
 
   async routeEscalationToWorkflow(this: any, tenantDb: DataSource, args: any) {
     const workflowKey = `post_visit_escalation:${String(args.escalationId || args.sessionId || '')}:${Date.now()}`;
-    await tenantDb.query(
-      `
-        INSERT INTO nurse_cross_module_workflow_state (
-          workflow_key,
-          workflow_type,
-          patient_id,
-          appointment_id,
-          consultation_id,
-          assigned_role,
-          assigned_user_id,
-          status,
-          priority,
-          note,
-          metadata
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'open',$8,$9,$10::jsonb)
-      `,
-      [
-        workflowKey,
-        'post_visit_escalation',
-        args.patientId || null,
-        args.appointmentId || null,
-        args.consultationId || null,
-        args.routeTarget || 'doctor',
-        null,
-        args.severity === 'critical' ? 'critical' : args.severity === 'high' ? 'high' : 'normal',
-        args.signalText || null,
-        JSON.stringify(args.metadata || {}),
-      ],
-    ).catch(() => {});
+    try {
+      await tenantDb.query(
+        `
+          INSERT INTO nurse_cross_module_workflow_state (
+            workflow_key,
+            workflow_type,
+            patient_id,
+            appointment_id,
+            consultation_id,
+            assigned_role,
+            assigned_user_id,
+            status,
+            priority,
+            note,
+            metadata
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,'open',$8,$9,$10::jsonb)
+        `,
+        [
+          workflowKey,
+          'post_visit_escalation',
+          args.patientId || null,
+          args.appointmentId || null,
+          args.consultationId || null,
+          args.routeTarget || 'doctor',
+          null,
+          args.severity === 'critical' ? 'critical' : args.severity === 'high' ? 'high' : 'normal',
+          args.signalText || null,
+          JSON.stringify(args.metadata || {}),
+        ],
+      );
+    } catch (e: any) {
+      // F11 fix (S269) — previously returned workflowKey unconditionally even when
+      // this insert failed, so callers' `if (workflowKey) { UPDATE ... workflow_key }`
+      // would set post_visit_escalation_events.workflow_key to a key that references
+      // a row that was never created (a "ghost workflow" no dashboard join could find).
+      this.logger.error(`routeEscalationToWorkflow failed for escalation ${args.escalationId || args.sessionId}: ${e?.message}`);
+      return null;
+    }
     return workflowKey;
   },
 
