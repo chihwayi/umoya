@@ -56,7 +56,8 @@ jobs:
           services/cdss-service/tests/test_ai_governance.py \
           services/cdss-service/tests/test_outbound_guard.py \
           services/cdss-service/tests/test_clinical_safety.py \
-          services/cdss-service/tests/test_diagnosis_discharge_safety_governor.py
+          services/cdss-service/tests/test_diagnosis_discharge_safety_governor.py \
+          services/cdss-service/tests/test_diagnostic_assistant_grounding_status.py
 
     - name: CDSS AI release-gate suite (release gate)
       if: matrix.service == 'ehr-service'

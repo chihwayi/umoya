@@ -906,13 +906,21 @@ class DiagnosticAssistant:
             "patient_data": patient_data,
         }
         
+        # F8 fix (S268): tracks whether guideline retrieval actually grounded this
+        # generation, so the response can honestly say so instead of silently
+        # proceeding with empty context. Set on every return path.
+        grounding_status = 'not_attempted'
+        grounding_reason = 'No retrieval engine configured or AI generation not reached'
+
         # If no AI models at all, return rule-based only
         if not has_ai_models and not has_llm:
             logger.debug("AI models not available, using rule-based only")
             base = {
                 **rule_based_results,
                 'source': 'rule_based_only',
-                'ai_enabled': False
+                'ai_enabled': False,
+                'grounding_status': grounding_status,
+                'grounding_reason': grounding_reason,
             }
             base["model_registry"] = model_snapshot
             base["model_trace"] = self._build_model_trace(
@@ -930,6 +938,8 @@ class DiagnosticAssistant:
                 # RAG: Retrieve relevant guidelines
                 guideline_context = ""
                 retrieved_docs = []
+                retrieval_attempted = False
+                retrieval_failed = False
                 safe_notes_for_retrieval = redact_text(clinical_notes) if clinical_notes else None
                 query_terms = symptoms + ([safe_notes_for_retrieval] if safe_notes_for_retrieval else [])
                 query = " ".join(query_terms)[:200] # Limit query length
@@ -940,6 +950,7 @@ class DiagnosticAssistant:
                     requested_module = patient_data.get("module")
 
                 if self.knowledge_registry:
+                    retrieval_attempted = True
                     try:
                         governed_docs = self.knowledge_registry.search(
                             query,
@@ -951,14 +962,16 @@ class DiagnosticAssistant:
                             retrieved_docs.extend(governed_docs)
                     except Exception as e:
                         logger.warning(f"Governed knowledge retrieval failed: {e}")
+                        retrieval_failed = True
 
                 if self.rag_engine:
+                    retrieval_attempted = True
                     # Context-Aware Filtering (Sprint 2)
                     rag_filters = {}
                     if gender and gender.lower() in ['male', 'm']:
                         # Exclude pregnancy-related content for males
                         rag_filters["target_population"] = {"$ne": "pregnant_women"}
-                        
+
                     try:
                         # Pass None when no filters to avoid Chroma 'where' validation errors
                         rag_docs = self.rag_engine.query(
@@ -979,6 +992,20 @@ class DiagnosticAssistant:
                             logger.info(f"RAG retrieved {len(rag_docs)} guideline chunks with filters: {rag_filters}")
                     except Exception as e:
                         logger.warning(f"RAG retrieval failed: {e}")
+                        retrieval_failed = True
+
+                if retrieved_docs:
+                    grounding_status = 'grounded'
+                    grounding_reason = f'{len(retrieved_docs)} guideline chunk(s) retrieved and included in the prompt'
+                elif not retrieval_attempted:
+                    grounding_status = 'not_attempted'
+                    grounding_reason = 'No knowledge registry or RAG engine configured'
+                elif retrieval_failed:
+                    grounding_status = 'ungrounded_retrieval_failed'
+                    grounding_reason = 'Guideline retrieval raised an exception — generation proceeded without grounding'
+                else:
+                    grounding_status = 'ungrounded_no_results'
+                    grounding_reason = 'Guideline retrieval ran but found no relevant chunks for this query'
 
                 if retrieved_docs:
                     guideline_texts = []
@@ -1038,8 +1065,12 @@ class DiagnosticAssistant:
                     llm_results = llm_json
                     logger.info(f"Local LLM generated {len(llm_results.get('diagnoses', []))} diagnoses")
                     
-                    # Store citations for return
-                    if self.rag_engine and 'retrieved_docs' in locals() and retrieved_docs:
+                    # Store citations for return. Previously gated on `self.rag_engine`
+                    # truthy even when retrieved_docs came from knowledge_registry alone
+                    # (S268/F8 fix) — a knowledge-registry-only-grounded answer would
+                    # silently lose its citations and incorrectly fail the governance
+                    # gate's citation-count requirement.
+                    if retrieved_docs:
                         llm_results['citations'] = retrieved_docs
             except Exception as e:
                 logger.error(f"Local LLM execution failed: {e}")
@@ -1084,7 +1115,9 @@ class DiagnosticAssistant:
                 **rule_based_results,
                 'source': 'rule_based_only',
                 'ai_enabled': True,
-                'ai_models_available': False
+                'ai_models_available': False,
+                'grounding_status': grounding_status,
+                'grounding_reason': grounding_reason,
             }
             base["model_registry"] = model_snapshot
             base["model_trace"] = self._build_model_trace(
@@ -1170,7 +1203,9 @@ class DiagnosticAssistant:
             'guideline_citations': fused_results.get('guideline_citations', []),
             'clinical_recommendation': fused_results.get('clinical_recommendation'),
             'ai_enabled': True,
-            'source': 'hybrid_cdss_ai_llm'
+            'source': 'hybrid_cdss_ai_llm',
+            'grounding_status': grounding_status,
+            'grounding_reason': grounding_reason,
         }
         final_result["model_registry"] = model_snapshot
         final_result["model_trace"] = self._build_model_trace(
