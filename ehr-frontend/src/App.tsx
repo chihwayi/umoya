@@ -75,6 +75,7 @@ const OccupationalMedicineDashboard = lazy(() => import('./pages/OccupationalMed
 const OemSurveillanceDashboard = lazy(() => import('./pages/OemSurveillanceDashboard'));
 const PatientSafetyIncidentDashboard = lazy(() => import('./pages/PatientSafetyIncidentDashboard'));
 const StaffCredentialingDashboard = lazy(() => import('./pages/StaffCredentialingDashboard'));
+const StaffDutyRosterDashboard = lazy(() => import('./pages/StaffDutyRosterDashboard'));
 const PACUDashboard = lazy(() => import('./pages/PACUDashboard'));
 const MARDashboard = lazy(() => import('./pages/MARDashboard'));
 const BloodBankDashboard = lazy(() => import('./pages/BloodBankDashboard'));
@@ -999,6 +1000,15 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin']}>
                   <StaffCredentialingDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 276: Staff Duty Rostering (core, not module-gated) */}
+            <Route
+              path="/ehr/:tenantSlug/staff-rostering"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <StaffDutyRosterDashboard />
                 </RoleProtectedRoute>
               }
             />

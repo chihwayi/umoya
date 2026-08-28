@@ -8147,6 +8147,53 @@ export class DatabaseProvisioningService {
         ],
       },
 
+      // S276 — Staff Duty Rostering. Southern-Africa-hospital-readiness gap G3:
+      // nurse_tasks tracks work items but nothing recorded who is rostered on which
+      // ward/shift, on-call status, or shift handover notes — a real operational need
+      // for any facility running 24/7 wards. Scoped modestly: record-keeping +
+      // double-booking conflict detection, not a full rostering optimizer.
+      // See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+      {
+        id: 'staff_duty_rostering',
+        label: 'Staff Duty Rostering (S276)',
+        version: '2026.08.28.1',
+        description: 'Ward-level shift roster, on-call status, and shift handover notes',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS staff_duty_shifts (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id     TEXT NOT NULL,
+            user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            ward          TEXT NOT NULL,
+            shift_date    DATE NOT NULL,
+            shift_type    TEXT NOT NULL DEFAULT 'day'
+              CHECK (shift_type IN ('day','night','on_call')),
+            start_time    TIME NOT NULL,
+            end_time      TIME NOT NULL,
+            on_call       BOOLEAN NOT NULL DEFAULT FALSE,
+            status        TEXT NOT NULL DEFAULT 'scheduled'
+              CHECK (status IN ('scheduled','completed','cancelled')),
+            created_by    UUID REFERENCES users(id),
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_sds_tenant_date ON staff_duty_shifts(tenant_id, shift_date)`,
+          `CREATE INDEX IF NOT EXISTS idx_sds_user_date ON staff_duty_shifts(tenant_id, user_id, shift_date) WHERE status = 'scheduled'`,
+          `CREATE INDEX IF NOT EXISTS idx_sds_ward_date ON staff_duty_shifts(tenant_id, ward, shift_date)`,
+          `CREATE TABLE IF NOT EXISTS shift_handover_notes (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id     TEXT NOT NULL,
+            shift_id      UUID REFERENCES staff_duty_shifts(id) ON DELETE SET NULL,
+            ward          TEXT NOT NULL,
+            from_user_id  UUID NOT NULL REFERENCES users(id),
+            to_user_id    UUID REFERENCES users(id),
+            notes         TEXT NOT NULL,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_shn_ward_date ON shift_handover_notes(tenant_id, ward, created_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_shn_shift ON shift_handover_notes(shift_id) WHERE shift_id IS NOT NULL`,
+        ],
+      },
+
       // S235 — AI Model Performance Registry
       {
         id: 'nc_ai_performance_registry',
