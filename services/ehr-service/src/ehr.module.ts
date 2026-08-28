@@ -295,6 +295,8 @@ import { OemSurveillanceController } from './controllers/oem-surveillance.contro
 import { OemSurveillanceService } from './services/oem-surveillance.service';
 import { PatientTransportController } from './controllers/patient-transport.controller';
 import { PatientTransportService } from './services/patient-transport.service';
+import { PatientSafetyIncidentController } from './controllers/patient-safety-incident.controller';
+import { PatientSafetyIncidentService } from './services/patient-safety-incident.service';
 import { AestheticsController } from './controllers/aesthetics.controller';
 import { AestheticsService } from './services/aesthetics.service';
 import { PaediatricCardiologyController } from './controllers/paediatric-cardiology.controller';
@@ -950,6 +952,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PaediatricCardiologyController,
     OccupationalMedicineController,
     OemSurveillanceController,
+    PatientSafetyIncidentController,
     OutcomeLinkageController,
     CascadeAnalyticsController,
     LabQualityController,
@@ -1318,6 +1321,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PaediatricCardiologyService,
     OccupationalMedicineService,
     OemSurveillanceService,
+    PatientSafetyIncidentService,
     OutcomeLinkageService,
     CascadeAnalyticsService,
     LabQualityService,

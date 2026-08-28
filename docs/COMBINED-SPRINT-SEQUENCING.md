@@ -22,7 +22,7 @@ Within each phase, sprints are additionally ordered to respect **file overlap**:
 | 5 | S266 | PostVisit ingestion cron hardening | AI-INTELLIGENCE | — | Not started |
 | 6 | S267 | AI surface contract audit wiring | AI-INTELLIGENCE | — | Not started |
 | **Phase 2 — Hospital-ops infrastructure** | | | | | |
-| 7 | S274 | Patient safety incident reporting & RCA | SOUTHERN-AFRICA | — | Not started |
+| 7 | S274 | Patient safety incident reporting & RCA | SOUTHERN-AFRICA | — | **Done (2026-08-28)** |
 | 8 | S275 | Clinical staff credentialing & privileging | SOUTHERN-AFRICA | — | Not started |
 | 9 | S276 | Staff duty rostering | SOUTHERN-AFRICA | — | Not started |
 | 10 | S277 | Biomedical equipment register | SOUTHERN-AFRICA | — | Not started |

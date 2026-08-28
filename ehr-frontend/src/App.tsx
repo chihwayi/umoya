@@ -73,6 +73,7 @@ const AestheticsDashboard = lazy(() => import('./pages/AestheticsDashboard'));
 const PaedCardiologyDashboard = lazy(() => import('./pages/PaedCardiologyDashboard'));
 const OccupationalMedicineDashboard = lazy(() => import('./pages/OccupationalMedicineDashboard'));
 const OemSurveillanceDashboard = lazy(() => import('./pages/OemSurveillanceDashboard'));
+const PatientSafetyIncidentDashboard = lazy(() => import('./pages/PatientSafetyIncidentDashboard'));
 const PACUDashboard = lazy(() => import('./pages/PACUDashboard'));
 const MARDashboard = lazy(() => import('./pages/MARDashboard'));
 const BloodBankDashboard = lazy(() => import('./pages/BloodBankDashboard'));
@@ -979,6 +980,15 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="occupational_medicine">
                   <OemSurveillanceDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 274: Patient Safety Incident Reporting & RCA (core, not module-gated) */}
+            <Route
+              path="/ehr/:tenantSlug/patient-safety"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <PatientSafetyIncidentDashboard />
                 </RoleProtectedRoute>
               }
             />

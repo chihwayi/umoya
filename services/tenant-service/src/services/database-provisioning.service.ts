@@ -8018,6 +8018,80 @@ export class DatabaseProvisioningService {
         ],
       },
 
+      // S274 — Patient Safety Incident Reporting & RCA
+      // General-purpose incident register + root-cause-analysis workflow, covering
+      // falls, medication errors, wrong-site/wrong-patient events, specimen errors, and
+      // any other hospital-wide patient-safety event — distinct from the module-specific
+      // near-miss tracking that already existed (oncology_near_miss_events,
+      // workplace_incidents). This is the single highest-value gap found against
+      // COHSASA (the region's actual accreditation body) — their own reference system
+      // for this is called PatSIS. See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+      {
+        id: 'patient_safety_incidents',
+        label: 'Patient Safety Incident Reporting & RCA (S274)',
+        version: '2026.08.27.1',
+        description: 'General-purpose incident register, root-cause analysis, and corrective-action tracking',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS patient_safety_incidents (
+            id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id               TEXT NOT NULL,
+            incident_type           TEXT NOT NULL,
+            harm_level              TEXT NOT NULL DEFAULT 'near_miss'
+              CHECK (harm_level IN ('near_miss','no_harm','mild_harm','moderate_harm','severe_harm','death')),
+            patient_id              UUID REFERENCES patients(id) ON DELETE SET NULL,
+            staff_involved          JSONB NOT NULL DEFAULT '[]',
+            location                TEXT,
+            incident_date           TIMESTAMPTZ NOT NULL,
+            description             TEXT NOT NULL,
+            immediate_actions_taken TEXT,
+            reported_by             UUID NOT NULL REFERENCES users(id),
+            status                  TEXT NOT NULL DEFAULT 'reported'
+              CHECK (status IN ('reported','under_review','rca_in_progress','closed')),
+            requires_rca            BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_psi_tenant_date ON patient_safety_incidents(tenant_id, incident_date DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_psi_status ON patient_safety_incidents(tenant_id, status) WHERE status <> 'closed'`,
+          `CREATE INDEX IF NOT EXISTS idx_psi_type ON patient_safety_incidents(tenant_id, incident_type)`,
+          `CREATE INDEX IF NOT EXISTS idx_psi_patient ON patient_safety_incidents(patient_id) WHERE patient_id IS NOT NULL`,
+          `CREATE TABLE IF NOT EXISTS incident_root_cause_analyses (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            incident_id       UUID NOT NULL REFERENCES patient_safety_incidents(id) ON DELETE CASCADE,
+            tenant_id         TEXT NOT NULL,
+            method            TEXT NOT NULL DEFAULT 'five_whys'
+              CHECK (method IN ('five_whys','fishbone','other')),
+            contributing_factors JSONB NOT NULL DEFAULT '[]',
+            root_cause        TEXT,
+            analysis_notes    TEXT,
+            conducted_by      UUID REFERENCES users(id),
+            conducted_at      TIMESTAMPTZ,
+            status            TEXT NOT NULL DEFAULT 'in_progress'
+              CHECK (status IN ('in_progress','completed')),
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_irca_incident ON incident_root_cause_analyses(incident_id)`,
+          `CREATE TABLE IF NOT EXISTS incident_corrective_actions (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            incident_id       UUID NOT NULL REFERENCES patient_safety_incidents(id) ON DELETE CASCADE,
+            rca_id            UUID REFERENCES incident_root_cause_analyses(id) ON DELETE SET NULL,
+            tenant_id         TEXT NOT NULL,
+            action_description TEXT NOT NULL,
+            owner_user_id     UUID REFERENCES users(id),
+            due_date          DATE,
+            status            TEXT NOT NULL DEFAULT 'open'
+              CHECK (status IN ('open','in_progress','completed','overdue')),
+            completed_at      TIMESTAMPTZ,
+            completed_by      UUID REFERENCES users(id),
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_ica_incident ON incident_corrective_actions(incident_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_ica_open ON incident_corrective_actions(tenant_id, status, due_date) WHERE status IN ('open','in_progress')`,
+        ],
+      },
+
       // S235 — AI Model Performance Registry
       {
         id: 'nc_ai_performance_registry',
