@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Bell, Heart, LogOut, Menu, Package, Settings, ShieldAlert, User, Users, X, CheckCheck, ExternalLink, type LucideIcon } from 'lucide-react';
+import { Bell, Heart, LogOut, Menu, Package, Settings, ShieldAlert, ShieldCheck, User, Users, X, CheckCheck, ExternalLink, type LucideIcon } from 'lucide-react';
 import { tenantApi, cdssApi } from '../services/api';
 import LanguageSwitcher from './LanguageSwitcher';
 import { OnboardingChecklist } from './OnboardingChecklist';
@@ -264,6 +264,14 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
         icon: ShieldAlert,
         exact: true,
         roles: ['doctor', 'nurse', 'admin'],
+      },
+      {
+        key: 'staff-credentialing',
+        label: 'Staff Credentialing',
+        path: `/ehr/${tenantSlug}/staff-credentialing`,
+        icon: ShieldCheck,
+        exact: true,
+        roles: ['admin'],
       },
       {
         key: 'settings',

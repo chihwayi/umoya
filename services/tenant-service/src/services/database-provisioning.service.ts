@@ -8092,6 +8092,61 @@ export class DatabaseProvisioningService {
         ],
       },
 
+      // S275 — Clinical Staff Credentialing & Privileging. Southern-Africa-hospital-
+      // readiness gap G2: nothing previously tracked medical staff license expiry,
+      // scope-of-practice privileges, malpractice cover, or CPD/CME compliance —
+      // a baseline requirement of every regional accreditation framework (COHSASA
+      // included). See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+      {
+        id: 'clinical_staff_credentialing',
+        label: 'Clinical Staff Credentialing & Privileging (S275)',
+        version: '2026.08.28.1',
+        description: 'Medical staff license/malpractice/CPD register and facility privileging grants',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS clinical_staff_credentials (
+            id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id               TEXT NOT NULL,
+            user_id                 UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            license_number          TEXT NOT NULL,
+            license_body            TEXT,
+            license_expiry_date     DATE NOT NULL,
+            malpractice_provider    TEXT,
+            malpractice_policy_number TEXT,
+            malpractice_expiry_date DATE,
+            cpd_points_current_cycle NUMERIC(6,2) NOT NULL DEFAULT 0,
+            cpd_points_required     NUMERIC(6,2) NOT NULL DEFAULT 0,
+            cpd_cycle_end_date      DATE,
+            status                  TEXT NOT NULL DEFAULT 'active'
+              CHECK (status IN ('active','suspended','expired')),
+            notes                   TEXT,
+            created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (tenant_id, user_id)
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_csc_tenant ON clinical_staff_credentials(tenant_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_csc_license_expiry ON clinical_staff_credentials(tenant_id, license_expiry_date)`,
+          `CREATE INDEX IF NOT EXISTS idx_csc_malpractice_expiry ON clinical_staff_credentials(tenant_id, malpractice_expiry_date) WHERE malpractice_expiry_date IS NOT NULL`,
+          `CREATE TABLE IF NOT EXISTS clinical_staff_privileges (
+            id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            credential_id     UUID NOT NULL REFERENCES clinical_staff_credentials(id) ON DELETE CASCADE,
+            tenant_id         TEXT NOT NULL,
+            procedure_or_scope TEXT NOT NULL,
+            granted_by        UUID REFERENCES users(id),
+            granted_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+            expiry_date       DATE,
+            status            TEXT NOT NULL DEFAULT 'active'
+              CHECK (status IN ('active','revoked','expired')),
+            revoked_at        TIMESTAMPTZ,
+            revoked_by        UUID REFERENCES users(id),
+            revoked_reason    TEXT,
+            created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_csp_credential ON clinical_staff_privileges(credential_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_csp_active ON clinical_staff_privileges(tenant_id, status) WHERE status = 'active'`,
+        ],
+      },
+
       // S235 — AI Model Performance Registry
       {
         id: 'nc_ai_performance_registry',

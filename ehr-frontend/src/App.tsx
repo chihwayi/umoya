@@ -74,6 +74,7 @@ const PaedCardiologyDashboard = lazy(() => import('./pages/PaedCardiologyDashboa
 const OccupationalMedicineDashboard = lazy(() => import('./pages/OccupationalMedicineDashboard'));
 const OemSurveillanceDashboard = lazy(() => import('./pages/OemSurveillanceDashboard'));
 const PatientSafetyIncidentDashboard = lazy(() => import('./pages/PatientSafetyIncidentDashboard'));
+const StaffCredentialingDashboard = lazy(() => import('./pages/StaffCredentialingDashboard'));
 const PACUDashboard = lazy(() => import('./pages/PACUDashboard'));
 const MARDashboard = lazy(() => import('./pages/MARDashboard'));
 const BloodBankDashboard = lazy(() => import('./pages/BloodBankDashboard'));
@@ -989,6 +990,15 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <PatientSafetyIncidentDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 275: Clinical Staff Credentialing & Privileging (core, admin-only) */}
+            <Route
+              path="/ehr/:tenantSlug/staff-credentialing"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <StaffCredentialingDashboard />
                 </RoleProtectedRoute>
               }
             />
