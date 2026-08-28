@@ -4,6 +4,7 @@ import { CircuitBreaker } from '../utils/circuit-breaker';
 import { LruCache } from '../utils/lru-cache';
 import { CdssService } from './cdss.service';
 import { AiSurfaceContractService } from './ai-surface-contract.service';
+import { TenantService } from './tenant.service';
 
 export interface GroundingCitation {
   id: string;
@@ -111,21 +112,52 @@ export class PostVisitGroundedLlmService {
   constructor(
     @Optional() private readonly cdssService?: CdssService,
     @Optional() private readonly aiSurfaceContractService?: AiSurfaceContractService,
+    @Optional() private readonly tenantService?: TenantService,
   ) {}
 
   private canUseLlm() {
     return this.enabled && Boolean(this.cdssService);
   }
 
-  private buildAiMetadata(useCase: string, model: string) {
-    return this.aiSurfaceContractService?.buildSurfaceMetadata({
+  /**
+   * S267 (F7) — persists a real audit record via AiSurfaceContractService.recordExecution
+   * when a tenantId is available (resolving tenantDb from it), instead of only building
+   * display metadata that was never actually written to prompt_audit_log. Falls back to
+   * the cheap display-only path when tenantId/tenantService/aiSurfaceContractService are
+   * unavailable — this service is also used in contexts with no tenant context at all.
+   */
+  private async buildAiMetadata(useCase: string, model: string, tenantId?: string | null, extra?: { patientId?: string | null; responseSummary?: Record<string, any> }) {
+    if (!this.aiSurfaceContractService) return undefined;
+
+    if (tenantId && this.tenantService) {
+      try {
+        const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+        if (tenantDb) {
+          return this.aiSurfaceContractService.recordExecution({
+            tenantDb,
+            tenantId,
+            aiSurface: 'post_visit_grounded_llm',
+            useCase,
+            source: 'post_visit_grounded_llm_service',
+            modelId: model || 'governed_json_proxy',
+            modelVersion: model || 'governed_json_proxy',
+            patientId: extra?.patientId ?? undefined,
+            responseSummary: extra?.responseSummary,
+          });
+        }
+      } catch (e: any) {
+        this.logger.warn(`AI surface audit recording failed for ${useCase}: ${e?.message}`);
+      }
+    }
+
+    return this.aiSurfaceContractService.buildSurfaceMetadata({
       aiSurface: 'post_visit_grounded_llm',
       useCase,
       source: 'post_visit_grounded_llm_service',
       modelId: model || 'governed_json_proxy',
       modelVersion: model || 'governed_json_proxy',
       provider: 'local',
-      recorded: true,
+      recorded: false,
     });
   }
 
@@ -197,7 +229,7 @@ export class PostVisitGroundedLlmService {
         letterText,
         model: llmResponse.model,
         audit: llmResponse.audit,
-        aiMetadata: this.buildAiMetadata('post_visit_referral_letter', llmResponse.model),
+        aiMetadata: await this.buildAiMetadata('post_visit_referral_letter', llmResponse.model, input.tenantId),
       };
     } catch {
       return null;
@@ -266,7 +298,7 @@ export class PostVisitGroundedLlmService {
         noteText,
         model: llmResponse.model,
         audit: llmResponse.audit,
-        aiMetadata: this.buildAiMetadata('post_visit_clinical_note', llmResponse.model),
+        aiMetadata: await this.buildAiMetadata('post_visit_clinical_note', llmResponse.model, input.tenantId),
       };
     } catch {
       return null;
@@ -369,7 +401,7 @@ export class PostVisitGroundedLlmService {
           ...llmResponse.audit,
           safetyGateTriggered: false,
         },
-        aiMetadata: this.buildAiMetadata('post_visit_doctor_polish', llmResponse.model),
+        aiMetadata: await this.buildAiMetadata('post_visit_doctor_polish', llmResponse.model, input.tenantId),
       };
     } catch (error: any) {
       this.logger.warn(`Doctor polish LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);
@@ -465,7 +497,7 @@ export class PostVisitGroundedLlmService {
             ...llmResponse.audit,
             safetyGateTriggered: true,
           },
-          aiMetadata: this.buildAiMetadata('post_visit_patient_answer', llmResponse.model),
+          aiMetadata: await this.buildAiMetadata('post_visit_patient_answer', llmResponse.model, input.tenantId),
         };
       }
 
@@ -484,7 +516,7 @@ export class PostVisitGroundedLlmService {
           ...llmResponse.audit,
           safetyGateTriggered: false,
         },
-        aiMetadata: this.buildAiMetadata('post_visit_patient_answer', llmResponse.model),
+        aiMetadata: await this.buildAiMetadata('post_visit_patient_answer', llmResponse.model, input.tenantId),
       };
     } catch (error: any) {
       this.logger.warn(`Patient answer LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);
@@ -579,7 +611,7 @@ export class PostVisitGroundedLlmService {
           templateVersion: 'postvisit-escalation-v2',
           safetyGateTriggered: false,
         },
-        aiMetadata: this.buildAiMetadata('post_visit_escalation_classification', llmResponse.model),
+        aiMetadata: await this.buildAiMetadata('post_visit_escalation_classification', llmResponse.model, input.tenantId, { responseSummary: { severity, routeTarget, temporality, confidence: confidenceRaw } }),
       };
     } catch (error: any) {
       this.logger.warn(`Escalation classifier LLM request failed, using deterministic fallback: ${String(error?.message || error)}`);

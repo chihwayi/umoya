@@ -19,8 +19,8 @@ Within each phase, sprints are additionally ordered to respect **file overlap**:
 | 2 | S263 | Real LLM SOAP note generation | AI-INTELLIGENCE | S262 (same file) | **Done (2026-08-26)** |
 | 3 | S264 | PostVisit escalation delivery reliability | AI-INTELLIGENCE | — | **Done (2026-08-27)** |
 | 4 | S265 | PostVisit escalation schema consolidation | AI-INTELLIGENCE | S264 (same files) | **Done (2026-08-27)** — root cause differed from care_gaps precedent, see F4 |
-| 5 | S266 | PostVisit ingestion cron hardening | AI-INTELLIGENCE | — | Not started |
-| 6 | S267 | AI surface contract audit wiring | AI-INTELLIGENCE | — | Not started |
+| 5 | S266 | PostVisit ingestion cron hardening | AI-INTELLIGENCE | — | **Done (2026-08-28)** |
+| 6 | S267 | AI surface contract audit wiring | AI-INTELLIGENCE | — | **Done (2026-08-28)** |
 | **Phase 2 — Hospital-ops infrastructure** | | | | | |
 | 7 | S274 | Patient safety incident reporting & RCA | SOUTHERN-AFRICA | — | **Done (2026-08-28)** |
 | 8 | S275 | Clinical staff credentialing & privileging | SOUTHERN-AFRICA | — | **Done (2026-08-28)** |

@@ -108,6 +108,10 @@ jobs:
       if: matrix.service == 'ehr-service'
       run: npm run audit:tenant-fk-drift
 
+    - name: AI surface execution audit-wiring audit (release gate)
+      if: matrix.service == 'ehr-service'
+      run: npm run audit:ai-surface-execution-wiring
+
     - name: Red-team adversarial suite (release gate)
       if: matrix.service == 'ehr-service'
       working-directory: ${{ matrix.path }}

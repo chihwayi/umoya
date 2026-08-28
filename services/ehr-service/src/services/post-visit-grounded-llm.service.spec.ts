@@ -134,4 +134,48 @@ describe('PostVisitGroundedLlmService', () => {
       }),
     );
   });
+
+  // S267 (F7) — actually persists an audit record via recordExecution when a
+  // tenantId is resolvable, instead of only building unpersisted display metadata.
+  it('calls recordExecution (not just buildSurfaceMetadata) when tenantId is resolvable', async () => {
+    const cdssService = {
+      requestGovernedJson: jest.fn().mockResolvedValue({
+        json: {
+          abstain: false,
+          answer: 'Please follow your blood pressure follow-up in one week.',
+          citations_used: ['cit-1'],
+          urgent_signal: false,
+        },
+        model: 'governed-postvisit-answer',
+        audit: { promptHash: 'hash', templateVersion: 'postvisit-patient-answer-v1' },
+      }),
+    };
+    const recordExecutionMock = jest.fn().mockResolvedValue({
+      aiSurface: 'post_visit_grounded_llm',
+      useCase: 'post_visit_patient_answer',
+      audit: { recorded: true },
+    });
+    const tenantDb = { query: jest.fn() };
+    const tenantService = { getTenantDatabase: jest.fn().mockResolvedValue(tenantDb) };
+
+    const service = new PostVisitGroundedLlmService(
+      cdssService as any,
+      { ...aiSurfaceContractService, recordExecution: recordExecutionMock } as any,
+      tenantService as any,
+    );
+    const result = await service.answerPatientQuestion({
+      sessionId: 'session-1',
+      tenantId: 'clinic-a',
+      question: 'When is my follow-up?',
+      summary: 'You need a one-week follow-up.',
+      checklist: ['Repeat blood pressure check in one week'],
+      citations: [{ id: 'cit-1', label: 'WHO follow-up guidance' }],
+    });
+
+    expect(tenantService.getTenantDatabase).toHaveBeenCalledWith('clinic-a');
+    expect(recordExecutionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantDb, tenantId: 'clinic-a', useCase: 'post_visit_patient_answer' }),
+    );
+    expect(result?.aiMetadata).toEqual(expect.objectContaining({ audit: { recorded: true } }));
+  });
 });

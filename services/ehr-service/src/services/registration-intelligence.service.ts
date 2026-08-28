@@ -63,9 +63,41 @@ export class RegistrationIntelligenceService {
     @Optional() private readonly aiSurfaceContractService?: AiSurfaceContractService,
   ) {}
 
-  private buildRegistrationAiMetadata(aiAnalysis?: RegistrationDocumentAnalysisResponse | null) {
+  // S267 (F7) — persists a real audit record via recordExecution when tenantDb is
+  // available (this runs at genuine document-extraction execution time, not a
+  // read/decoration path), instead of only building never-persisted display metadata.
+  private async buildRegistrationAiMetadata(
+    aiAnalysis?: RegistrationDocumentAnalysisResponse | null,
+    context?: { tenantDb?: DataSource; tenantId?: string | null; patientId?: string | null },
+  ) {
     if (!aiAnalysis) {
       return null;
+    }
+
+    const provider = String(
+      aiAnalysis.governance?.vendor_id ||
+      aiAnalysis.governance?.vendorId ||
+      aiAnalysis.governance?.provider ||
+      'local',
+    );
+
+    if (context?.tenantDb && this.aiSurfaceContractService) {
+      try {
+        return await this.aiSurfaceContractService.recordExecution({
+          tenantDb: context.tenantDb,
+          tenantId: context.tenantId ?? undefined,
+          aiSurface: 'registration_intelligence',
+          useCase: 'registration_document_intelligence',
+          source: 'registration_intelligence_service.extractRegistrationDocument',
+          modelId: aiAnalysis.model || 'registration_document_intelligence_proxy',
+          modelVersion: aiAnalysis.model || 'registration_document_intelligence_proxy',
+          provider,
+          patientId: context.patientId ?? undefined,
+          responseSummary: { flagCount: (aiAnalysis.flags || []).length, confidence: aiAnalysis.confidence ?? null, abstained: aiAnalysis.abstained === true },
+        });
+      } catch (e: any) {
+        this.logger.warn(`AI surface audit recording failed for registration document intelligence: ${e?.message}`);
+      }
     }
 
     return this.aiSurfaceContractService?.buildSurfaceMetadata({
@@ -74,13 +106,8 @@ export class RegistrationIntelligenceService {
       source: 'registration_intelligence_service',
       modelId: aiAnalysis.model || 'registration_document_intelligence_proxy',
       modelVersion: aiAnalysis.model || 'registration_document_intelligence_proxy',
-      provider: String(
-        aiAnalysis.governance?.vendor_id ||
-        aiAnalysis.governance?.vendorId ||
-        aiAnalysis.governance?.provider ||
-        'local',
-      ),
-      recorded: true,
+      provider,
+      recorded: false,
     }) || null;
   }
 
@@ -403,7 +430,7 @@ export class RegistrationIntelligenceService {
         extractionSummary: aiAnalysis?.summary || null,
         flags: aiAnalysis?.flags || [],
         governance: aiAnalysis?.governance || null,
-        aiMetadata: this.buildRegistrationAiMetadata(aiAnalysis),
+        aiMetadata: await this.buildRegistrationAiMetadata(aiAnalysis, { tenantDb, tenantId: payload.tenantId, patientId: payload.patientId }),
       };
     }
 
@@ -478,7 +505,7 @@ export class RegistrationIntelligenceService {
       extractionSummary: aiAnalysis?.summary || null,
       flags: aiAnalysis?.flags || [],
       governance: aiAnalysis?.governance || null,
-      aiMetadata: this.buildRegistrationAiMetadata(aiAnalysis),
+      aiMetadata: await this.buildRegistrationAiMetadata(aiAnalysis, { tenantDb, tenantId: payload.tenantId, patientId: payload.patientId ?? inserted.patient_id }),
       createdAt: inserted.created_at,
     };
   }

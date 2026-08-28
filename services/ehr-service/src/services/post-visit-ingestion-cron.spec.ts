@@ -39,7 +39,8 @@ describe('PostVisitIngestionCronService', () => {
         ])
         .mockResolvedValueOnce([
           { transcript_raw: 'Patient has a cough.', structured_output: {}, draft_note: { subjective: 'cough', objective: '', assessment: '', plan: '' }, session_started_at: new Date(), session_ended_at: new Date() },
-        ]),
+        ])
+        .mockResolvedValue([]), // detectStuckSessions query
     } as any;
 
     const mockIngest = jest.fn().mockResolvedValue({});
@@ -60,9 +61,11 @@ describe('PostVisitIngestionCronService', () => {
 
   it('calls transcriptionService.transcribe for a telemedicine recording session', async () => {
     const mockTenantDb = {
-      query: jest.fn().mockResolvedValueOnce([
-        { id: 's2', source_type: 'telemedicine', ambient_session_id: null, recording_storage_key: 'post-visit/recordings/s2/recording.mp4', patient_id: 'p1', doctor_id: 'd1', language: 'en' },
-      ]),
+      query: jest.fn()
+        .mockResolvedValueOnce([
+          { id: 's2', source_type: 'telemedicine', ambient_session_id: null, recording_storage_key: 'post-visit/recordings/s2/recording.mp4', patient_id: 'p1', doctor_id: 'd1', language: 'en' },
+        ])
+        .mockResolvedValue([]), // detectStuckSessions query
     } as any;
 
     const mockTranscribe = jest.fn().mockResolvedValue({ text: 'Transcribed tele.', language: 'en', segments: [], confidence: 0.9 });
@@ -140,5 +143,60 @@ describe('PostVisitIngestionCronService', () => {
 
     expect(mockIngest).not.toHaveBeenCalled();
     delete process.env.FEATURE_POSTVISIT_INGESTION_CRON;
+  });
+
+  // S266 (F6) — silent-failure surfacing
+  describe('failure surfacing', () => {
+    it('logs an error and returns early when getAllActiveTenants() throws', async () => {
+      const svc = buildService({
+        tenantService: { getAllActiveTenants: jest.fn().mockRejectedValue(new Error('tenant service down')) },
+      });
+      const errorSpy = jest.spyOn((svc as any).logger, 'error');
+
+      await svc.ingestCapturedSessions();
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('getAllActiveTenants() failed'));
+    });
+
+    it('logs an error and continues past a per-tenant DB connection failure', async () => {
+      const svc = buildService({
+        tenantService: {
+          getAllActiveTenants: jest.fn().mockResolvedValue(['clinic-a']),
+          getTenantDatabase: jest.fn().mockRejectedValue(new Error('connection refused')),
+        },
+      });
+      const errorSpy = jest.spyOn((svc as any).logger, 'error');
+
+      await svc.ingestCapturedSessions();
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('DB connection failed for tenant clinic-a'));
+    });
+  });
+
+  // S266 (F6) — stuck-session detection
+  describe('detectStuckSessions', () => {
+    it('logs an error identifying sessions stuck in captured status past the threshold', async () => {
+      const mockTenantDb = {
+        query: jest.fn().mockResolvedValue([
+          { id: 'stuck-1', source_type: 'in_person', created_at: new Date(Date.now() - 30 * 60 * 1000) },
+        ]),
+      } as any;
+      const svc = buildService({ tenantDb: mockTenantDb });
+      const errorSpy = jest.spyOn((svc as any).logger, 'error');
+
+      await svc['detectStuckSessions'](mockTenantDb, 'clinic-a');
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('stuck-1'));
+    });
+
+    it('does not log when no sessions are stuck', async () => {
+      const mockTenantDb = { query: jest.fn().mockResolvedValue([]) } as any;
+      const svc = buildService({ tenantDb: mockTenantDb });
+      const errorSpy = jest.spyOn((svc as any).logger, 'error');
+
+      await svc['detectStuckSessions'](mockTenantDb, 'clinic-a');
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
   });
 });

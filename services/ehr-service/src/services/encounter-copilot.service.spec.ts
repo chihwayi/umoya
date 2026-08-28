@@ -17,6 +17,7 @@ describe('EncounterCopilotService', () => {
       useCase: payload.useCase,
       provenance: { modelId: payload.modelId, modelVersion: payload.modelVersion, provider: payload.provider, source: payload.source },
     })),
+    recordExecution: jest.fn().mockResolvedValue({}),
   };
 
   const buildRepo = () => ({

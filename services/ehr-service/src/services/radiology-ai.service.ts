@@ -139,6 +139,20 @@ export class RadiologyAiService {
 
       await ds.getRepository(DicomStudy).update(study.id, { aiAnalysisStatus: 'complete' });
 
+      // S267 (F7) — persist the actual audit trail for this AI execution, not just
+      // display-time metadata (decorateStudy/decorateFinding below only format it).
+      await this.aiSurfaceContractService.recordExecution({
+        tenantDb: ds,
+        tenantId: subdomain,
+        aiSurface: 'radiology_ai',
+        useCase: 'radiology_analysis',
+        source: 'radiology_ai_service.analyzeStudy',
+        modelId: data.model_version || 'radiology_analysis_proxy',
+        modelVersion: data.model_version || 'radiology_analysis_proxy',
+        patientId: study.patientId,
+        responseSummary: { topFinding: data.top_finding, confidence: data.confidence, findingCount: (data.findings || []).length },
+      }).catch((e: any) => this.logger.warn(`AI surface audit recording failed for study ${study.id}: ${e?.message}`));
+
       // Alert if critical finding
       const criticalFindings = (data.findings || []).filter((f: any) =>
         f.severity === 'critical' || f.confidence > 0.85
@@ -238,6 +252,18 @@ export class RadiologyAiService {
     );
     const record = rows[0];
     if (!record) return null;
+
+    await this.aiSurfaceContractService.recordExecution({
+      tenantDb: db,
+      tenantId: tenantSubdomain,
+      aiSurface: 'radiology_ai',
+      useCase: 'radiology_analysis',
+      source: 'radiology_ai_service.analyseStudyWithDb',
+      modelId: cdssResponse?.model_version || 'radiology_analysis_proxy',
+      modelVersion: cdssResponse?.model_version || 'radiology_analysis_proxy',
+      patientId,
+      responseSummary: { urgency, confidence, findingCount: findings.length },
+    }).catch((e: any) => this.logger.warn(`AI surface audit recording failed for study ${studyId}: ${e?.message}`));
 
     if (['HIGH', 'CRITICAL'].includes(urgency)) {
       try {

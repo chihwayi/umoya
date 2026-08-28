@@ -21,6 +21,7 @@
     "audit:controller-guards": "node scripts/audit-controller-guards.mjs",
     "audit:migration-sequence": "node scripts/audit-migration-sequence.mjs",
     "audit:tenant-fk-drift": "node scripts/audit-tenant-fk-drift.mjs",
+    "audit:ai-surface-execution-wiring": "node scripts/audit-ai-surface-execution-wiring.mjs",
     "knowledge:validate": "python3 services/cdss-service/validate_knowledge_registry.py",
     "knowledge:release": "python3 services/cdss-service/prepare_knowledge_release.py",
     "ai:eval:suite": "python3 services/cdss-service/evaluation/run_release_gate_suite.py",

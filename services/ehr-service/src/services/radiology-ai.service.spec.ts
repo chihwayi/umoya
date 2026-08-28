@@ -13,7 +13,10 @@ function makeS170Service(cdssOverride?: any, alertOverride?: any) {
     broadcastCriticalAlert: jest.fn().mockResolvedValue(undefined),
   };
   const tenantService: any = { getTenantDatabase: jest.fn() };
-  const aiSurface: any = { buildSurfaceMetadata: jest.fn().mockReturnValue({}) };
+  const aiSurface: any = {
+    buildSurfaceMetadata: jest.fn().mockReturnValue({}),
+    recordExecution: jest.fn().mockResolvedValue({}),
+  };
   return new RadiologyAiService(tenantService, alert, cdss, aiSurface);
 }
 
@@ -101,6 +104,7 @@ describe('RadiologyAiService', () => {
       useCase: payload.useCase,
       provenance: { modelId: payload.modelId, modelVersion: payload.modelVersion, provider: payload.provider, source: payload.source },
     })),
+    recordExecution: jest.fn().mockResolvedValue({}),
   };
 
   beforeEach(() => {

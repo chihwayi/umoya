@@ -12,6 +12,7 @@ describe('MOAS-06 encounter orchestration lifecycle', () => {
       useCase: payload.useCase,
       provenance: { modelId: payload.modelId, modelVersion: payload.modelVersion, provider: payload.provider, source: payload.source },
     })),
+    recordExecution: jest.fn().mockResolvedValue({}),
   };
   const smartDefaultsService = {
     getDefaults: jest.fn().mockResolvedValue({

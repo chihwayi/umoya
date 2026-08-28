@@ -180,6 +180,27 @@ export class EncounterCopilotService {
       }),
     );
 
+    // S267 (F7) — persist the audit trail for this AI execution. getSessionById/
+    // listPatientSessions below only decorate reads with cheap display metadata
+    // (buildAiMetadata) and should not each write a new audit row.
+    await this.aiSurfaceContractService.recordExecution({
+      tenantDb,
+      tenantId,
+      aiSurface: 'encounter_copilot',
+      useCase: 'encounter_copilot',
+      source: 'encounter_copilot_service.generateSession',
+      modelId: 'encounter_copilot_proxy',
+      modelVersion: 'encounter_copilot_proxy',
+      patientId: payload.patientId,
+      encounterId: session.medicalRecordId ?? undefined,
+      actorId: actorUserId ?? undefined,
+      responseSummary: {
+        suggestedOrderCount: suggestedOrders.length,
+        pathwayCount: pathwayRecommendations.length,
+        confidenceScore: session.confidenceScore,
+      },
+    }).catch((e: any) => this.logger.warn(`AI surface audit recording failed for session ${session.id}: ${e?.message}`));
+
     await this.persistPathwayInstances(
       tenantDb,
       session.id,

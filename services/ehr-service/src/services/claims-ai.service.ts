@@ -77,14 +77,23 @@ export class ClaimsAiService {
     });
     await riskScoreRepo.save(score);
 
-    const aiMetadata = this.aiSurfaceContractService.buildSurfaceMetadata({
+    const aiMetadata = await this.aiSurfaceContractService.recordExecution({
+      tenantDb,
+      tenantId,
       aiSurface: 'claims_ai',
       useCase: 'claims_denial_prediction',
-      source: 'claims_ai_service',
+      source: 'claims_ai_service.scoreClaimBeforeSubmission',
       modelId: result.model_version,
       modelVersion: result.model_version,
-      provider: 'local',
-      recorded: true,
+      patientId: claim.patientId,
+      encounterId: claim.encounterId ?? null,
+      responseSummary: { riskScore: result.risk_score, thresholdAction: result.threshold_action },
+    }).catch((e: any) => {
+      this.logger.warn(`AI surface audit recording failed for claim ${claim.claimId}: ${e?.message}`);
+      return this.aiSurfaceContractService.buildSurfaceMetadata({
+        aiSurface: 'claims_ai', useCase: 'claims_denial_prediction', source: 'claims_ai_service.scoreClaimBeforeSubmission',
+        modelId: result.model_version, modelVersion: result.model_version, provider: 'local', recorded: false,
+      });
     });
 
     if (result.threshold_action !== 'allow' && claim.totalAmount > 10000) {
@@ -135,14 +144,22 @@ export class ClaimsAiService {
       status: 'draft',
     });
     const savedAppeal = await appealRepo.save(appeal);
-    (savedAppeal as any).aiMetadata = this.aiSurfaceContractService.buildSurfaceMetadata({
+    (savedAppeal as any).aiMetadata = await this.aiSurfaceContractService.recordExecution({
+      tenantDb,
+      tenantId,
       aiSurface: 'claims_ai',
       useCase: 'claims_appeal_generation',
-      source: 'claims_ai_service',
+      source: 'claims_ai_service.generateAppealTemplate',
       modelId: result.model_version,
       modelVersion: result.model_version,
-      provider: 'local',
-      recorded: true,
+      patientId,
+      responseSummary: { denialReasonCode, ragSourceCount: (result.rag_sources ?? []).length },
+    }).catch((e: any) => {
+      this.logger.warn(`AI surface audit recording failed for claim ${claimId}: ${e?.message}`);
+      return this.aiSurfaceContractService.buildSurfaceMetadata({
+        aiSurface: 'claims_ai', useCase: 'claims_appeal_generation', source: 'claims_ai_service.generateAppealTemplate',
+        modelId: result.model_version, modelVersion: result.model_version, provider: 'local', recorded: false,
+      });
     });
     return savedAppeal as ClaimAppeal;
   }
@@ -189,14 +206,22 @@ export class ClaimsAiService {
       dispensingBlocked: result.dispensing_blocked,
     });
     const saved = await pdmpRepo.save(check);
-    (saved as any).aiMetadata = this.aiSurfaceContractService.buildSurfaceMetadata({
+    (saved as any).aiMetadata = await this.aiSurfaceContractService.recordExecution({
+      tenantDb,
+      tenantId,
       aiSurface: 'claims_ai',
       useCase: 'pharmacy_pdmp_check',
-      source: 'claims_ai_service',
+      source: 'claims_ai_service.checkPdmp',
       modelId: 'pharmacy_pdmp_check_proxy',
       modelVersion: 'pharmacy_pdmp_check_proxy',
-      provider: 'local',
-      recorded: true,
+      patientId,
+      responseSummary: { riskLevel: result.risk_level, dispensingBlocked: result.dispensing_blocked },
+    }).catch((e: any) => {
+      this.logger.warn(`AI surface audit recording failed for PDMP check ${saved.id}: ${e?.message}`);
+      return this.aiSurfaceContractService.buildSurfaceMetadata({
+        aiSurface: 'claims_ai', useCase: 'pharmacy_pdmp_check', source: 'claims_ai_service.checkPdmp',
+        modelId: 'pharmacy_pdmp_check_proxy', modelVersion: 'pharmacy_pdmp_check_proxy', provider: 'local', recorded: false,
+      });
     });
 
     if (result.dispensing_blocked) {

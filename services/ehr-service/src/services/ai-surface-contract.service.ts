@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { HipaaAuditService } from './hipaa-audit.service';
@@ -283,6 +283,8 @@ const AI_SURFACE_CONTRACTS: Record<string, AiSurfaceContractDefinition> = {
 
 @Injectable()
 export class AiSurfaceContractService {
+  private readonly logger = new Logger(AiSurfaceContractService.name);
+
   constructor(@Optional() private readonly hipaaAuditService?: HipaaAuditService) {}
 
   listContracts(): AiSurfaceContractDefinition[] {
@@ -355,6 +357,14 @@ export class AiSurfaceContractService {
     const provider = String(input.provider || 'local');
 
     if (!input.tenantDb || !this.hipaaAuditService) {
+      // S267 (F7) — this used to fail invisibly: a caller could believe it was
+      // recording a real audit trail while silently getting recorded: false with
+      // no trace anywhere. Log at warn level so a missing dependency is at least
+      // operator-visible instead of a silent compliance gap.
+      this.logger.warn(
+        `recordExecution() called without ${!input.tenantDb ? 'tenantDb' : 'HipaaAuditService'} — ` +
+        `aiSurface=${input.aiSurface} useCase=${input.useCase} source=${input.source}: audit NOT persisted.`,
+      );
       return this.buildSurfaceMetadata({
         aiSurface: input.aiSurface,
         useCase: input.useCase,

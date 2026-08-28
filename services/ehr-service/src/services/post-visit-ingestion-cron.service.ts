@@ -18,21 +18,52 @@ export class PostVisitIngestionCronService {
     @Optional() private readonly tenantService?: TenantService,
   ) {}
 
+  /** Threshold past which a `'captured'` session with a valid ingestion source is
+   * considered stuck rather than merely queued — the cron runs every 2 minutes, so
+   * surviving 5 cycles unprocessed means ingestion itself has stalled for it. */
+  private static readonly STUCK_SESSION_THRESHOLD_MINUTES = 15;
+
   @Cron('*/2 * * * *')
   async ingestCapturedSessions(): Promise<void> {
     if (process.env.FEATURE_POSTVISIT_INGESTION_CRON === 'false') return;
 
-    const tenants = await this.tenantService?.getAllActiveTenants?.().catch(() => []) ?? [];
+    let tenants: any[] = [];
+    try {
+      tenants = (await this.tenantService?.getAllActiveTenants?.()) ?? [];
+    } catch (e: any) {
+      // Was previously a silent .catch(() => []) — a tenant-service outage meant
+      // zero tenants processed with no operator-visible trace whatsoever. This is
+      // the single most severe failure mode of this cron (F6): surface it loudly.
+      this.logger.error(`PostVisit ingestion cron: getAllActiveTenants() failed — no tenants will be processed this cycle: ${e?.message}`);
+      return;
+    }
+
+    if (tenants.length === 0) {
+      this.logger.warn('PostVisit ingestion cron: getAllActiveTenants() returned zero tenants — nothing to process this cycle');
+      return;
+    }
 
     for (const tenant of tenants) {
       const subdomain = typeof tenant === 'string' ? tenant : tenant?.subdomain;
       if (!subdomain) continue;
 
-      const tenantDb = await this.tenantService?.getTenantDatabase(subdomain).catch(() => null);
-      if (!tenantDb) continue;
+      let tenantDb: DataSource | null = null;
+      try {
+        tenantDb = await this.tenantService?.getTenantDatabase(subdomain) ?? null;
+      } catch (e: any) {
+        this.logger.error(`PostVisit ingestion cron: DB connection failed for tenant ${subdomain} — skipping this cycle: ${e?.message}`);
+        continue;
+      }
+      if (!tenantDb) {
+        this.logger.error(`PostVisit ingestion cron: getTenantDatabase(${subdomain}) returned null — skipping this cycle`);
+        continue;
+      }
 
       await this.processTenant(tenantDb, subdomain).catch(e =>
-        this.logger.warn(`Ingestion cron failed for ${subdomain}: ${e?.message}`),
+        this.logger.error(`Ingestion cron failed for ${subdomain}: ${e?.message}`),
+      );
+      await this.detectStuckSessions(tenantDb, subdomain).catch(e =>
+        this.logger.warn(`Stuck-session detection failed for ${subdomain}: ${e?.message}`),
       );
     }
   }
@@ -46,7 +77,10 @@ export class PostVisitIngestionCronService {
         AND (recording_storage_key IS NOT NULL OR ambient_session_id IS NOT NULL)
       ORDER BY created_at ASC
       LIMIT 10
-    `).catch(() => []);
+    `).catch((e: any) => {
+      this.logger.error(`PostVisit ingestion cron: failed to query captured sessions for ${subdomain}: ${e?.message}`);
+      return [];
+    });
 
     const work: Array<Promise<void>> = [];
     for (const session of sessions) {
@@ -65,6 +99,30 @@ export class PostVisitIngestionCronService {
     }
 
     await Promise.all(work);
+  }
+
+  /** Flags sessions that have sat in `'captured'` status past the stall threshold —
+   * these represent ingestion having stopped working for that item specifically
+   * (as opposed to merely being queued behind others). Logged at error level so
+   * it surfaces in operator-facing log monitoring/alerting. */
+  private async detectStuckSessions(tenantDb: DataSource, subdomain: string): Promise<void> {
+    const stuck = await tenantDb.query(
+      `SELECT id, source_type, created_at
+       FROM post_visit_sessions
+       WHERE status = 'captured'
+         AND (recording_storage_key IS NOT NULL OR ambient_session_id IS NOT NULL)
+         AND created_at < NOW() - INTERVAL '${PostVisitIngestionCronService.STUCK_SESSION_THRESHOLD_MINUTES} minutes'
+       ORDER BY created_at ASC
+       LIMIT 50`,
+    );
+
+    if (stuck.length > 0) {
+      this.logger.error(
+        `PostVisit ingestion cron: ${stuck.length} session(s) stuck in 'captured' status for over ` +
+        `${PostVisitIngestionCronService.STUCK_SESSION_THRESHOLD_MINUTES} minutes for tenant ${subdomain} — ` +
+        `ingestion appears stalled. Session IDs: ${stuck.map((s: any) => s.id).join(', ')}`,
+      );
+    }
   }
 
   private async processSession(
