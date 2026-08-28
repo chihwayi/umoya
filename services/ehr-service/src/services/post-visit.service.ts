@@ -6898,11 +6898,29 @@ export class PostVisitService {
       };
       // Not rethrown — the patient must still get an answer even if the secondary
       // nurse-task/alert routing fails — but no longer silently invisible (S264).
-      await this.escalationRouter.routeEscalation(sessionId, patientId, signal, tenantDb).catch((err: any) => {
-        this.logger.error(
-          `Escalation routing failed for session ${sessionId} (severity ${signal.escalationLevel}): ${err?.message}`,
-        );
-      });
+      const routingEscalationId = await this.escalationRouter
+        .routeEscalation(sessionId, patientId, signal, tenantDb)
+        .catch((err: any) => {
+          this.logger.error(
+            `Escalation routing failed for session ${sessionId} (severity ${signal.escalationLevel}): ${err?.message}`,
+          );
+          return null;
+        });
+
+      // Link the two escalation records (S265) — post_visit_escalation_events (created
+      // above, SLA/workflow lifecycle) and post_visit_escalations (the actionable nurse
+      // task + alert delivery) are both written for this same trigger but previously had
+      // no cross-reference, so a dashboard reading one had no way to find the other.
+      if (routingEscalationId && escalation?.id) {
+        await tenantDb
+          .query(
+            `UPDATE post_visit_escalation_events SET routing_escalation_id = $2, updated_at = NOW() WHERE id = $1`,
+            [escalation.id, routingEscalationId],
+          )
+          .catch((err: any) => {
+            this.logger.error(`Failed to link escalation event ${escalation.id} to routing escalation ${routingEscalationId}: ${err?.message}`);
+          });
+      }
     }
 
     const assistantAnswer = await this.buildGroundedCompanionAnswer({

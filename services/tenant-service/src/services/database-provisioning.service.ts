@@ -1917,7 +1917,7 @@ export class DatabaseProvisioningService {
       {
         id: 'sprint51_post_visit_patient_companion_escalations',
         label: 'Sprint 51 - Post-Visit Patient Companion Messaging and Escalations',
-        version: '2026.03.05',
+        version: '2026.08.27.1',
         description: 'Adds patient companion chat persistence, teach-back acknowledgements, and escalation routing events',
         statements: () => this.getSprint51PostVisitCompanionEscalationSchemaStatements(),
       },
@@ -10276,6 +10276,17 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_route ON post_visit_escalation_events(route_target, status, sla_due_at)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_trigger ON post_visit_escalation_events(trigger_type, status, route_target, detected_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_patient ON post_visit_escalation_events(patient_id, detected_at DESC)`,
+      // S265 (2026-08-27): post_visit_escalation_events (this table — SLA/workflow/
+      // notification lifecycle, queried by 20+ dashboard/report call sites) and
+      // post_visit_escalations (PostVisitEscalationRoutingService — creates the
+      // actionable nurse_tasks row + real-time alert delivery) are both written for the
+      // same trigger (a patient-message escalation) but had no cross-reference, so a
+      // dashboard reading one table had no way to know a record existed in the other.
+      // Not merged — they hold genuinely different data (this one has SLA/workflow
+      // fields the other doesn't; the other has the nurse_task_id the actionable
+      // worklist depends on) — linked instead.
+      `ALTER TABLE post_visit_escalation_events ADD COLUMN IF NOT EXISTS routing_escalation_id UUID`,
+      `CREATE INDEX IF NOT EXISTS idx_post_visit_escalation_events_routing ON post_visit_escalation_events(routing_escalation_id) WHERE routing_escalation_id IS NOT NULL`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_session ON post_visit_companion_acknowledgements(session_id, created_at DESC)`,
       `CREATE INDEX IF NOT EXISTS idx_post_visit_companion_ack_patient ON post_visit_companion_acknowledgements(patient_id, acknowledgement_type)`,
       `CREATE OR REPLACE FUNCTION update_updated_at_column()

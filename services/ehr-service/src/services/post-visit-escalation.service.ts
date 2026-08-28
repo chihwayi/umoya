@@ -147,6 +147,13 @@ export class PostVisitEscalationService {
       workflowKey: row.workflow_key || null,
       metadata,
       trustSummary: this.buildEscalationTrustSummary(row, metadata),
+      // Linkage to PostVisitEscalationRoutingService's separate escalation record (S265)
+      // — undefined (not just absent) when the row didn't come from the joined query in
+      // listEscalations, so callers can tell "not linked" apart from "not looked up".
+      routingEscalationId: row.routing_escalation_id || null,
+      routingNurseTaskId: row.routing_nurse_task_id !== undefined ? (row.routing_nurse_task_id || null) : undefined,
+      routingStatus: row.routing_status !== undefined ? (row.routing_status || null) : undefined,
+      routingAlertDeliveryFailed: row.routing_alert_delivery_failed !== undefined ? Boolean(row.routing_alert_delivery_failed) : undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -230,10 +237,19 @@ export class PostVisitEscalationService {
     const limit  = Math.min(Math.max(Number(filters.limit  || 50), 1), 200);
     const offset = Math.max(Number(filters.offset || 0), 0);
 
+    // routing_escalation_id links to the separate post_visit_escalations table
+    // (PostVisitEscalationRoutingService — creates the actionable nurse_tasks row and
+    // real-time alert delivery for high/critical severity). Joined here so this
+    // dashboard read shows whether a nurse task actually exists for an escalation,
+    // rather than only the SLA/workflow lifecycle this table owns (S265).
     const rows = await tenantDb.query(
-      `SELECT e.*, p.first_name, p.last_name, p.patient_number
+      `SELECT e.*, p.first_name, p.last_name, p.patient_number,
+              pve.nurse_task_id AS routing_nurse_task_id,
+              pve.status AS routing_status,
+              pve.alert_delivery_failed AS routing_alert_delivery_failed
        FROM post_visit_escalation_events e
        LEFT JOIN patients p ON p.id = e.patient_id
+       LEFT JOIN post_visit_escalations pve ON pve.id = e.routing_escalation_id
        ${whereSql}
        ORDER BY e.detected_at DESC
        LIMIT $${idx++} OFFSET $${idx++}`,

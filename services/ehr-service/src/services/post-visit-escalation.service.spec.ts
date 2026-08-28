@@ -132,6 +132,38 @@ describe('PostVisitEscalationService', () => {
       expect(result.summary.highPriorityOpenCount).toBe(1);
     });
 
+    it('surfaces the linked nurse-task/routing record when one exists (S265)', async () => {
+      const query = makeQuery(
+        [makeEscalationRow({
+          routing_escalation_id: 'route-esc-1',
+          routing_nurse_task_id: 'task-1',
+          routing_status: 'routed',
+          routing_alert_delivery_failed: false,
+        })],
+        [makeSummaryRow()],
+      );
+      const tenantDb = makeTenantDb(query);
+
+      const result = await service.listEscalations(tenantDb);
+
+      expect(result.escalations[0].routingEscalationId).toBe('route-esc-1');
+      expect(result.escalations[0].routingNurseTaskId).toBe('task-1');
+      expect(result.escalations[0].routingStatus).toBe('routed');
+      expect(result.escalations[0].routingAlertDeliveryFailed).toBe(false);
+    });
+
+    it('leaves routing fields null when no linked record exists', async () => {
+      const query = makeQuery(
+        [makeEscalationRow()],
+        [makeSummaryRow()],
+      );
+      const tenantDb = makeTenantDb(query);
+
+      const result = await service.listEscalations(tenantDb);
+
+      expect(result.escalations[0].routingEscalationId).toBeNull();
+    });
+
     it('normalizes trust summary from escalation metadata and classifier source', async () => {
       const query = makeQuery(
         [
