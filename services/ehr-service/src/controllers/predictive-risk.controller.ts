@@ -1,4 +1,4 @@
-import { UseGuards, Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Query, Req } from '@nestjs/common';
 import { PredictiveRiskService } from '../services/predictive-risk.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
@@ -23,6 +23,11 @@ export class PredictiveRiskController {
     @Query('subdomain') subdomain: string,
   ) {
     return this.svc.getDeteriorationHistory(subdomain, patientId);
+  }
+
+  @Get('deterioration-watch/list')
+  getActiveWorseningTrends(@Req() req: any, @Query('subdomain') subdomain?: string) {
+    return this.svc.getActiveWorseningTrends(subdomain || req.tenantId);
   }
 
   @Post('readmission')

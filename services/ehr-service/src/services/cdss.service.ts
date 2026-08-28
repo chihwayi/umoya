@@ -2916,9 +2916,14 @@ export class CdssService {
     tenantId?: string,
     tenantDb?: DataSource,
   ): Promise<any> {
+    // Calls the ML-blended endpoint, which honestly falls back to pure MEWS
+    // (ml_enhanced: false) whenever no production deterioration model is loaded —
+    // see /risk/deterioration/ml in cdss-service/main.py. This means predictions
+    // become ML-enhanced automatically the moment a model is ever deployed, with
+    // no further wiring required.
     const responseData = await this.postWithPolicy<any>(
       'risk_deterioration',
-      '/risk/deterioration',
+      '/risk/deterioration/ml',
       {
         patientId: payload.patientId,
         admissionId: payload.admissionId,
@@ -2944,6 +2949,7 @@ export class CdssService {
         score: responseData?.score ?? null,
         eventType: responseData?.event_type || null,
         timeframeHours: responseData?.timeframe_hours ?? null,
+        mlEnhanced: responseData?.ml_enhanced === true,
         abstained: responseData?.abstained === true,
       },
       governance: responseData?.governance || {},

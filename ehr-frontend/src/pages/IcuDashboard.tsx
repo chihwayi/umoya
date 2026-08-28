@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Wind, Droplets, AlertTriangle, CheckCircle, Heart } from 'lucide-react';
+import { Activity, Wind, Droplets, AlertTriangle, CheckCircle, Heart, TrendingDown } from 'lucide-react';
 import { api } from '../services/api';
 
 const SOFA_COLOR = (score: number): string =>
@@ -19,6 +19,7 @@ const ICU_TYPE_LABEL: Record<string, string> = {
 export default function IcuDashboard() {
   const [census, setCensus]   = useState<any[]>([]);
   const [dash, setDash]       = useState<any>(null);
+  const [watchList, setWatchList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter]   = useState<string>('');
 
@@ -26,9 +27,11 @@ export default function IcuDashboard() {
     Promise.all([
       api.get('/icu/census'),
       api.get('/icu/dashboard'),
-    ]).then(([c, d]) => {
+      api.get('/risk/deterioration-watch/list').catch(() => ({ data: [] })),
+    ]).then(([c, d, w]) => {
       setCensus(c.data ?? c);
       setDash(d.data ?? d);
+      setWatchList(w.data ?? w ?? []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -76,6 +79,37 @@ export default function IcuDashboard() {
           <span className="text-[#E8614D] font-semibold text-sm">
             {ventAlarms} ventilator alarm{ventAlarms > 1 ? 's' : ''} in the last hour — driving pressure or plateau exceeded
           </span>
+        </div>
+      )}
+
+      {/* Deterioration Trend Watch (S278) — patient-specific rate-of-change lookahead,
+          computed from windowed vitals; distinct from the current-vitals NEWS2/MEWS
+          alerts above. Trend extrapolation, not a trained ML prediction — labeled
+          honestly as such. */}
+      {watchList.length > 0 && (
+        <div
+          className="mb-5 rounded-xl px-4 py-3"
+          style={{ background: '#F0954A12', border: '1px solid #F0954A44' }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingDown size={16} color="#F0954A" />
+            <span className="text-[#F0954A] font-semibold text-sm">
+              Deterioration Trend Watch — {watchList.length} patient{watchList.length > 1 ? 's' : ''} trending worse
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {watchList.map((w: any) => (
+              <div key={w.id} className="flex items-center justify-between text-xs">
+                <span className="text-[#E2EDF8]">{w.first_name} {w.last_name}</span>
+                <span className="text-[#7A9CBC]">
+                  Score {Number(w.deterioration_score).toFixed(0)} ({w.model_used})
+                  {w.trend_direction === 'worsening' && w.projected_hours_to_critical != null && (
+                    <> · trending toward critical in ~{w.projected_hours_to_critical}h</>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

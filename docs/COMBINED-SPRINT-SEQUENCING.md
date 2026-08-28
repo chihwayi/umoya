@@ -34,7 +34,7 @@ Within each phase, sprints are additionally ordered to respect **file overlap**:
 | 15 | S272 | Knowledge ingestion reliability | AI-INTELLIGENCE | — | Not started |
 | 16 | S273 | Voice ID + remaining hygiene | AI-INTELLIGENCE | — | Not started |
 | **Phase 4 — Verification-first** | | | | | |
-| 17 | S278 | ICU predictive deterioration — verify, then close gap if real | SOUTHERN-AFRICA | — | Not started |
+| 17 | S278 | ICU predictive deterioration — verify, then close gap if real | SOUTHERN-AFRICA | — | **Done (2026-08-28)** |
 
 **Dropped / deferred (not in this sequence):** S279 (Multi-Scheme Medical Aid Framework), S280 (POPIA Compliance Layer) — see `docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md` Part 2 for why.
 

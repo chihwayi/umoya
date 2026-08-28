@@ -175,7 +175,7 @@ Umoya is AI-first — every major clinical surface has an integrated AI layer go
 | Clinical RAG | pgvector + BM25 hybrid retrieval grounds all AI output in real clinical documents |
 | Denial prediction | XGBoost pre-submission claim risk scoring with explainable top-3 reasons and RAG-grounded appeal letters |
 | Patient risk stratification | 6-dimension composite risk tier (chronic conditions, vitals, adherence, SDOH, no-show, labs) with nightly batch |
-| Early warning system | ML deterioration probability + NEWS2 breakdown surfaced in the vitals panel |
+| Early warning system | NEWS2/MEWS scoring with per-component breakdown; per-patient trend extrapolation (rate-of-change over trailing vitals) projects hours-to-critical-threshold; ML-blended scoring auto-activates the moment a production deterioration model is deployed, with honest fallback to pure MEWS until then |
 | Radiology AI | DICOM viewer with AI attention heatmap overlay and incidental finding SLA tracking |
 | Ambient transcription | Whisper-based voice capture with failed-chunk retry queue and automatic PostVisit handoff |
 | PostVisit AI | AI-generated visit summaries, follow-up task generation, outcome capture, and self-learning feedback loop |

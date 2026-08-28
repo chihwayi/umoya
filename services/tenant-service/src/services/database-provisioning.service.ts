@@ -2337,8 +2337,8 @@ export class DatabaseProvisioningService {
       {
         id: 'sprint89_predictive_risk',
         label: 'Sprint 89 - Predictive Deterioration & Readmission',
-        version: '2026.03.19',
-        description: 'deterioration_predictions, readmission_predictions tables',
+        version: '2026.08.28.1',
+        description: 'deterioration_predictions, readmission_predictions tables + trend-based lookahead columns (S278)',
         statements: () => this.getSprint89PredictiveRiskStatements(),
       },
       {
@@ -23544,6 +23544,15 @@ RECOMMENDATIONS:
       )`,
       `CREATE INDEX IF NOT EXISTS idx_det_pred_patient ON deterioration_predictions(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_det_pred_alert ON deterioration_predictions(triggered_alert) WHERE triggered_alert = TRUE`,
+      // S278 — patient-specific trend/rate-of-change lookahead columns, added
+      // alongside the existing static-band MEWS timeframe estimate. Honestly
+      // labeled as trend extrapolation, not an ML prediction (no trained
+      // production deterioration model exists — see /risk/deterioration/ml's
+      // ml_enhanced flag, which is now also captured via model_used).
+      `ALTER TABLE deterioration_predictions ADD COLUMN IF NOT EXISTS trend_direction VARCHAR(20)`,
+      `ALTER TABLE deterioration_predictions ADD COLUMN IF NOT EXISTS trend_method VARCHAR(30) DEFAULT 'linear_extrapolation'`,
+      `ALTER TABLE deterioration_predictions ADD COLUMN IF NOT EXISTS projected_hours_to_critical INTEGER`,
+      `ALTER TABLE deterioration_predictions ADD COLUMN IF NOT EXISTS trend_details JSONB DEFAULT '{}'`,
       `CREATE TABLE IF NOT EXISTS readmission_predictions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         patient_id UUID NOT NULL,
