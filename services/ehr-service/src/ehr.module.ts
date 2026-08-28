@@ -301,6 +301,8 @@ import { ClinicalStaffCredentialingController } from './controllers/clinical-sta
 import { ClinicalStaffCredentialingService } from './services/clinical-staff-credentialing.service';
 import { StaffDutyRosteringController } from './controllers/staff-duty-rostering.controller';
 import { StaffDutyRosteringService } from './services/staff-duty-rostering.service';
+import { BiomedicalEquipmentController } from './controllers/biomedical-equipment.controller';
+import { BiomedicalEquipmentService } from './services/biomedical-equipment.service';
 import { AestheticsController } from './controllers/aesthetics.controller';
 import { AestheticsService } from './services/aesthetics.service';
 import { PaediatricCardiologyController } from './controllers/paediatric-cardiology.controller';
@@ -959,6 +961,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PatientSafetyIncidentController,
     ClinicalStaffCredentialingController,
     StaffDutyRosteringController,
+    BiomedicalEquipmentController,
     OutcomeLinkageController,
     CascadeAnalyticsController,
     LabQualityController,
@@ -1330,6 +1333,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     PatientSafetyIncidentService,
     ClinicalStaffCredentialingService,
     StaffDutyRosteringService,
+    BiomedicalEquipmentService,
     OutcomeLinkageService,
     CascadeAnalyticsService,
     LabQualityService,

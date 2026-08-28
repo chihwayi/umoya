@@ -76,6 +76,7 @@ const OemSurveillanceDashboard = lazy(() => import('./pages/OemSurveillanceDashb
 const PatientSafetyIncidentDashboard = lazy(() => import('./pages/PatientSafetyIncidentDashboard'));
 const StaffCredentialingDashboard = lazy(() => import('./pages/StaffCredentialingDashboard'));
 const StaffDutyRosterDashboard = lazy(() => import('./pages/StaffDutyRosterDashboard'));
+const BiomedicalEquipmentDashboard = lazy(() => import('./pages/BiomedicalEquipmentDashboard'));
 const PACUDashboard = lazy(() => import('./pages/PACUDashboard'));
 const MARDashboard = lazy(() => import('./pages/MARDashboard'));
 const BloodBankDashboard = lazy(() => import('./pages/BloodBankDashboard'));
@@ -1009,6 +1010,15 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <StaffDutyRosterDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            {/* Sprint 277: Biomedical Equipment Register (core, admin-only) */}
+            <Route
+              path="/ehr/:tenantSlug/biomedical-equipment"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'nurse']}>
+                  <BiomedicalEquipmentDashboard />
                 </RoleProtectedRoute>
               }
             />

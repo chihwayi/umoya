@@ -8194,6 +8194,58 @@ export class DatabaseProvisioningService {
         ],
       },
 
+      // S277 — Biomedical Equipment Register. Southern-Africa-hospital-readiness gap
+      // G4: every "calibration" hit in the schema before this was AI-model calibration
+      // metrics — nothing tracked clinical equipment (ventilators, infusion pumps,
+      // defibrillators, monitors) service/calibration due-dates or out-of-service
+      // status. Directly maps to a COHSASA technical-services standard.
+      // See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+      {
+        id: 'biomedical_equipment_register',
+        label: 'Biomedical Equipment Register (S277)',
+        version: '2026.08.28.1',
+        description: 'Clinical equipment inventory with calibration due-dates, out-of-service flagging, and maintenance history',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS biomedical_equipment (
+            id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            tenant_id               TEXT NOT NULL,
+            equipment_type          TEXT NOT NULL,
+            name                    TEXT NOT NULL,
+            manufacturer            TEXT,
+            model                   TEXT,
+            serial_number           TEXT,
+            location                TEXT,
+            status                  TEXT NOT NULL DEFAULT 'in_service'
+              CHECK (status IN ('in_service','out_of_service','decommissioned')),
+            purchase_date           DATE,
+            last_calibration_date   DATE,
+            calibration_interval_days INTEGER NOT NULL DEFAULT 365,
+            next_calibration_due_date DATE,
+            out_of_service_reason   TEXT,
+            created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_be_tenant ON biomedical_equipment(tenant_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_be_calibration_due ON biomedical_equipment(tenant_id, next_calibration_due_date) WHERE status = 'in_service'`,
+          `CREATE INDEX IF NOT EXISTS idx_be_status ON biomedical_equipment(tenant_id, status)`,
+          `CREATE INDEX IF NOT EXISTS idx_be_location ON biomedical_equipment(tenant_id, location)`,
+          `CREATE TABLE IF NOT EXISTS biomedical_equipment_maintenance_log (
+            id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            equipment_id  UUID NOT NULL REFERENCES biomedical_equipment(id) ON DELETE CASCADE,
+            tenant_id     TEXT NOT NULL,
+            event_type    TEXT NOT NULL
+              CHECK (event_type IN ('calibration','repair','inspection','out_of_service','returned_to_service','decommission')),
+            performed_by  UUID REFERENCES users(id),
+            performed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+            notes         TEXT,
+            next_due_date DATE,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_beml_equipment ON biomedical_equipment_maintenance_log(equipment_id, performed_at DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_beml_tenant ON biomedical_equipment_maintenance_log(tenant_id, performed_at DESC)`,
+        ],
+      },
+
       // S235 — AI Model Performance Registry
       {
         id: 'nc_ai_performance_registry',
