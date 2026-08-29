@@ -6861,6 +6861,7 @@ export class PostVisitService {
 
     const detection = await this.classifyEscalationSignals({
       sessionId,
+      tenantId: options.tenantId,
       message: messageText,
       language: this.normalizeLanguage(payload.language || sessionRow.language || 'en'),
     });
@@ -10740,7 +10741,12 @@ Object.assign(PostVisitService.prototype as any, {
     return String(process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE || 'false').toLowerCase() === 'true';
   },
 
-  classifyEscalationSignals(this: any, payload: any): PostVisitEscalationClassifierOutput {
+  /** Pure keyword matcher — F12/S269 fix: this used to be the *only* classifier.
+   * Now retained solely as the explicit fallback when the LLM classifier
+   * (classifyEscalationSignals below) is unavailable or fails, since nuanced
+   * messages that don't hit a keyword ("trouble sleeping since the surgery")
+   * were silently missed by keywords alone. */
+  classifyEscalationSignalsKeywordFallback(this: any, payload: any): PostVisitEscalationClassifierOutput {
     const text = String(payload?.message || payload || '').toLowerCase().trim();
     const criticalTerms = ['chest pain', 'shortness of breath', 'difficulty breathing', 'cannot breathe', 'suicidal', 'seizure', 'stroke'];
     const highTerms = ['severe headache', 'vision loss', 'confusion', 'high fever', 'palpitations', 'worsening pain'];
@@ -10771,6 +10777,61 @@ Object.assign(PostVisitService.prototype as any, {
       return { detected: true, severity: 'moderate', routeTarget: 'nurse', confidence: 0.72, triggerTerms: moderateMatches, temporality: temporality === 'unclear' ? 'current' : temporality, classifierSource: 'keyword_v1', rationale: 'Moderate symptom keywords matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'symptom_keyword', slaMinutes: 240 } as any;
     }
     return { detected: false, severity: 'low', routeTarget: 'nurse', confidence: 0.2, triggerTerms: [], temporality, classifierSource: 'keyword_v1', rationale: 'No escalation signal matched.', escalationSuppressedReason: null, classifierModel: null, triggerType: 'none', slaMinutes: null } as any;
+  },
+
+  /** F12 fix (S271) — routes through the real LLM classifier
+   * (PostVisitGroundedLlmService.classifyEscalationSignal, which already existed
+   * but was never called from here), using the keyword matcher's output as the
+   * stage-1 prefilter it was always designed to feed (see the LLM prompt's
+   * stage1_prefilter field). Falls back to pure keyword matching, unchanged,
+   * whenever the LLM path is unavailable or returns null. */
+  async classifyEscalationSignals(this: any, payload: any): Promise<PostVisitEscalationClassifierOutput> {
+    const keywordResult = this.classifyEscalationSignalsKeywordFallback(payload);
+
+    if (!this.groundedLlmService) {
+      return keywordResult;
+    }
+
+    const message = String(payload?.message || payload || '').trim();
+    if (!message) {
+      return keywordResult;
+    }
+
+    try {
+      const llmResult = await this.groundedLlmService.classifyEscalationSignal({
+        sessionId: payload?.sessionId,
+        tenantId: payload?.tenantId,
+        message,
+        triggerTerms: keywordResult.triggerTerms || [],
+        candidateSeverity: keywordResult.severity,
+      });
+
+      if (!llmResult) {
+        return keywordResult;
+      }
+
+      const slaBySeverity: Record<string, number> = { critical: 5, high: 60, moderate: 240, low: 0 };
+      const suppressedByHistory = llmResult.temporality === 'historical' && this.isEscalationConfidenceV2Enabled();
+      const detected = !suppressedByHistory && llmResult.severity !== 'low';
+
+      return {
+        detected,
+        severity: llmResult.severity,
+        routeTarget: suppressedByHistory ? 'doctor' : llmResult.routeTarget,
+        confidence: llmResult.confidence,
+        triggerTerms: keywordResult.triggerTerms || [],
+        temporality: llmResult.temporality,
+        classifierSource: 'llm_v1',
+        rationale: llmResult.rationale || 'Classified by governed LLM escalation classifier.',
+        escalationSuppressedReason: suppressedByHistory ? 'historical_signal' : null,
+        classifierModel: llmResult.model,
+        triggerType: llmResult.severity === 'low' ? 'none' : 'llm_classification',
+        slaMinutes: llmResult.severity === 'low' ? null : slaBySeverity[llmResult.severity],
+      } as any;
+    } catch (e: any) {
+      this.logger.warn(`LLM escalation classification failed, using keyword fallback: ${e?.message}`);
+      return keywordResult;
+    }
   },
 
   normalizeIntraVisitAlertSource(this: any, value: any): string {

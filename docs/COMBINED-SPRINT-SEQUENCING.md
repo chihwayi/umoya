@@ -30,7 +30,7 @@ Within each phase, sprints are additionally ordered to respect **file overlap**:
 | 11 | S268 | CDSS RAG & guidelines hardening | AI-INTELLIGENCE | Phase 1 settled | **Done (2026-08-28)** |
 | 12 | S269 | Backend silent-catch sweep — workflow/order pipelines | AI-INTELLIGENCE | Phase 1 settled | **Done (2026-08-28)** |
 | 13 | S270 | AI governance dashboard honesty | AI-INTELLIGENCE | S267 | **Done (2026-08-28)** |
-| 14 | S271 | Escalation classifier LLM wiring | AI-INTELLIGENCE | S264/S265 | Not started |
+| 14 | S271 | Escalation classifier LLM wiring | AI-INTELLIGENCE | S264/S265 | **Done (2026-08-28)** |
 | 15 | S272 | Knowledge ingestion reliability | AI-INTELLIGENCE | — | Not started |
 | 16 | S273 | Voice ID + remaining hygiene | AI-INTELLIGENCE | — | Not started |
 | **Phase 4 — Verification-first** | | | | | |

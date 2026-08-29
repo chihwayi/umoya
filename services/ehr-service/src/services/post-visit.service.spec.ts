@@ -3261,6 +3261,14 @@ describe('PostVisitService', () => {
       expect(result.classification.temporality).toBe('historical');
       expect(result.classification.suppressedReason).toBe('historical_signal');
       expect(result.classification.routeTarget).toBe('doctor');
+      // F12 (S271) — must actually route through the LLM classifier, not just
+      // coincidentally match via the keyword fallback (which this test's input
+      // would previously satisfy on its own, silently leaving the LLM mock unused).
+      expect(groundedLlmServiceMock.classifyEscalationSignal).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'I had chest pain last week but feel better now' }),
+      );
+      expect(result.classification.classifierSource).toBe('llm_v1');
+      expect(result.classification.classifierModel).toBe('gpt-4o-mini');
     } finally {
       if (typeof originalFlag === 'string') {
         process.env.FEATURE_POSTVISIT_ESCALATION_CONFIDENCE = originalFlag;
