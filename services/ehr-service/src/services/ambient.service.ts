@@ -115,6 +115,15 @@ export class AmbientService {
   /**
    * Send an audio chunk to the CDSS /transcription/stream endpoint.
    * Returns structured entities extracted from the conversation so far.
+   *
+   * F22 (S273): deliberately reachable only via ambient.gateway.ts's WebSocket
+   * handler, not AmbientController (which only exposes session-lifecycle REST
+   * fallbacks — start/end/action). Continuous audio-chunk streaming needs a
+   * persistent connection; a REST endpoint would mean re-establishing HTTP
+   * overhead per chunk for no benefit, and there is no non-WebSocket client in
+   * this codebase. Documented here explicitly so this isn't mistaken for an
+   * accidental gap by a future reader — add a REST endpoint only if a real
+   * REST-only consumer actually needs one.
    */
   async processChunk(
     sessionId: string,

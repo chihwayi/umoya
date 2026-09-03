@@ -2664,6 +2664,122 @@ describe('PostVisitService', () => {
     }));
   });
 
+  it('F20: degrades gracefully instead of crashing when companion memory retrieval fails', async () => {
+    const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
+    const warnSpy = jest.spyOn((service as any).logger, 'warn');
+    jest.spyOn(service as any, 'getPatientCompanionMemoryFacts').mockRejectedValue(new Error('connection reset'));
+
+    let companionInsertCount = 0;
+    const patientAiSessionRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ id: 'patient-ai-session-1', ...value })),
+      findOneBy: jest.fn(async () => null),
+    };
+    const patientAiEscalationRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ id: 'patient-ai-escalation-1', ...value })),
+      findOneBy: jest.fn(async () => null),
+    };
+    const followupRepo = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ id: 'followup-1', ...value })),
+      findOneBy: jest.fn(async () => null),
+    };
+
+    const tenantDb = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM post_visit_sessions')) {
+          return [
+            {
+              id: 'session-1',
+              patient_id: 'patient-1',
+              status: 'published',
+              source_type: 'in_person',
+              language: 'en',
+            },
+          ];
+        }
+        if (sql.includes('FROM post_visit_draft_artifacts') && sql.includes('artifact_type = $2')) {
+          if (params[1] === 'visit_summary') {
+            return [
+              {
+                id: 'artifact-summary-1',
+                artifact_status: 'published',
+                content: { plain_language_summary: 'Follow your blood pressure plan.' },
+              },
+            ];
+          }
+          if (params[1] === 'recommendation_bundle') {
+            return [
+              {
+                id: 'artifact-rec-1',
+                artifact_status: 'published',
+                content: { items: [{ title: 'Take medications as prescribed' }] },
+              },
+            ];
+          }
+        }
+        if (sql.includes('INSERT INTO post_visit_companion_threads')) {
+          return [{ id: 'thread-1', status: 'active', message_count: 0 }];
+        }
+        if (sql.includes('INSERT INTO post_visit_companion_messages')) {
+          companionInsertCount += 1;
+          if (companionInsertCount === 1) {
+            return [
+              {
+                id: 'msg-patient-1',
+                message_text: 'How should I take my new medication?',
+                message_type: 'question',
+                escalation_detected: false,
+                escalation_event_id: null,
+                created_at: '2026-03-05T11:00:00.000Z',
+              },
+            ];
+          }
+          return [
+            {
+              id: 'msg-assistant-1',
+              message_text: 'Take it once daily with food.',
+              message_type: 'answer',
+              created_at: '2026-03-05T11:00:05.000Z',
+            },
+          ];
+        }
+        if (sql.includes('UPDATE post_visit_companion_messages') && sql.includes('escalation_detected = TRUE')) {
+          return [];
+        }
+        if (sql.includes('UPDATE post_visit_companion_threads')) {
+          return [];
+        }
+        return [];
+      }),
+      getRepository: jest.fn((entity: any) => {
+        switch (entity?.name) {
+          case 'PatientAiSession':
+            return patientAiSessionRepo;
+          case 'PatientAiEscalation':
+            return patientAiEscalationRepo;
+          case 'PatientFollowupOrchestration':
+            return followupRepo;
+          default:
+            return null;
+        }
+      }),
+    } as any;
+
+    const result = await service.sendCompanionMessage(
+      tenantDb,
+      'session-1',
+      'patient-1',
+      { message: 'How should I take my new medication?' },
+    );
+
+    expect(result.memory.factCount).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Companion memory retrieval failed for patient patient-1'),
+    );
+  });
+
   it('syncs post-visit escalation resolution into patient-ai escalation and follow-up state', async () => {
     const service = new PostVisitService(transcriptionServiceMock as any, patientServiceMock as any);
     const patientAiSessionRows: any[] = [

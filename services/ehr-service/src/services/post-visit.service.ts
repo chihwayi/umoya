@@ -1387,7 +1387,7 @@ export class PostVisitService {
           { fields: ['suggestions', 'documentation'], recordCount: suggestions.length },
           { sessionId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging failed: ${e?.message}`));
     }
 
     return {
@@ -1695,7 +1695,7 @@ export class PostVisitService {
             { fields: ['brief_content', 'follow_up_risk'], recordCount: 1 },
             { appointmentId },
           )
-          .catch(() => {});
+          .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging failed: ${e?.message}`));
       }
       return {
         featureEnabled: true,
@@ -1931,7 +1931,7 @@ export class PostVisitService {
           { fields: ['brief_content', 'follow_up_risk'], recordCount: 1 },
           { appointmentId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging failed: ${e?.message}`));
     }
 
     if (
@@ -2522,7 +2522,7 @@ export class PostVisitService {
           { fields: ['title', 'body_json', 'document_type'], recordCount: rows.length },
           { sessionId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging failed: ${e?.message}`));
     }
 
     return {
@@ -3785,7 +3785,7 @@ export class PostVisitService {
           { fields: ['matches', 'eligibility'], recordCount: matches.length },
           { sessionId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging failed: ${e?.message}`));
     }
 
     return {
@@ -5476,7 +5476,7 @@ export class PostVisitService {
           { fields: ['medications', 'age', 'egfr'], recordCount: 1 },
           { sessionId, source: options.source },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging failed: ${e?.message}`));
     }
 
     if (this.isSpecialtySoapEnabled() && !specialtySoapValidation.isComplete) {
@@ -6141,7 +6141,7 @@ export class PostVisitService {
           { fields: ['soap_note', 'patient_context'], recordCount: 1 },
           { sessionId, specialty: specialtySoapValidation.specialty },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging failed: ${e?.message}`));
     }
 
     let citationQualityMeta: Record<string, any> | null = null;
@@ -6513,7 +6513,7 @@ export class PostVisitService {
           { fields: ['timeline', 'content'], recordCount: 1 },
           { action: 'get_latest' },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging failed: ${e?.message}`));
     }
     return {
       featureEnabled: true,
@@ -6857,7 +6857,19 @@ export class PostVisitService {
         source: 'patient_message',
       },
     });
-    const memoryFacts = await this.getPatientCompanionMemoryFacts(tenantDb, patientId, 8);
+    // F20 fix (S273) — this call had no error handling at all: a transient memory
+    // query failure would crash the whole patient-companion message-send request.
+    // Now degrades gracefully (LLM still answers, just without memory context) and
+    // records that degradation honestly in the audit trail below, instead of
+    // silently implying "grounded" context was always available.
+    let memoryFacts: string[] = [];
+    let memoryContextAvailable = true;
+    try {
+      memoryFacts = await this.getPatientCompanionMemoryFacts(tenantDb, patientId, 8);
+    } catch (e: any) {
+      memoryContextAvailable = false;
+      this.logger.warn(`Companion memory retrieval failed for patient ${patientId}, answering without memory context: ${e?.message}`);
+    }
 
     const detection = await this.classifyEscalationSignals({
       sessionId,
@@ -6947,6 +6959,7 @@ export class PostVisitService {
         escalation_detected: detection.detected,
         citation_count: Array.isArray(assistantAnswer.citationsUsed) ? assistantAnswer.citationsUsed.length : 0,
         memory_fact_count: memoryFacts.length,
+        memory_context_available: memoryContextAvailable,
       },
     });
 

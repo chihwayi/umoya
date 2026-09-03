@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { CdssService } from './cdss.service';
 import { AbstentionLogService, AbstentionReason } from './abstention-log.service';
 
@@ -41,7 +42,10 @@ export class VoiceTranscriptionService {
 
     if (this.cdss) {
       try {
-        const sessionId = `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        // F13 fix (S273) — Math.random() is not cryptographically secure and was
+        // the odd one out; every other generated ID in this codebase (MRNs, claim
+        // numbers, tokens) already uses crypto. Matches the established pattern.
+        const sessionId = `voice_${Date.now()}_${randomBytes(6).toString('hex')}`;
         const result = await this.cdss.ambientTranscriptionStream({
           sessionId,
           audioBase64,

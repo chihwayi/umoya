@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Put, Query, Request, UseGuards } fr
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { AiPerformanceService } from '../services/ai-performance.service';
+import { RecordAiPredictionDto } from '../dto/ai-performance.dto';
 
 @Controller('tenants/:tenantId/ai')
 @UseGuards(JwtAuthGuard)
@@ -9,7 +10,7 @@ export class AiPerformanceController {
   constructor(private readonly aiPerformance: AiPerformanceService) {}
 
   @Post('predictions')
-  recordPrediction(@Param('tenantId') tenantId: string, @Body() dto: any) {
+  recordPrediction(@Param('tenantId') tenantId: string, @Body() dto: RecordAiPredictionDto) {
     return this.aiPerformance.recordPrediction(tenantId, dto);
   }
 

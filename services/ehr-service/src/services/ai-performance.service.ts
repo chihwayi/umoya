@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { TenantService } from './tenant.service';
+import { RecordAiPredictionDto } from '../dto/ai-performance.dto';
 
 @Injectable()
 export class AiPerformanceService {
   constructor(private readonly tenantService: TenantService) {}
 
-  async recordPrediction(tenantId: string, dto: any): Promise<string> {
+  // F21 fix (S273) — dto is now a validated RecordAiPredictionDto (class-validator,
+  // enforced globally via ValidationPipe with whitelist/forbidNonWhitelisted) instead
+  // of `any`, so callers can no longer write arbitrary confidence scores/model
+  // versions/unvalidated JSON that other governance dashboards trust as ground truth.
+  async recordPrediction(tenantId: string, dto: RecordAiPredictionDto): Promise<string> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const result = await db.query(
       `INSERT INTO ai_predictions

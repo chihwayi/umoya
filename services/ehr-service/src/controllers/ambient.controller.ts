@@ -4,6 +4,10 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { AmbientService, StartSessionDto } from '../services/ambient.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
+// F22 (S273): session lifecycle (start/end/action) has REST fallbacks below for
+// clients that can't hold a WebSocket open. Audio-chunk processing
+// (AmbientService.processChunk) is intentionally WebSocket-only — see the
+// docstring there — reachable through ambient.gateway.ts, not this controller.
 @ApiTags('Ambient AI Sessions')
 @ApiBearerAuth()
 @Controller('ambient')
