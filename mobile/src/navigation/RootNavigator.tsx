@@ -62,6 +62,8 @@ import { PatientEducationScreen } from "../components/patient/PatientEducationSc
 import { EducationCourseScreen } from "../components/patient/EducationCourseScreen";
 import { PatientFamilyAccessScreen } from "../components/patient/PatientFamilyAccessScreen";
 
+import ReportsNavigator from "./ReportsNavigator";
+
 const Stack       = createNativeStackNavigator();
 const DoctorStack = createNativeStackNavigator();
 const PatientStack = createNativeStackNavigator();
@@ -75,6 +77,7 @@ const DOCTOR_TABS = [
   { icon: "escalate"  as const, label: "Inbox",    badge: 3 },
   { icon: "chat"      as const, label: "Messages"  },
   { icon: "brain"     as const, label: "AI"        },
+  { icon: "trending"  as const, label: "Reports"   },
 ];
 
 const DoctorTabs_ = () => (
@@ -87,6 +90,7 @@ const DoctorTabs_ = () => (
     <DoctorTabs.Screen name="DEscalations" component={DoctorEscalationScreen} />
     <DoctorTabs.Screen name="DMessages"    component={DoctorMessagesScreen}   />
     <DoctorTabs.Screen name="DAI"          component={DoctorAIScreen}         />
+    <DoctorTabs.Screen name="DReports"     component={ReportsNavigator}       />
   </DoctorTabs.Navigator>
 );
 
@@ -122,6 +126,7 @@ const NURSE_TABS = [
   { icon: "pulse"      as const, label: "Vitals"   },
   { icon: "chat"       as const, label: "Messages" },
   { icon: "stethoscope" as const, label: "NCD"     },
+  { icon: "trending"   as const, label: "Reports"  },
 ];
 
 const NurseNavigator = () => (
@@ -133,6 +138,7 @@ const NurseNavigator = () => (
     <NurseTabs.Screen name="NVitals"   component={NurseVitalsScreen}    />
     <NurseTabs.Screen name="NMessages" component={NurseMessagesScreen}  />
     <NurseTabs.Screen name="NNcdCrisis" component={NurseNcdCrisisScreen} />
+    <NurseTabs.Screen name="NReports"  component={ReportsNavigator}     />
   </NurseTabs.Navigator>
 );
 
