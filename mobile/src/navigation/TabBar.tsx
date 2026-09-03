@@ -4,10 +4,38 @@ import {
 } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { C, FONT, RADIUS } from '../design/tokens';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Polygon } from 'react-native-svg';
+import { C, FONT } from '../design/tokens';
 import { Icon } from '../components/ui/Icon';
 import { IconName } from '../design/icons';
+
+// Flat-top/flat-bottom hexagon points (pointed left/right), matching the
+// brand mark's silhouette (assets/umoya-icon-square.png) — used as the
+// active-tab badge so tab icons read as "molded from" the logo rather than
+// a generic rounded-rect pill.
+const hexPoints = (cx: number, cy: number, r: number) =>
+  [0, 60, 120, 180, 240, 300]
+    .map((deg) => {
+      const rad = (deg * Math.PI) / 180;
+      return `${cx + r * Math.cos(rad)},${cy + r * Math.sin(rad)}`;
+    })
+    .join(' ');
+
+const HexBadge: React.FC<{ accent: string; size: number }> = ({ accent, size }) => {
+  const r = size / 2;
+  const gradId = `hexGrad-${accent.replace('#', '')}`;
+  return (
+    <Svg width={size} height={size} style={StyleSheet.absoluteFillObject}>
+      <Defs>
+        <SvgLinearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <Stop offset="0%" stopColor={accent} stopOpacity={0.32} />
+          <Stop offset="100%" stopColor={accent} stopOpacity={0.12} />
+        </SvgLinearGradient>
+      </Defs>
+      <Polygon points={hexPoints(r, r, r)} fill={`url(#${gradId})`} />
+    </Svg>
+  );
+};
 
 interface TabConfig {
   icon: IconName;
@@ -49,12 +77,11 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({
               activeOpacity={0.7}
               style={styles.tabBtn}
             >
-              {/* Active pill */}
+              {/* Active badge — hexagon, matching the brand mark's silhouette */}
               {isFocused && (
-                <LinearGradient
-                  colors={[accent + '30', accent + '18']}
-                  style={styles.activePill}
-                />
+                <View style={styles.activePill}>
+                  <HexBadge accent={accent} size={40} />
+                </View>
               )}
 
               {/* Icon */}
@@ -108,11 +135,12 @@ const styles = StyleSheet.create({
   },
   activePill: {
     position: 'absolute',
-    top: 4,
-    left: '20%',
-    right: '20%',
-    bottom: 4,
-    borderRadius: RADIUS.md,
+    top: 2,
+    alignSelf: 'center',
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconWrapper: {
     position: 'relative',
