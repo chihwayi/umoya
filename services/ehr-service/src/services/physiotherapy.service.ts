@@ -97,7 +97,10 @@ export class PhysiotherapyService {
     const cdss = await this.cdssService.getGuidelines('physiotherapy', {
       specialty: 'rehabilitation',
       module: 'stroke_rehabilitation',
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS stroke rehabilitation guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -106,7 +109,10 @@ export class PhysiotherapyService {
     const cdss = await this.cdssService.getGuidelines('physiotherapy', {
       specialty: 'rehabilitation',
       module: 'cardiac_rehabilitation',
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS cardiac rehabilitation guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 }

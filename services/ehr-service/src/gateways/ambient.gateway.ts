@@ -179,7 +179,7 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
             { clinicianAction: 'accepted' },
             db,
           ),
-        ).catch(() => {}); // non-blocking
+        ).catch((e: any) => this.logger.warn(`Recording clinician action for ambient decision failed: ${e?.message}`));
       }
     } catch (e: any) {
       client.emit('ambient:error', { message: String(e?.message || e) });

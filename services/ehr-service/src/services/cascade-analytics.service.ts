@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 
@@ -23,6 +23,8 @@ function pct(num: number, den: number): number {
 
 @Injectable()
 export class CascadeAnalyticsService {
+  private readonly logger = new Logger(CascadeAnalyticsService.name);
+
   constructor(private readonly tenantService: TenantService) {}
 
   private async getDb(tenantId: string): Promise<DataSource> {
@@ -351,7 +353,7 @@ export class CascadeAnalyticsService {
             AND COALESCE(e.enrollment_status, 'active') NOT IN ('deceased', 'discontinued', 'transferred_out')
           ORDER BY e.enrollment_date
           LIMIT 500`,
-      ).catch(() => []);
+      ).catch((e: any) => { this.logger.warn(`HIV not-on-ART gap analysis query failed: ${e?.message}`); return []; });
     }
     return db.query(
       `SELECT p.id AS patient_id, p.full_name AS name,
@@ -367,7 +369,7 @@ export class CascadeAnalyticsService {
        HAVING MAX(lr.result_value::numeric) >= 1000 OR MAX(lr.result_date) IS NULL
         ORDER BY last_seen NULLS FIRST
         LIMIT 500`,
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`HIV not-suppressed gap analysis query failed: ${e?.message}`); return []; });
   }
 
   async getPmtctGap(tenantId: string) {
@@ -383,7 +385,7 @@ export class CascadeAnalyticsService {
           )
         ORDER BY e.enrollment_date
         LIMIT 200`,
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`PMTCT gap analysis query failed: ${e?.message}`); return []; });
   }
 
   async getTbHivGap(tenantId: string, period: { start: string; end: string }) {
@@ -399,7 +401,7 @@ export class CascadeAnalyticsService {
         ORDER BY tc.date_registered
         LIMIT 500`,
       [period.start, period.end],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`TB-HIV gap analysis query failed: ${e?.message}`); return []; });
   }
 
   async getNcdGap(tenantId: string, condition: string) {
@@ -418,6 +420,6 @@ export class CascadeAnalyticsService {
         ORDER BY last_seen NULLS FIRST
         LIMIT 500`,
       [icdPattern],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`NCD gap analysis query failed: ${e?.message}`); return []; });
   }
 }

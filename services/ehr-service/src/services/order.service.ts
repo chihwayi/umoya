@@ -84,7 +84,7 @@ export class OrderService {
               if (!externalCodes[target]) {
                 const mappings: SnomedMapping[] = await this.terminologyService
                   .mapConcept(tenantDb, concept.conceptId, target)
-                  .catch(() => []);
+                  .catch((e: any) => { this.logger.warn(`SNOMED terminology mapping for ${target} failed: ${e?.message}`); return []; });
                 if (mappings.length > 0) {
                   externalCodes[target] = mappings;
                 }

@@ -61,7 +61,7 @@ export class PredictiveRiskService {
        FROM vitals WHERE patient_id = $1 AND recorded_at >= NOW() - INTERVAL '12 hours'
        ORDER BY recorded_at ASC`,
       [patientId],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`vitals deterioration trend query failed: ${e?.message}`); return []; });
 
     if (!rows || rows.length < 3) {
       return { trendDirection: 'insufficient_data', projectedHoursToCritical: null, trendDetails: { windowHours: 12, readingCount: rows?.length || 0 } };
@@ -204,7 +204,7 @@ export class PredictiveRiskService {
       await ds.query(
         `UPDATE discharges SET readmission_risk_score=$1, readmission_risk_category=$2, ai_followup_recommendation=$3 WHERE id=$4`,
         [predData.risk, predData.category, `Follow up in ${predData.followup_days} days`, dischargeId]
-      ).catch(() => {});
+      ).catch((e: any) => this.logger.warn(`discharges readmission risk UPDATE failed: ${e?.message}`));
     }
     return saved;
   }
@@ -239,9 +239,9 @@ export class PredictiveRiskService {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
     const active = await ds.query(
       `SELECT id, patient_id FROM admissions WHERE discharge_date IS NULL LIMIT 100`
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`active admissions query failed: ${e?.message}`); return []; });
     for (const adm of active) {
-      await this.predictDeterioration(subdomain, adm.patient_id, adm.id).catch(() => {});
+      await this.predictDeterioration(subdomain, adm.patient_id, adm.id).catch((e: any) => this.logger.warn(`predictDeterioration failed: ${e?.message}`));
     }
   }
 }

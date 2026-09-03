@@ -48,9 +48,9 @@ export class TelemedicineService {
    */
   @Cron('*/5 * * * *')
   async sendUpcomingConsultationReminders() {
-    const tenants = await this.tenantService?.getAllActiveTenants?.().catch(() => []) ?? [];
+    const tenants = await this.tenantService?.getAllActiveTenants?.().catch((e: any) => { this.logger.warn(`getAllActiveTenants() failed: ${e?.message}`); return []; }) ?? [];
     for (const subdomain of tenants) {
-      const tenantDb = await this.tenantService?.getTenantDatabase(subdomain).catch(() => null);
+      const tenantDb = await this.tenantService?.getTenantDatabase(subdomain).catch((e: any) => { this.logger.warn(`getTenantDatabase(${subdomain}) failed: ${e?.message}`); return null; });
       if (!tenantDb) continue;
       await this.sendRemindersForTenant(tenantDb).catch(e =>
         this.logger.warn(`Reminder cron failed for ${subdomain}: ${e?.message}`),
@@ -70,7 +70,7 @@ export class TelemedicineService {
         AND tc.scheduled_start_time BETWEEN NOW() + INTERVAL '10 minutes'
                                         AND NOW() + INTERVAL '20 minutes'
         AND tc.reminder_sent_at IS NULL
-    `).catch(() => []);
+    `).catch((e: any) => { this.logger.warn(`Query for upcoming consultations failed: ${e?.message}`); return []; });
 
     for (const row of upcoming) {
       if (!row.phone_number) continue;
@@ -89,7 +89,7 @@ export class TelemedicineService {
       await tenantDb.query(
         `UPDATE telemedicine_consultations SET reminder_sent_at = NOW() WHERE id = $1`,
         [row.id],
-      ).catch(() => {});
+      ).catch((e: any) => this.logger.warn(`Update of reminder_sent_at for consultation ${row.id} failed: ${e?.message}`));
     }
   }
 
@@ -474,7 +474,7 @@ export class TelemedicineService {
           this.logger.warn(`SMS to patient ${patientId} failed: ${e?.message}`),
         );
       }
-    }).catch(() => {/* no-op */});
+    }).catch((e: any) => this.logger.warn(`Query for patient phone number failed: ${e?.message}`));
   }
 
   /**

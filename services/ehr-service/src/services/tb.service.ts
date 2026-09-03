@@ -393,7 +393,7 @@ export class TbService {
       const records = await tenantDb.getRepository(TbDotRecord).find({
         where: { tbPatientId: payload.tbPatientId } as any,
         order: { dotDate: 'DESC' } as any,
-      }).catch(() => []);
+      }).catch((e: any) => { this.logger.warn(`DOT records for adherence analysis query failed: ${e?.message}`); return []; });
 
       const recent = records.filter((r: any) => new Date(r.dotDate) >= cutoff);
       const taken = recent.filter((r: any) => r.status === 'taken' || r.taken === true).length;

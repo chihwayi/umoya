@@ -52,7 +52,10 @@ export class HaematologyService {
       context: 'haematology_anaemia',
       specialty: 'haematology',
       module: 'anaemia_management',
-    }, false).catch(() => null);
+    }, false).catch((e: any) => {
+      this.logger.warn(`CDSS anaemia diagnosis assistance fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -62,7 +65,10 @@ export class HaematologyService {
       specialty: 'haematology',
       module: 'transfusion_trigger',
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS transfusion trigger guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -72,7 +78,10 @@ export class HaematologyService {
       specialty: 'haematology',
       module: 'lymphoma_staging',
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS lymphoma staging guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 }

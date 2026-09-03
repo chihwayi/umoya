@@ -114,7 +114,10 @@ export class EntService {
       context: 'ent_tonsillitis',
       specialty: 'ent',
       module: 'pharyngitis_tonsillitis',
-    }, false).catch(() => null);
+    }, false).catch((e: any) => {
+      this.logger.warn(`CDSS tonsillitis triage diagnosis assistance fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...centor, cdss: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -124,7 +127,10 @@ export class EntService {
       specialty: 'ent',
       module: 'rhinosinusitis',
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS rhinosinusitis guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 }

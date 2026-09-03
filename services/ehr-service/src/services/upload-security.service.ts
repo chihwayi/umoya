@@ -48,7 +48,7 @@ export class UploadSecurityService {
     try {
       await fn(tempPath);
     } finally {
-      await fs.unlink(tempPath).catch(() => undefined);
+      await fs.unlink(tempPath).catch((e: any) => { this.logger.warn(`Temp file cleanup failed for ${tempPath}: ${e?.message}`); return undefined; });
     }
   }
 

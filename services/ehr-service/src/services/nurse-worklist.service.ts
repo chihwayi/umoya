@@ -1,10 +1,12 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { HipaaAuditAction, HipaaAuditService } from './hipaa-audit.service';
 import { HivService } from './hiv.service';
 
 @Injectable()
 export class NurseWorklistService {
+  private readonly logger = new Logger(NurseWorklistService.name);
+
   constructor(
     private readonly hipaaAuditService: HipaaAuditService,
     private readonly hivService: HivService,
@@ -4134,7 +4136,7 @@ export class NurseWorklistService {
         ORDER BY r.approval_date DESC NULLS LAST, r.request_date DESC, r.created_at DESC
         LIMIT 50
         `,
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`ARV change request workflow data query failed: ${e?.message}`); return []; }),
       this.safeQuery(
         tenantDb,
         `

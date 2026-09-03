@@ -334,7 +334,7 @@ export class StoreroomIntelligenceService {
 
     const prompt = `A patient has been prescribed "${orig[0].name}" (ATC: ${orig[0].atc_code ?? 'unknown'}, class: ${orig[0].drug_class ?? 'unknown'}) but it is out of stock. The following in-stock alternatives were found:\n\n${ruleEquivs.map((e: any, i: number) => `${i + 1}. ${e.name} (${e.equivalence_type}, qty available: ${e.quantity_available})`).join('\n')}\n\nFor each alternative, rate clinical equivalence as high/medium/low and provide a one-sentence clinical reasoning. Return ONLY valid JSON: [{"catalog_id":"...","confidence":"high|medium|low","ai_reasoning":"..."}]`;
 
-    const result = await this.llm.generate(prompt, { context: 'drug-substitution', maxTokens: 300 }, tenantDb).catch(() => null);
+    const result = await this.llm.generate(prompt, { context: 'drug-substitution', maxTokens: 300 }, tenantDb).catch((e: any) => { this.logger.warn(`LLM drug substitution recommendation generation failed: ${e?.message}`); return null; });
     if (!result?.text) {
       return ruleEquivs.map(e => ({
         catalog_id: e.catalog_id,

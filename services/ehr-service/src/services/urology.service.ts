@@ -47,7 +47,10 @@ export class UrologyService {
       specialty: 'urology',
       module: 'bph_management',
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS BPH management guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -61,7 +64,10 @@ export class UrologyService {
       context: 'urology_renal_stone',
       specialty: 'urology',
       module: 'renal_stone_management',
-    }, false).catch(() => null);
+    }, false).catch((e: any) => {
+      this.logger.warn(`CDSS renal stone management guidance fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
   }
 

@@ -2400,7 +2400,7 @@ export class Dhis2Service {
          FROM equity_kpi_results WHERE tenant_id=$1 AND period=$2
          GROUP BY kpi_name`,
         [tenantId, equityPeriod],
-      ).catch(() => []);
+      ).catch((e: any) => { this.logger.warn(`equity_kpi_results DHIS2 sync query failed: ${e?.message}`); return []; });
       const getRatio = (kpi: string) => {
         const r = rows.find((x: any) => x.kpi_name === kpi);
         if (!r || !r.best || Number(r.best) === 0) return 0;
@@ -2423,7 +2423,7 @@ export class Dhis2Service {
           `SELECT model_name, f1_score, auc_roc, drift_flag
            FROM ai_model_performance_snapshots WHERE tenant_id=$1 AND snapshot_period=$2`,
           [tenantId, aiPeriod],
-        ).catch(() => []),
+        ).catch((e: any) => { this.logger.warn(`ai_model_performance_snapshots DHIS2 sync query failed: ${e?.message}`); return []; }),
         tenantDb.query(
           `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE actual_outcome IS NOT NULL)::int AS verified
            FROM ai_predictions WHERE tenant_id=$1 AND TO_CHAR(prediction_date,'YYYY-MM')=$2`,

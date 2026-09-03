@@ -767,7 +767,7 @@ export class PopulationHealthService {
     const patients = await tenantDb.query(
       `SELECT id, phone, email, first_name FROM patients WHERE id = ANY($1::uuid[])`,
       [patientIds],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`patients for recall list notification query failed: ${e?.message}`); return []; });
 
     const message = list.description
       ? `Recall: ${list.name} — ${list.description}`

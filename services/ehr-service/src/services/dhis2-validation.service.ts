@@ -62,7 +62,7 @@ export class Dhis2ValidationService {
           Math.round(deviation * 10000) / 100,
           isOutlier, severity,
         ],
-      ).catch(() => { /* table may not exist yet */ });
+      ).catch((e: any) => this.logger.warn(`dhis2_validation_snapshots INSERT failed: ${e?.message}`));
     }
 
     return { period: p, pulled: dhis2Values.length, outliers: outliersFound };
@@ -79,14 +79,14 @@ export class Dhis2ValidationService {
          WHERE tenant_id=$1 AND period=$2 AND outlier_flag=true
          ORDER BY ABS(deviation_pct) DESC`,
         [tenantId, p],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`dhis2_validation_snapshots outliers query failed: ${e?.message}`); return []; }),
       db.query(
         `SELECT outlier_severity, COUNT(*)::int AS n
          FROM dhis2_validation_snapshots
          WHERE tenant_id=$1 AND period=$2
          GROUP BY outlier_severity`,
         [tenantId, p],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`dhis2_validation_snapshots severity summary query failed: ${e?.message}`); return []; }),
     ]);
 
     const summaryMap: Record<string, number> = {};
@@ -124,7 +124,7 @@ export class Dhis2ValidationService {
               resolved_at = NOW(), resolved_by = $4, resolution = $5, resolution_note = $6
         WHERE tenant_id = $1 AND data_element_id = $2 AND period = $3`,
       [tenantId, dataElementId, period, resolvedBy, resolution, note ?? null],
-    ).catch(() => { /* column may not exist on older schemas */ });
+    ).catch((e: any) => this.logger.warn(`dhis2_validation_snapshots resolution UPDATE failed: ${e?.message}`));
   }
 
   async getDqaScore(tenantId: string, period: string): Promise<{ score: number; period: string }> {
@@ -133,11 +133,11 @@ export class Dhis2ValidationService {
       db.query(
         `SELECT COUNT(*)::int AS n FROM dhis2_validation_snapshots WHERE tenant_id=$1 AND period=$2`,
         [tenantId, period],
-      ).catch(() => [{ n: 0 }]),
+      ).catch((e: any) => { this.logger.warn(`dhis2_validation_snapshots total count query failed: ${e?.message}`); return [{ n: 0 }]; }),
       db.query(
         `SELECT COUNT(*)::int AS n FROM dhis2_validation_snapshots WHERE tenant_id=$1 AND period=$2 AND outlier_flag=true AND resolved_at IS NULL`,
         [tenantId, period],
-      ).catch(() => [{ n: 0 }]),
+      ).catch((e: any) => { this.logger.warn(`dhis2_validation_snapshots unresolved count query failed: ${e?.message}`); return [{ n: 0 }]; }),
     ]);
     const t = Number(total[0]?.n ?? 0);
     const u = Number(unresolved[0]?.n ?? 0);
@@ -153,7 +153,7 @@ export class Dhis2ValidationService {
        WHERE tenant_id=$1 AND data_element_id=$2
        ORDER BY period DESC LIMIT $3`,
       [tenantId, dataElementId, periods],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`dhis2_validation_snapshots history query failed: ${e?.message}`); return []; });
     return rows.reverse();
   }
 

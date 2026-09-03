@@ -92,7 +92,7 @@ export class SupplyChainAiService {
       LEFT JOIN pharmacy_inventory ph ON ph.drug_id = d.id
       WHERE d.is_active = TRUE ${where}
       LIMIT 200
-    `).catch(() => []);
+    `).catch((e: any) => { this.logger.warn(`drug inventory levels query failed: ${e?.message}`); return []; });
   }
 
   private async predictForDrug(ds: any, drug: any): Promise<StockoutPrediction | null> {

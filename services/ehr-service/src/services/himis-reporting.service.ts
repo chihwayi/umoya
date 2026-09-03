@@ -130,7 +130,7 @@ export class HimisReportingService {
            VALUES ($1, $2, $3, $4, $5)
            ON CONFLICT (national_id) DO UPDATE SET first_name = EXCLUDED.first_name RETURNING id`,
           [data.givenName, data.familyName, data.birthdate, data.gender, data.identifiers?.[0]?.identifier],
-        ).catch(() => []);
+        ).catch((e: any) => { this.logger.warn(`HIMIS patient INSERT failed: ${e?.message}`); return []; });
         return result[0]?.id;
       }
       default:

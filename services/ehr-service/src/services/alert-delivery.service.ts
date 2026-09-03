@@ -176,7 +176,7 @@ export class AlertDeliveryService {
       FROM users u
       WHERE u.role = 'nurse' AND u.on_call = TRUE
       LIMIT 5
-    `, [patientId]).catch(() => []);
+    `, [patientId]).catch((e: any) => { this.logger.warn(`On-call staff query for alert delivery failed: ${e?.message}`); return []; });
     return staff;
   }
 }

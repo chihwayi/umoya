@@ -190,7 +190,7 @@ export class EDService {
         tenantDb.query(
           `UPDATE ed_visits SET ai_triage_flag = true, ai_triage_note = $2 WHERE id = $1`,
           [visitId, `CDSS recommended ESI ${aiEsi}: ${result?.rationale || result?.summary || ''}`],
-        ).catch(() => {});
+        ).catch((e: any) => { this.logger.warn(`ED visit AI triage flag update failed: ${e?.message}`); });
       }
     }).catch((e: any) => this.logger.warn(`[ED] CDSS triage enrichment failed: ${e?.message}`));
 

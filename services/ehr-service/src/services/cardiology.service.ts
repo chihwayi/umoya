@@ -664,7 +664,10 @@ export class CardiologyService {
       context: 'ecg_interpretation',
       specialty: 'cardiology',
       module: 'ecg',
-    }, null as any, undefined).catch(() => null);
+    }, null as any, undefined).catch((e: any) => {
+      this.logger.warn(`CDSS ECG risk assessment failed: ${e?.message}`);
+      return null;
+    });
 
     return { ...saved, cdss: cdss ?? { cdssUnavailable: true } };
   }
@@ -690,7 +693,10 @@ export class CardiologyService {
       vitals: { heartRate: payload.heartRateBpm, qtcMs: payload.qtcMs },
       specialty: 'cardiology',
       module: 'ecg_interpretation',
-    }, null as any, undefined).catch(() => null);
+    }, null as any, undefined).catch((e: any) => {
+      this.logger.warn(`CDSS ECG interpretation diagnosis assistance fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
   }
 }

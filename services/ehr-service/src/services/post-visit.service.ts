@@ -399,7 +399,7 @@ export class PostVisitService {
   private async checkPostVisitSchema(tenantDb: DataSource): Promise<void> {
     const [row] = await tenantDb.query(`
       SELECT to_regclass('post_visit_sessions') AS tbl
-    `).catch(() => [null]);
+    `).catch((e: any) => { this.logger.warn(`Database query failed: ${e?.message}`); return [null]; });
 
     if (!row) {
       return;
@@ -1553,7 +1553,7 @@ export class PostVisitService {
           sessionId,
           { action: action === 'approve' ? 'approved' : 'rejected', sessionId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for billing suggestion review failed: ${e?.message}`));
     }
 
     return {
@@ -1914,7 +1914,7 @@ export class PostVisitService {
           undefined,
           { appointmentId, fromJob: options.fromJob === true },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for pre-visit brief modification failed: ${e?.message}`));
       await this.hipaaAuditService
         .logPhiAccess(
           tenantDb,
@@ -1963,7 +1963,7 @@ export class PostVisitService {
             risk.nudgePolicy || null,
           ],
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`Risk assessment insert/update failed: ${e?.message}`));
     }
 
     return {
@@ -2273,7 +2273,7 @@ export class PostVisitService {
             signImmediately,
           },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for PHI modification failed: ${e?.message}`));
     }
 
     if (signImmediately && documents.length > 0) {
@@ -2283,7 +2283,7 @@ export class PostVisitService {
           resourceType: 'DocumentReference',
           resourceId: doc.id,
           operation: 'create',
-        }).catch(() => {});
+        }).catch((e: any) => this.logger.warn(`Risk assessment update failed: ${e?.message}`));
       }
     }
 
@@ -2579,7 +2579,7 @@ export class PostVisitService {
           doc.session_id,
           { previousStatus: 'signed', newStatus: 'dispatched' },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for PHI modification failed: ${e?.message}`));
     }
     const [updated] = await tenantDb.query(
       `SELECT * FROM post_visit_admin_documents WHERE id = $1 LIMIT 1`,
@@ -2725,7 +2725,7 @@ export class PostVisitService {
           sessionId,
           { command: normalizedCommand, channel: 'voice_command' },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for PHI modification failed: ${e?.message}`));
     }
 
     return {
@@ -3941,7 +3941,7 @@ export class PostVisitService {
           sessionId,
           { action: payload.action, previousStatus, nextStatus },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for PHI modification failed: ${e?.message}`));
     }
 
     return {
@@ -4148,7 +4148,7 @@ export class PostVisitService {
     if (this.hipaaAuditService && options.actorUserId && sessionRow.patient_id) {
       await this.hipaaAuditService
         .logPhiModification(tenantDb, options.actorUserId, '', undefined, HipaaAuditAction.MEDICAL_RECORD_CREATE, 'post_visit_peer_consult', row.id, sessionRow.patient_id, undefined, undefined, undefined, undefined, sessionId, { action: 'request_created' })
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for PHI modification failed: ${e?.message}`));
     }
     return {
       id: row.id,
@@ -4189,7 +4189,7 @@ export class PostVisitService {
     if (this.hipaaAuditService && options.actorUserId && existing.patient_id) {
       await this.hipaaAuditService
         .logPhiModification(tenantDb, options.actorUserId, '', undefined, HipaaAuditAction.MEDICAL_RECORD_UPDATE, 'post_visit_peer_consult', consultId, existing.patient_id, undefined, undefined, undefined, undefined, existing.session_id, { action: 'responded' })
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for PHI modification failed: ${e?.message}`));
     }
     const [updated] = await tenantDb.query(`SELECT * FROM post_visit_peer_consults WHERE id = $1 LIMIT 1`, [consultId]);
     return {
@@ -5712,7 +5712,7 @@ export class PostVisitService {
             literacyScored: typeof summaryContent.literacy_score === 'number',
           },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for PHI modification failed: ${e?.message}`));
     }
 
     const recommendationArtifact = await this.upsertDraftArtifact(tenantDb, {
@@ -6387,7 +6387,7 @@ export class PostVisitService {
         tenantDb,
         resolvedPublishedSession.patient_id,
         sessionId,
-      ).catch(() => {});
+      ).catch((e: any) => this.logger.warn(`Workflow state update failed: ${e?.message}`));
     }
 
     return {
@@ -7123,7 +7123,7 @@ export class PostVisitService {
             AND COALESCE(payload->>'sessionId', '') = $2
         `,
         [patientId, sessionId, commitmentText],
-      ).catch(() => undefined);
+      ).catch((e: any) => { this.logger.warn(`Record update failed: ${e?.message}`); return undefined; });
     }
 
     return {
@@ -7586,7 +7586,7 @@ export class PostVisitService {
           sessionId,
           { action: 'acknowledge', sessionId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for intra-visit alert modification failed: ${e?.message}`));
     }
     return this.mapIntraVisitAlertEvent(updatedRows[0]);
   }
@@ -7658,7 +7658,7 @@ export class PostVisitService {
           sessionId,
           { action: 'resolve', status: targetStatus, sessionId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for intra-visit alert modification failed: ${e?.message}`));
     }
     return this.mapIntraVisitAlertEvent(updatedRows[0]);
   }
@@ -9684,7 +9684,7 @@ Object.assign(PostVisitService.prototype as any, {
           codeType: args.codeType || null,
         }),
       ],
-    ).catch(() => {});
+    ).catch((e: any) => this.logger.warn(`Database operation failed: ${e?.message}`));
     return workflowKey;
   },
 
@@ -11002,7 +11002,7 @@ Object.assign(PostVisitService.prototype as any, {
         .then(() => {
           channelDelivery.patientInApp = true;
         })
-        .catch(() => undefined);
+        .catch((e: any) => { this.logger.warn(`Patient timeline record failed: ${e?.message}`); return undefined; });
     }
 
     if (patientId && (this.notificationsService?.sendSms || this.emailService?.sendEmail)) {
@@ -11014,7 +11014,7 @@ Object.assign(PostVisitService.prototype as any, {
           LIMIT 1
         `,
         [patientId],
-      ).catch(() => []);
+      ).catch((e: any) => { this.logger.warn(`Query execution failed: ${e?.message}`); return []; });
       const patient = patientRows?.[0];
       if (patient?.phone && this.notificationsService?.sendSms) {
         await this.notificationsService
@@ -11027,7 +11027,7 @@ Object.assign(PostVisitService.prototype as any, {
           .then(() => {
             channelDelivery.patientSms = true;
           })
-          .catch(() => undefined);
+          .catch((e: any) => { this.logger.warn(`Patient timeline record failed: ${e?.message}`); return undefined; });
       }
       if (patient?.email && this.emailService?.sendEmail) {
         await this.emailService
@@ -11042,7 +11042,7 @@ Object.assign(PostVisitService.prototype as any, {
           .then(() => {
             channelDelivery.patientEmail = true;
           })
-          .catch(() => undefined);
+          .catch((e: any) => { this.logger.warn(`Patient timeline record failed: ${e?.message}`); return undefined; });
       }
     }
 
@@ -11055,7 +11055,7 @@ Object.assign(PostVisitService.prototype as any, {
           ORDER BY created_at DESC NULLS LAST, id ASC
           LIMIT 3
         `,
-      ).catch(() => []);
+      ).catch((e: any) => { this.logger.warn(`Query execution failed: ${e?.message}`); return []; });
       for (const clinician of clinicianRows || []) {
         if (clinician?.phone && this.notificationsService?.sendSms && !channelDelivery.clinicianSms) {
           await this.notificationsService
@@ -11066,7 +11066,7 @@ Object.assign(PostVisitService.prototype as any, {
             .then(() => {
               channelDelivery.clinicianSms = true;
             })
-            .catch(() => undefined);
+            .catch((e: any) => { this.logger.warn(`Record query failed: ${e?.message}`); return undefined; });
         }
         if (clinician?.email && this.emailService?.sendEmail && !channelDelivery.clinicianEmail) {
           await this.emailService
@@ -11078,7 +11078,7 @@ Object.assign(PostVisitService.prototype as any, {
             .then(() => {
               channelDelivery.clinicianEmail = true;
             })
-            .catch(() => undefined);
+            .catch((e: any) => { this.logger.warn(`Patient timeline record failed: ${e?.message}`); return undefined; });
         }
       }
     }
@@ -11095,7 +11095,7 @@ Object.assign(PostVisitService.prototype as any, {
         severity,
         signalText: messageText,
         metadata: args.metadata || {},
-      }).catch(() => null);
+      }).catch((e: any) => { this.logger.warn(`Patient timeline record lookup failed: ${e?.message}`); return null; });
     }
     if (workflowKey) {
       await tenantDb.query(
@@ -11106,7 +11106,7 @@ Object.assign(PostVisitService.prototype as any, {
           WHERE id = $1
         `,
         [inserted.id, workflowKey],
-      ).catch(() => {});
+      ).catch((e: any) => this.logger.warn(`Record update failed: ${e?.message}`));
       inserted.workflow_key = workflowKey;
     }
     if (Object.values(channelDelivery).some(Boolean)) {
@@ -11122,7 +11122,7 @@ Object.assign(PostVisitService.prototype as any, {
           WHERE id = $1
         `,
         [inserted.id, JSON.stringify({ channel_delivery: channelDelivery })],
-      ).catch(() => {});
+      ).catch((e: any) => this.logger.warn(`Record update failed: ${e?.message}`));
     }
     return this.mapEscalationEvent(inserted);
   },
@@ -11204,7 +11204,7 @@ Object.assign(PostVisitService.prototype as any, {
       provider,
       status: 'active',
       metadata: { feature: 'post_visit_grounded_llm' },
-    }).catch(() => undefined);
+    }).catch((e: any) => { this.logger.warn(`Patient timeline record failed: ${e?.message}`); return undefined; });
     await this.hipaaAuditService.logPromptAudit(tenantDb, {
       promptHash: audit.promptHash,
       templateVersion: audit.templateVersion || 'postvisit-grounded-v1',
@@ -11223,7 +11223,7 @@ Object.assign(PostVisitService.prototype as any, {
         model_name: modelName,
         ...(args.metadata || {}),
       },
-    }).catch(() => undefined);
+    }).catch((e: any) => { this.logger.warn(`Patient timeline record failed: ${e?.message}`); return undefined; });
   },
 
   async createGeneralOrderFromRecommendation(this: any, tenantDb: DataSource, args: any) {
@@ -11292,7 +11292,7 @@ Object.assign(PostVisitService.prototype as any, {
           AND artifact_type = $2
       `,
       [args.sessionId, 'recommendation_bundle', JSON.stringify({ ...content, action_executions: actionExecutions }), args.actorUserId || null],
-    ).catch(() => {});
+    ).catch((e: any) => this.logger.warn(`Record update failed: ${e?.message}`));
   },
 
   async safeSyncCrossModuleWorkflow(this: any, _tenantDb: DataSource, _args: any) {

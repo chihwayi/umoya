@@ -169,7 +169,7 @@ export class RevenueCycleService {
          LEFT JOIN charge_master cm ON LOWER(cm.description) = LOWER(lo.test_name)
          WHERE lo.admission_id = $1 AND pc.id IS NULL`,
         [admissionId],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`missed lab_orders query failed: ${e?.message}`); return []; }),
       tenantDb.query(
         `SELECT p.id AS source_id, 'prescription' AS source_type,
                 p.medication_name AS description, p.created_at AS service_date,
@@ -179,7 +179,7 @@ export class RevenueCycleService {
          LEFT JOIN charge_master cm ON LOWER(cm.description) = LOWER(p.medication_name)
          WHERE p.admission_id = $1 AND pc.id IS NULL`,
         [admissionId],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`missed prescriptions query failed: ${e?.message}`); return []; }),
       tenantDb.query(
         `SELECT mr.id AS source_id, 'procedure' AS source_type,
                 mr.chief_complaint AS description, mr.created_at AS service_date,
@@ -188,7 +188,7 @@ export class RevenueCycleService {
          LEFT JOIN patient_charges pc ON pc.source_id = mr.id::text AND pc.admission_id = $1
          WHERE mr.admission_id = $1 AND pc.id IS NULL`,
         [admissionId],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`missed procedures query failed: ${e?.message}`); return []; }),
     ]);
 
     return [...labRows, ...rxRows, ...procRows].map((r: any) => ({

@@ -171,9 +171,9 @@ export class ClinicalTrialMatchingService {
 
   private async buildPatientProfile(ds: any, patientId: string): Promise<Record<string, any>> {
     const [problems, demos, meds] = await Promise.all([
-      ds.query(`SELECT description, code FROM problems WHERE patient_id=$1 AND status='active' LIMIT 10`, [patientId]).catch(() => []),
-      ds.query(`SELECT date_of_birth, gender FROM patients WHERE id=$1`, [patientId]).catch(() => []),
-      ds.query(`SELECT drug_name FROM prescriptions WHERE patient_id=$1 AND status='active' LIMIT 10`, [patientId]).catch(() => []),
+      ds.query(`SELECT description, code FROM problems WHERE patient_id=$1 AND status='active' LIMIT 10`, [patientId]).catch((e: any) => { this.logger.warn(`patient problems for trial matching query failed: ${e?.message}`); return []; }),
+      ds.query(`SELECT date_of_birth, gender FROM patients WHERE id=$1`, [patientId]).catch((e: any) => { this.logger.warn(`patient demographics for trial matching query failed: ${e?.message}`); return []; }),
+      ds.query(`SELECT drug_name FROM prescriptions WHERE patient_id=$1 AND status='active' LIMIT 10`, [patientId]).catch((e: any) => { this.logger.warn(`patient prescriptions for trial matching query failed: ${e?.message}`); return []; }),
     ]);
     const dob = demos[0]?.date_of_birth;
     const age = dob ? Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000)) : null;
@@ -258,9 +258,9 @@ export class ClinicalTrialMatchingService {
       WHERE pr.status = 'active'
       AND pr.code LIKE 'C%' -- oncology ICD-10
       LIMIT 50
-    `).catch(() => []);
+    `).catch((e: any) => { this.logger.warn(`patients for trial sweep query failed: ${e?.message}`); return []; });
     for (const { id } of patients) {
-      await this.matchTrials(subdomain, id).catch(() => {});
+      await this.matchTrials(subdomain, id).catch((e: any) => this.logger.warn(`Trial matching sweep failed for patient ${id}: ${e?.message}`));
     }
   }
 }

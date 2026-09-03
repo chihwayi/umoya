@@ -58,7 +58,7 @@ export class PediatricsService {
             nutritionalStatus:  result.nutritional_status,
           } as any);
         }
-      }).catch(() => {});
+      }).catch((e: any) => { this.logger.warn(`Growth measurement Z-score update failed: ${e?.message}`); });
     }
 
     return saved;
@@ -236,7 +236,7 @@ export class PediatricsService {
       vitals: payload.vitals ?? {},
       specialty: 'pediatrics',
       module: 'imci',
-    }, null as any, undefined).catch(() => null);
+    }, null as any, undefined).catch((e: any) => { this.logger.warn(`CDSS IMCI diagnosis assist failed: ${e?.message}`); return null; });
     return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
   }
 

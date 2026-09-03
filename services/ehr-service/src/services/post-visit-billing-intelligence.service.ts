@@ -11,6 +11,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -52,6 +53,8 @@ interface PostVisitBillingSuggestionDraft {
 
 @Injectable()
 export class PostVisitBillingIntelligenceService {
+  private readonly logger = new Logger(PostVisitBillingIntelligenceService.name);
+
   constructor(
     @Optional() private readonly hipaaAuditService?: HipaaAuditService,
   ) {}
@@ -117,7 +120,7 @@ export class PostVisitBillingIntelligenceService {
           { fields: ['suggestions', 'documentation'], recordCount: suggestions.length },
           { sessionId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging for billing intelligence failed: ${e?.message}`));
     }
 
     return {
@@ -278,7 +281,7 @@ export class PostVisitBillingIntelligenceService {
           sessionId,
           { action: action === 'approve' ? 'approved' : 'rejected', sessionId },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA audit log for billing suggestion ${action} failed: ${e?.message}`));
     }
 
     return {

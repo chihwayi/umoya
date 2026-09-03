@@ -277,7 +277,7 @@ export class FederatedLearningService {
           WHERE dp.prediction_time > NOW() - INTERVAL '6 months'
           ORDER BY dp.prediction_time ${orderDir}
           LIMIT ${limit}
-        `).catch(() => []);
+        `).catch((e: any) => { this.logger.warn(`deterioration_predictions training outcomes query failed: ${e?.message}`); return []; });
       }
 
       if (modelType === 'readmission') {
@@ -303,7 +303,7 @@ export class FederatedLearningService {
           WHERE rp.prediction_date > NOW() - INTERVAL '6 months'
           ORDER BY rp.prediction_date ${orderDir}
           LIMIT ${limit}
-        `).catch(() => []);
+        `).catch((e: any) => { this.logger.warn(`readmission_predictions training outcomes query failed: ${e?.message}`); return []; });
       }
 
       if (modelType === 'no_show') {
@@ -321,7 +321,7 @@ export class FederatedLearningService {
           WHERE a.appointment_date > NOW() - INTERVAL '6 months'
           ORDER BY a.appointment_date ${orderDir}
           LIMIT ${limit}
-        `).catch(() => []);
+        `).catch((e: any) => { this.logger.warn(`appointments no-show training outcomes query failed: ${e?.message}`); return []; });
       }
     } catch (e: any) {
       this.logger.warn(`Outcome fetch failed for ${modelType}: ${e?.message}`);

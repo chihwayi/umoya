@@ -65,7 +65,7 @@ export class TelemedicinePostVisitBridgeService {
     const [existing] = await tenantDb.query(
       `SELECT id FROM post_visit_sessions WHERE consultation_id = $1 LIMIT 1`,
       [c.id],
-    ).catch(() => [null]);
+    ).catch((e: any) => { this.logger.warn(`Query for existing post-visit session for consultation ${c.id} failed: ${e?.message}`); return [null]; });
 
     if (existing?.id) return existing.id;
 
@@ -151,7 +151,7 @@ export class TelemedicinePostVisitBridgeService {
        SET recording_download_url = $1, recording_fetched_at = NOW()
        WHERE id = $2`,
       [downloadUrl, c.id],
-    ).catch(() => {});
+    ).catch((e: any) => this.logger.warn(`Update of consultation ${c.id} recording URL failed: ${e?.message}`));
 
     // Notify both participants the post-visit summary (with recording) is ready
     this.teleGateway?.broadcastToConsultation(c.id, 'tele:postvisit_ready', {

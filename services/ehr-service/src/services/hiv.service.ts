@@ -1518,7 +1518,7 @@ export class HivService {
         WHERE workflow_key = $2
         `,
         [result[0].id, `hiv-regimen:${approvedChangeRequestId}`, providerId || null],
-      ).catch(() => undefined);
+      ).catch((e: any) => { this.logger.warn(`HIV regimen change workflow completion update failed: ${e?.message}`); return undefined; });
       
       // Log audit trail for regimen change
       await this.logAuditAction(
@@ -1755,7 +1755,7 @@ export class HivService {
     if (arvRegimenCode) {
       const patientRows = await tenantDb
         .query(`SELECT patient_id FROM hiv_care_enrollments WHERE id = $1 LIMIT 1`, [enrollmentId])
-        .catch(() => []);
+        .catch((e: any) => { this.logger.warn(`HIV enrollment patient lookup query failed: ${e?.message}`); return []; });
       const patientId: string | undefined = patientRows[0]?.patient_id;
       if (patientId) {
         const oiInput = {
@@ -1784,7 +1784,7 @@ export class HivService {
              LIMIT 1`,
             [patientId],
           )
-          .catch(() => []);
+          .catch((e: any) => { this.logger.warn(`Patient info query for HIV cohort analysis failed: ${e?.message}`); return []; });
         const patient = patientInfoRows[0];
         if (patient?.date_of_birth) {
           const birthDate = new Date(patient.date_of_birth);
@@ -1827,7 +1827,7 @@ export class HivService {
             `SELECT medication_name FROM prescriptions WHERE patient_id = $1 AND status IN ('active', 'pending') LIMIT 20`,
             [patientId],
           )
-          .catch(() => []);
+          .catch((e: any) => { this.logger.warn(`Active prescriptions query for drug interaction check failed: ${e?.message}`); return []; });
         const medsForCheck = [arvRegimenCode, ...activePrescRows.map((r: any) => r.medication_name).filter(Boolean)];
         if (medsForCheck.length >= 2) {
           this.cdssService
@@ -1848,7 +1848,7 @@ export class HivService {
                       JSON.stringify({ regimen: arvRegimenCode, interactions: criticalInteractions, visitId: result[0]?.id }),
                     ],
                   )
-                  .catch(() => undefined);
+                  .catch((e: any) => { this.logger.warn(`Critical drug interaction monitoring schedule update failed: ${e?.message}`); return undefined; });
               }
             })
             .catch((e: any) => this.logger.warn(`CDSS HIV visit DDI check failed: ${e?.message || e}`));

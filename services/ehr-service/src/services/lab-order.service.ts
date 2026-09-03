@@ -200,7 +200,7 @@ export class LabOrderService {
           if (!loincCode) {
             const loincMappings: SnomedMapping[] = await this.terminologyService
               .mapConcept(tenantDb, concept.conceptId, 'LOINC')
-              .catch(() => []);
+              .catch((e: any) => { this.logger.warn(`SNOMED to LOINC mapping failed: ${e?.message}`); return []; });
             if (loincMappings.length > 0) {
               loincCode = loincMappings[0].targetCode || null;
             }
@@ -209,7 +209,7 @@ export class LabOrderService {
           if (!cptCode) {
             const cptMappings: SnomedMapping[] = await this.terminologyService
               .mapConcept(tenantDb, concept.conceptId, 'CPT')
-              .catch(() => []);
+              .catch((e: any) => { this.logger.warn(`SNOMED to CPT mapping failed: ${e?.message}`); return []; });
             if (cptMappings.length > 0) {
               cptCode = cptMappings[0].targetCode || null;
             }

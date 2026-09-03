@@ -175,7 +175,10 @@ export class NcdComorbidityService {
       context: 'ncd_comorbidity_review',
       specialty: 'internal_medicine',
       module: 'ncd_comorbidity',
-    }, null as any, undefined).catch(() => null);
+    }, null as any, undefined).catch((e: any) => {
+      this.logger.warn(`CDSS NCD comorbidity cardiovascular risk assessment failed: ${e?.message}`);
+      return null;
+    });
 
     return { ...profile, riskAssessment: { alerts, cdss: cdss ?? { cdssUnavailable: true } } };
   }
@@ -208,7 +211,10 @@ export class NcdComorbidityService {
       context: 'cardiovascular_risk',
       specialty: 'internal_medicine',
       module: 'cvd_risk_stratification',
-    }, null as any, undefined).catch(() => null);
+    }, null as any, undefined).catch((e: any) => {
+      this.logger.warn(`CDSS cardiovascular risk assessment failed: ${e?.message}`);
+      return null;
+    });
 
     return { framinghamRisk10yr: risk10yr, riskCategory, recommendation, cdss: cdss ?? { cdssUnavailable: true } };
   }

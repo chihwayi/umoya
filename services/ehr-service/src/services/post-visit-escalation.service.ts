@@ -37,7 +37,7 @@ export class PostVisitEscalationService {
   private async assertSchema(tenantDb: DataSource): Promise<void> {
     const [row] = await tenantDb
       .query(`SELECT to_regclass('post_visit_sessions') AS tbl`)
-      .catch(() => [null]);
+      .catch((e: any) => { this.logger.warn(`Schema guard query for post_visit_sessions table failed: ${e?.message}`); return [null]; });
     if (!row?.tbl) {
       throw new Error(
         'post_visit_sessions table not found. Run provisioning scripts sprint48–sprint58 first.',
@@ -432,7 +432,7 @@ export class PostVisitEscalationService {
       HipaaAuditAction.MEDICAL_RECORD_UPDATE, 'post_visit_intravisit_alert',
       alertId, existing.patient_id, undefined, undefined, undefined, undefined,
       sessionId, { action: 'acknowledge', sessionId },
-    ).catch(() => {});
+    ).catch((e: any) => this.logger.warn(`HIPAA audit log for intra-visit alert acknowledge failed: ${e?.message}`));
 
     return this.mapIntraVisitAlertEvent(updated);
   }
@@ -477,7 +477,7 @@ export class PostVisitEscalationService {
       HipaaAuditAction.MEDICAL_RECORD_UPDATE, 'post_visit_intravisit_alert',
       alertId, existing.patient_id, undefined, undefined, undefined, undefined,
       sessionId, { action: 'resolve', status: targetStatus, sessionId },
-    ).catch(() => {});
+    ).catch((e: any) => this.logger.warn(`HIPAA audit log for intra-visit alert resolve failed: ${e?.message}`));
 
     return this.mapIntraVisitAlertEvent(updated);
   }

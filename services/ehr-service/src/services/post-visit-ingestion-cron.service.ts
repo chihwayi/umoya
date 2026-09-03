@@ -177,7 +177,7 @@ export class PostVisitIngestionCronService {
        FROM ambient_sessions
        WHERE id = $1 LIMIT 1`,
       [ambientSessionId],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`Query for ambient session ${ambientSessionId} failed: ${e?.message}`); return []; });
 
     const row = rows?.[0];
     if (!row) {

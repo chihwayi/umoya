@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Request, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Request, UseGuards, BadRequestException, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { MaternityService } from '../services/maternity.service';
@@ -10,6 +10,8 @@ import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class MaternityController {
+  private readonly logger = new Logger(MaternityController.name);
+
   constructor(
     private readonly maternityService: MaternityService,
     private readonly outcomeLinkage: OutcomeLinkageService,
@@ -183,7 +185,7 @@ export class MaternityController {
       this.outcomeLinkage.scheduleFollowUpsFromDb(
         req.tenantDb, req.tenantId, delivery.id, 'delivery',
         deliveryData.patient_id, new Date(deliveryData.delivery_date ?? Date.now()),
-      ).catch(() => undefined);
+      ).catch((e: any) => { this.logger.warn(`Schedule follow-ups from DB failed: ${e?.message}`); return undefined; });
     }
     return delivery;
   }

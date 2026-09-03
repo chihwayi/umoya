@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Request, Res } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Request, Res, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { Response } from 'express';
 import { PrescriptionService } from '../services/prescription.service';
@@ -13,6 +13,8 @@ import { ProactiveAiService } from '../services/proactive-ai.service';
 @UseGuards(JwtAuthGuard)
 @Controller('prescriptions')
 export class PrescriptionController {
+  private readonly logger = new Logger(PrescriptionController.name);
+
   constructor(
     private prescriptionService: PrescriptionService,
     private prescriptionPdfService: PrescriptionPdfService,
@@ -32,7 +34,7 @@ export class PrescriptionController {
         triggeredByUserId: (req.user as any)?.userId,
         triggerType: 'prescription',
         freshPrescriptions: [{ name: createDto.medicationName, dosage: createDto.dosage }],
-      }).catch(() => {});
+      }).catch((e: any) => this.logger.warn(`Prescription proactive analysis trigger failed: ${e?.message}`));
     }
 
     return saved;

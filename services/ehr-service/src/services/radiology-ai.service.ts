@@ -166,7 +166,7 @@ export class RadiologyAiService {
           severity: 'critical',
           message: `AI radiology finding: ${data.top_finding} (${Math.round((data.confidence || 0) * 100)}% confidence)`,
           payload: { studyId: study.id, findings: criticalFindings },
-        }).catch(() => {});
+        }).catch((e: any) => { this.logger.warn(`Critical radiology alert broadcast failed: ${e?.message}`); });
       }
     } catch (e: any) {
       await ds.getRepository(DicomStudy).update(study.id, { aiAnalysisStatus: 'failed' });

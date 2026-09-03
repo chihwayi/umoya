@@ -96,7 +96,7 @@ export class SmartSchedulingService {
       [cutoff.toISOString()]
     );
     for (const apt of appointments) {
-      await this.predictAppointment(subdomain, apt.id, {}).catch(() => {});
+      await this.predictAppointment(subdomain, apt.id, {}).catch((e: any) => { this.logger.warn(`Appointment prediction update failed for ${apt.id}: ${e?.message}`); });
     }
   }
 
@@ -106,6 +106,6 @@ export class SmartSchedulingService {
     await ds.query(
       `UPDATE appointments SET no_show_risk = $1, ai_recommended_duration = $2 WHERE id = $3`,
       [risk, predData.recommended_duration, appointmentId]
-    ).catch(() => {}); // column may not exist yet on older tenants
+    ).catch((e: any) => { this.logger.warn(`Appointment no-show risk update failed for ${appointmentId}: ${e?.message}`); }); // column may not exist yet on older tenants
   }
 }

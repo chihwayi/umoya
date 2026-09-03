@@ -621,15 +621,15 @@ export class SepsisService {
     const limit = Number.isFinite(Number(options?.limit)) ? Number(options?.limit) : 120;
 
     const [alerts, bundles, compliance] = await Promise.all([
-      this.getSepsisAlerts(tenantDb).catch(() => []),
+      this.getSepsisAlerts(tenantDb).catch((e: any) => { this.logger.warn(`sepsis alerts query failed: ${e?.message}`); return []; }),
       this.getBundleWorklist(tenantDb, {
         startDate,
         endDate,
         includeCompleted: Boolean(options?.includeCompleted),
         focus: 'all',
         limit,
-      }).catch(() => []),
-      this.getBundleCompliance(startDate, endDate, tenantDb).catch(() => null),
+      }).catch((e: any) => { this.logger.warn(`sepsis bundle worklist query failed: ${e?.message}`); return []; }),
+      this.getBundleCompliance(startDate, endDate, tenantDb).catch((e: any) => { this.logger.warn(`sepsis bundle compliance query failed: ${e?.message}`); return null; }),
     ]);
 
     const bundleList = Array.isArray(bundles) ? bundles : [];

@@ -225,8 +225,8 @@ export class TerminologyService {
     try {
       const masterDb = await this.getMasterDb();
       const [children, parents] = await Promise.all([
-        this.postgresService.getChildren(masterDb, conceptId).catch(() => []),
-        this.postgresService.getParents(masterDb, conceptId).catch(() => []),
+        this.postgresService.getChildren(masterDb, conceptId).catch((e: any) => { this.logger.warn(`SNOMED concept children hierarchy query failed: ${e?.message}`); return []; }),
+        this.postgresService.getParents(masterDb, conceptId).catch((e: any) => { this.logger.warn(`SNOMED concept parents hierarchy query failed: ${e?.message}`); return []; }),
       ]);
 
       return {

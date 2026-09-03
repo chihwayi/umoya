@@ -113,7 +113,10 @@ export class FamilyPlanningService {
       specialty: 'reproductive_health',
       module: 'postpartum_family_planning',
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS postpartum contraception guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 }

@@ -54,7 +54,7 @@ export class IotService {
     const repo = ds.getRepository(IotDataIngestion);
     const deviceRepo = ds.getRepository(IotDeviceRegistration);
     const saved: IotDataIngestion[] = [];
-    const device = await deviceRepo.findOneBy({ id: deviceId }).catch(() => null);
+    const device = await deviceRepo.findOneBy({ id: deviceId }).catch((e: any) => { this.logger.warn(`IoT device registration fetch failed: ${e?.message}`); return null; });
 
     for (const r of readings) {
       const rec = await repo.save(repo.create({
@@ -74,7 +74,7 @@ export class IotService {
     ]);
 
     // Update device last sync
-    await deviceRepo.update(deviceId, { lastSyncAt: new Date() }).catch(() => {});
+    await deviceRepo.update(deviceId, { lastSyncAt: new Date() }).catch((e: any) => { this.logger.warn(`IoT device last-sync timestamp update failed: ${e?.message}`); });
 
     return {
       ingested: saved.length,

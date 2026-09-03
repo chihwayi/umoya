@@ -178,7 +178,7 @@ export class InfectionControlService {
       ORDER BY week_start ASC
       `,
       [baselineStart, endDate],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`weekly infection surveillance query failed: ${e?.message}`); return []; });
 
     // Build week-by-week map keyed by "type|organism"
     const weeklyMap: Record<string, Array<{ week: string; count: number }>> = {};
@@ -444,8 +444,8 @@ export class InfectionControlService {
       this.getStewardshipWorklist(startDate, endDate, tenantDb, limit).catch(() => ({ summary: {}, items: [] })),
       this.getOutbreakSignals(startDate, endDate, tenantDb, 10).catch(() => ({ summary: {}, items: [] })),
       this.getHAIMetrics(startDate, endDate, tenantDb).catch(() => ({ totalHAI: 0, deviceAssociated: 0 })),
-      this.getHandHygieneCompliance(startDate, endDate, null, tenantDb).catch(() => null),
-      this.getDeviceDayRates(startDate, endDate, tenantDb).catch(() => null),
+      this.getHandHygieneCompliance(startDate, endDate, null, tenantDb).catch((e: any) => { this.logger.warn(`hand hygiene compliance query failed: ${e?.message}`); return null; }),
+      this.getDeviceDayRates(startDate, endDate, tenantDb).catch((e: any) => { this.logger.warn(`device-day rates query failed: ${e?.message}`); return null; }),
     ]);
 
     const infectionItemsRaw = Array.isArray(infectionWorklist?.items) ? infectionWorklist.items : [];

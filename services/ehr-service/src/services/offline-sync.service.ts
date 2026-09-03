@@ -115,8 +115,8 @@ export class OfflineSyncService {
     const sinceDate = new Date(since);
     // Return entities modified since last sync — vitals, notes, prescriptions
     const [vitals, notes] = await Promise.all([
-      ds.query(`SELECT * FROM vitals WHERE updated_at > $1 ORDER BY updated_at ASC LIMIT 500`, [sinceDate]).catch(() => []),
-      ds.query(`SELECT id, patient_id, updated_at FROM medical_records WHERE updated_at > $1 ORDER BY updated_at ASC LIMIT 200`, [sinceDate]).catch(() => []),
+      ds.query(`SELECT * FROM vitals WHERE updated_at > $1 ORDER BY updated_at ASC LIMIT 500`, [sinceDate]).catch((e: any) => { this.logger.warn(`Offline sync vitals query failed: ${e?.message}`); return []; }),
+      ds.query(`SELECT id, patient_id, updated_at FROM medical_records WHERE updated_at > $1 ORDER BY updated_at ASC LIMIT 200`, [sinceDate]).catch((e: any) => { this.logger.warn(`Offline sync medical records query failed: ${e?.message}`); return []; }),
     ]);
     return {
       checkpoint: new Date().toISOString(),

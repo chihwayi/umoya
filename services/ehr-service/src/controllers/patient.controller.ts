@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PatientService } from '../services/patient.service';
@@ -12,6 +12,8 @@ import { PatientIntelligenceService } from '../services/patient-intelligence.ser
 @Controller('patients')
 @UseGuards(JwtAuthGuard)
 export class PatientController {
+  private readonly logger = new Logger(PatientController.name);
+
   constructor(
     private patientService: PatientService,
     private proactiveAiService: ProactiveAiService,
@@ -96,7 +98,7 @@ export class PatientController {
       tenantId,
       triggeredByUserId: userId,
       triggerType: 'chart_open',
-    }).catch(() => {});
+    }).catch((e: any) => this.logger.warn(`Proactive AI analysis trigger failed: ${e?.message}`));
 
     // Attach latest cached snapshot if one exists
     const snapshot = await this.proactiveAiService.getSnapshot(id, tenantId);

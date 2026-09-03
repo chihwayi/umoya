@@ -10,6 +10,7 @@
 
 import {
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -44,6 +45,8 @@ interface ListPostVisitSessionsOptions {
 
 @Injectable()
 export class PostVisitSessionService {
+  private readonly logger = new Logger(PostVisitSessionService.name);
+
   constructor(
     @Optional() private readonly hipaaAuditService?: HipaaAuditService,
     @Optional() private readonly fileStorageService?: FileStorageService,
@@ -355,7 +358,7 @@ export class PostVisitSessionService {
           { fields: ['timeline', 'content'], recordCount: 1 },
           { action: 'get_latest' },
         )
-        .catch(() => {});
+        .catch((e: any) => this.logger.warn(`HIPAA PHI-access audit logging for patient story failed: ${e?.message}`));
     }
     return {
       featureEnabled: true,

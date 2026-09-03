@@ -76,7 +76,7 @@ export class FhirInboundService {
        VALUES ($1, $2, $3, $4, $5, 'fhir_inbound')
        ON CONFLICT DO NOTHING`,
       [patientId, obs.code?.coding?.[0]?.code, (obs as any).valueQuantity?.value, (obs as any).valueQuantity?.unit, obs.effectiveDateTime || new Date()]
-    ).catch(() => {});
+    ).catch((e: any) => { this.logger.warn(`FHIR inbound vital sign insert failed: ${e?.message}`); });
     return { conflict: false, resolved: false };
   }
 
@@ -91,7 +91,7 @@ export class FhirInboundService {
        VALUES ($1, $2, $3, $4, 'active', 'fhir_inbound')
        ON CONFLICT DO NOTHING`,
       [patientId, desc, code, 'ICD10']
-    ).catch(() => {});
+    ).catch((e: any) => { this.logger.warn(`FHIR inbound problem insert failed: ${e?.message}`); });
     return { conflict: false, resolved: false };
   }
 
@@ -103,7 +103,7 @@ export class FhirInboundService {
     const existing = await ds.query(
       `SELECT id FROM prescriptions WHERE patient_id = $1 AND drug_name ILIKE $2 AND status = 'active'`,
       [patientId, `%${drug}%`]
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`FHIR inbound prescription dedup query failed: ${e?.message}`); return []; });
     if (existing.length > 0) {
       return { conflict: true, resolved: false }; // pharmacist review needed
     }

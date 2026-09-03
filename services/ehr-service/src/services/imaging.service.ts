@@ -235,7 +235,7 @@ export class ImagingService {
         if (!cptCode) {
           const cptMappings: SnomedMapping[] = await this.terminologyService
             .mapConcept(tenantDb, concept.conceptId, 'CPT')
-            .catch(() => []);
+            .catch((e: any) => { this.logger.warn(`SNOMED to CPT terminology mapping failed: ${e?.message}`); return []; });
           if (cptMappings.length > 0) {
             cptCode = cptMappings[0].targetCode || null;
           }
@@ -898,7 +898,7 @@ export class ImagingService {
       throw new NotFoundException(`Order with ID ${orderId} not found`);
     }
 
-    const aiReview = await this.getOrderAiReview(tenantDb, orderId).catch(() => null);
+    const aiReview = await this.getOrderAiReview(tenantDb, orderId).catch((e: any) => { this.logger.warn(`imaging order AI review query failed: ${e?.message}`); return null; });
     return { ...order[0], aiReview };
   }
 
@@ -1163,14 +1163,14 @@ export class ImagingService {
     // Get images
     const images = await this.getStudyImages(tenantDb, studyId);
 
-    const reportDraft = await this.getStudyReportDraft(tenantDb, studyId).catch(() => null);
+    const reportDraft = await this.getStudyReportDraft(tenantDb, studyId).catch((e: any) => { this.logger.warn(`report draft query failed: ${e?.message}`); return null; });
     // Get report if exists
     const report = await this.getReportByStudyId(tenantDb, studyId);
     const discrepancyReviews = report?.id
-      ? await this.listReportDiscrepancyReviews(tenantDb, report.id).catch(() => [])
+      ? await this.listReportDiscrepancyReviews(tenantDb, report.id).catch((e: any) => { this.logger.warn(`report discrepancy reviews query failed: ${e?.message}`); return []; })
       : [];
     const incidentalFollowups = report?.id
-      ? await this.listReportIncidentalFollowups(tenantDb, report.id).catch(() => [])
+      ? await this.listReportIncidentalFollowups(tenantDb, report.id).catch((e: any) => { this.logger.warn(`report incidental followups query failed: ${e?.message}`); return []; })
       : [];
 
     return {
@@ -1577,8 +1577,8 @@ export class ImagingService {
       throw new NotFoundException(`Report with ID ${reportId} not found`);
     }
 
-    const discrepancyReviews = await this.listReportDiscrepancyReviews(tenantDb, reportId).catch(() => []);
-    const incidentalFollowups = await this.listReportIncidentalFollowups(tenantDb, reportId).catch(() => []);
+    const discrepancyReviews = await this.listReportDiscrepancyReviews(tenantDb, reportId).catch((e: any) => { this.logger.warn(`report discrepancy reviews query failed: ${e?.message}`); return []; });
+    const incidentalFollowups = await this.listReportIncidentalFollowups(tenantDb, reportId).catch((e: any) => { this.logger.warn(`report incidental followups query failed: ${e?.message}`); return []; });
 
     return {
       ...report[0],
@@ -1608,8 +1608,8 @@ export class ImagingService {
       return null;
     }
 
-    const discrepancyReviews = await this.listReportDiscrepancyReviews(tenantDb, report[0].id).catch(() => []);
-    const incidentalFollowups = await this.listReportIncidentalFollowups(tenantDb, report[0].id).catch(() => []);
+    const discrepancyReviews = await this.listReportDiscrepancyReviews(tenantDb, report[0].id).catch((e: any) => { this.logger.warn(`report discrepancy reviews query failed: ${e?.message}`); return []; });
+    const incidentalFollowups = await this.listReportIncidentalFollowups(tenantDb, report[0].id).catch((e: any) => { this.logger.warn(`report incidental followups query failed: ${e?.message}`); return []; });
 
     return {
       ...report[0],

@@ -110,7 +110,7 @@ export class ModelMonitoringService {
     }
 
     // Compute fairness
-    await this.computeFairness(subdomain, ds, modelName, evalPeriod, outcomes).catch(() => {});
+    await this.computeFairness(subdomain, ds, modelName, evalPeriod, outcomes).catch((e: any) => this.logger.warn(`model fairness computation failed: ${e?.message}`));
 
     return saved;
   }
@@ -287,7 +287,7 @@ export class ModelMonitoringService {
           LEFT JOIN admissions a ON a.id = dp.admission_id
           WHERE DATE_TRUNC('month', dp.prediction_time) = DATE_TRUNC('month', $1::date)
           LIMIT 5000
-        `, [yearMonth]).catch(() => []);
+        `, [yearMonth]).catch((e: any) => { this.logger.warn(`deterioration_predictions outcomes query failed: ${e?.message}`); return []; });
       }
       if (modelName === 'readmission') {
         return await ds.query(`
@@ -304,7 +304,7 @@ export class ModelMonitoringService {
           JOIN patients p ON p.id = rp.patient_id
           WHERE DATE_TRUNC('month', rp.prediction_date::date) = DATE_TRUNC('month', $1::date)
           LIMIT 5000
-        `, [yearMonth]).catch(() => []);
+        `, [yearMonth]).catch((e: any) => { this.logger.warn(`readmission_predictions outcomes query failed: ${e?.message}`); return []; });
       }
     } catch (e) {}
     return [];

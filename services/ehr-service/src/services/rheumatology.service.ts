@@ -128,7 +128,10 @@ export class RheumatologyService {
       module: 'treat_to_target',
       das28,
       diagnosis: payload.diagnosis,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS treat-to-target guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -142,7 +145,10 @@ export class RheumatologyService {
       context: 'rheumatology_gout',
       specialty: 'rheumatology',
       module: 'gout_management',
-    }, false).catch(() => null);
+    }, false).catch((e: any) => {
+      this.logger.warn(`CDSS gout diagnosis assistance fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -153,7 +159,10 @@ export class RheumatologyService {
       specialty: 'rheumatology',
       module: 'biologic_pre_screening',
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS biologic safety screening guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...checks, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 }

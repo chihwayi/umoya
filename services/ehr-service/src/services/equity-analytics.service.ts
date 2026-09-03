@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 
 const AGE_BANDS = [
@@ -126,6 +126,8 @@ const KPI_QUERIES: Record<KpiName, {
 
 @Injectable()
 export class EquityAnalyticsService {
+  private readonly logger = new Logger(EquityAnalyticsService.name);
+
   constructor(private readonly tenantService: TenantService) {}
 
   async disaggregate(tenantId: string, kpi: string, dimension: Dimension, period: string): Promise<any> {
@@ -190,7 +192,7 @@ export class EquityAnalyticsService {
        WHERE tenant_id=$1 AND period=$2
        ORDER BY kpi_name, dimension, rate`,
       [tenantId, period],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`equity_kpi_results summary query failed: ${e?.message}`); return []; });
 
     const grouped: Record<string, any> = {};
     for (const r of rows) {

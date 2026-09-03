@@ -2170,23 +2170,23 @@ export class PatientPortalService {
       connection.query(
         `SELECT date_of_birth, gender, first_name FROM patients WHERE id = $1 LIMIT 1`,
         [patientId],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`Patient demographics query failed: ${e?.message}`); return []; }),
       connection.query(
         `SELECT blood_pressure_systolic, blood_pressure_diastolic, heart_rate, temperature,
                 oxygen_saturation, weight, height, recorded_at
          FROM vitals WHERE patient_id = $1 ORDER BY recorded_at DESC LIMIT 1`,
         [patientId],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`Patient vitals query failed: ${e?.message}`); return []; }),
       connection.query(
         `SELECT medication_name, dosage, frequency FROM prescriptions
          WHERE patient_id = $1 AND status = 'active' LIMIT 20`,
         [patientId],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`Patient prescriptions query failed: ${e?.message}`); return []; }),
       connection.query(
         `SELECT condition_type, condition_name, status, risk_level FROM chronic_disease_registry
          WHERE patient_id = $1 AND status NOT IN ('resolved') LIMIT 10`,
         [patientId],
-      ).catch(() => []),
+      ).catch((e: any) => { this.logger.warn(`Patient chronic conditions query failed: ${e?.message}`); return []; }),
     ]);
 
     const patient = patientRows[0] || {};
@@ -2233,7 +2233,7 @@ export class PatientPortalService {
               module: 'patient_self_service',
             },
           )
-          .catch(() => null),
+          .catch((e: any) => { this.logger.warn(`Patient portal care gaps detection failed: ${e?.message}`); return null; }),
       ]);
 
       return {

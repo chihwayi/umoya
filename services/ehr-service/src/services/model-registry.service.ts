@@ -502,7 +502,7 @@ export class ModelRegistryService {
       promotionBlockedReason: null,
     });
 
-    await this.notifyCdssPromote(modelName, previous.minioPath).catch(() => {});
+    await this.notifyCdssPromote(modelName, previous.minioPath).catch((e: any) => { this.logger.warn(`CDSS model promotion notification failed: ${e?.message}`); });
     await this.syncModelCard(subdomain, await repo.findOneBy({ id: previous.id }), null, {
       requestedStage: 'production',
       candidateAuc: previous.aucRoc ?? null,

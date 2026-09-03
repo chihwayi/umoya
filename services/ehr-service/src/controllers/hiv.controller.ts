@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards, UsePipes, ValidationPipe, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards, UsePipes, ValidationPipe, ForbiddenException, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { HivService } from '../services/hiv.service';
@@ -15,6 +15,8 @@ import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class HivController {
+  private readonly logger = new Logger(HivController.name);
+
   constructor(
     private readonly hivService: HivService,
     private readonly hivMonthlyReturnService: HivMonthlyReturnService,
@@ -162,7 +164,7 @@ export class HivController {
       this.outcomeLinkage.scheduleFollowUpsFromDb(
         req.tenantDb, req.tenantId, visit.id, 'hiv_visit',
         body.patientId, new Date(),
-      ).catch(() => undefined);
+      ).catch((e: any) => { this.logger.warn(`Schedule follow-ups from DB failed: ${e?.message}`); return undefined; });
     }
     return visit;
   }

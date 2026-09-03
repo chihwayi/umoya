@@ -1052,7 +1052,7 @@ export class AppointmentService {
     appointment.status = 'no_show';
     const saved = await appointmentRepository.save(appointment);
 
-    const connection = await this.tenantService.getTenantDatabase(tenantId).catch(() => null);
+    const connection = await this.tenantService.getTenantDatabase(tenantId).catch((e: any) => { this.logger.warn(`Failed to get tenant DB connection for no-show workflow: ${e?.message}`); return null; });
 
     // Follow-up workflow so a missed patient isn't lost — drives contact/rebook tasks.
     if (this.workflowService && connection) {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { NotifiableDisease } from '../entities/notifiable-disease.entity';
 import { OutbreakCase } from '../entities/outbreak-case.entity';
@@ -7,6 +7,8 @@ import { MohAlert } from '../entities/moh-alert.entity';
 
 @Injectable()
 export class OutbreakService {
+  private readonly logger = new Logger(OutbreakService.name);
+
   constructor(private tenantService: TenantService) {}
 
   // ── Notifiable diseases ───────────────────────────────────────────────────
@@ -39,7 +41,7 @@ export class OutbreakService {
     const saved = (await repo.save(entity)) as unknown as OutbreakCase;
 
     // Threshold check — async, non-blocking
-    this.checkThreshold(tenantId, saved).catch(() => {});
+    this.checkThreshold(tenantId, saved).catch((e: any) => { this.logger.warn(`Disease outbreak threshold check failed: ${e?.message}`); });
 
     return saved;
   }

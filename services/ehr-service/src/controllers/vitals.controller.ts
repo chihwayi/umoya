@@ -1,4 +1,4 @@
-import { UseGuards, Controller, Post, Get, Body, Param, Req, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Req, Query, Logger } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { VitalsService } from '../services/vitals.service';
 import { ProactiveAiService } from '../services/proactive-ai.service';
@@ -8,6 +8,8 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 @Controller('vitals')
 @UseGuards(JwtAuthGuard)
 export class VitalsController {
+  private readonly logger = new Logger(VitalsController.name);
+
   constructor(
     private readonly vitalsService: VitalsService,
     private readonly proactiveAiService: ProactiveAiService,
@@ -35,7 +37,7 @@ export class VitalsController {
           glasgow_coma_scale: body.glasgowComaScale,
           blood_glucose: body.bloodGlucose,
         },
-      }).catch(() => {});
+      }).catch((e: any) => this.logger.warn(`Vitals proactive analysis trigger failed: ${e?.message}`));
     }
 
     return { success: true, vitals: saved, cdssInsights: saved.cdssInsights ?? null };

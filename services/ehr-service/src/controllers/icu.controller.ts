@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Req, UseGuards, Logger } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { IcuService } from '../services/icu.service';
 import { OutcomeLinkageService } from '../services/outcome-linkage.service';
@@ -6,6 +6,8 @@ import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 @UseGuards(JwtAuthGuard)
 @Controller('icu')
 export class IcuController {
+  private readonly logger = new Logger(IcuController.name);
+
   constructor(
     private readonly icu: IcuService,
     private readonly outcomeLinkage: OutcomeLinkageService,
@@ -40,7 +42,7 @@ export class IcuController {
       this.outcomeLinkage.scheduleFollowUpsFromDb(
         req.tenantDb, req.tenantId, id, 'icu_admission',
         admission.patient_id, new Date(),
-      ).catch(() => undefined);
+      ).catch((e: any) => { this.logger.warn(`Schedule follow-ups from DB failed: ${e?.message}`); return undefined; });
     }
     return admission;
   }

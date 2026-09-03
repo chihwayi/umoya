@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 
 interface MetricDef {
@@ -99,6 +99,8 @@ const NATIONAL_P75: Record<string, number> = {
 
 @Injectable()
 export class BenchmarkingService {
+  private readonly logger = new Logger(BenchmarkingService.name);
+
   constructor(private readonly tenantService: TenantService) {}
 
   async computeFacilitySnapshot(tenantId: string, facilityId: string, period: string): Promise<void> {
@@ -123,7 +125,7 @@ export class BenchmarkingService {
            AND period < $4
          ORDER BY period DESC LIMIT 12`,
         [tenantId, facilityId, metricName, period],
-      ).catch(() => []);
+      ).catch((e: any) => { this.logger.warn(`facility_benchmark_snapshots history query failed: ${e?.message}`); return []; });
 
       const vals = history.map((r: any) => Number(r.raw_value)).filter((v: number) => !isNaN(v));
       vals.push(rawValue);
@@ -145,7 +147,7 @@ export class BenchmarkingService {
           this.percentile(vals, 25), this.percentile(vals, 50), this.percentile(vals, 75),
           natP75, Number(rank.toFixed(1)), status,
         ],
-      ).catch(() => { /* ignore */ });
+      ).catch((e: any) => this.logger.warn(`facility_benchmark_snapshots INSERT failed: ${e?.message}`));
     }
   }
 
@@ -157,7 +159,7 @@ export class BenchmarkingService {
        WHERE tenant_id=$1 AND facility_id=$2 AND period=$3
        ORDER BY metric_name`,
       [tenantId, facilityId, period],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`facility_benchmark_snapshots scorecard query failed: ${e?.message}`); return []; });
 
     return {
       facility_id: facilityId,
@@ -186,7 +188,7 @@ export class BenchmarkingService {
        WHERE tenant_id=$1 AND facility_id=$2 AND metric_name=$3
        ORDER BY period DESC LIMIT $4`,
       [tenantId, facilityId, metricName, periods],
-    ).catch(() => []);
+    ).catch((e: any) => { this.logger.warn(`facility_benchmark_snapshots trend query failed: ${e?.message}`); return []; });
     return rows.reverse();
   }
 

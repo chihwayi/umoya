@@ -3305,7 +3305,10 @@ export class OncologyService {
 
     const [surveillance, financialSummary] = await Promise.all([
       this.generateSurveillanceReminders(tenantDb, caseId),
-      this.getFinancialSummary(tenantDb, caseId).catch(() => null),
+      this.getFinancialSummary(tenantDb, caseId).catch((e: any) => {
+        this.logger.warn(`Financial summary fetch failed for case ${caseId}: ${e?.message}`);
+        return null;
+      }),
     ]);
     const overdueFollowUps = Array.isArray(surveillance?.overdue) ? surveillance.overdue : [];
 

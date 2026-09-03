@@ -47,7 +47,10 @@ export class EndocrinologyService {
       specialty: 'endocrinology',
       module: 'thyroid_management',
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS thyroid management guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -60,7 +63,10 @@ export class EndocrinologyService {
       context: 'endocrine_adrenal_crisis',
       specialty: 'endocrinology',
       module: 'adrenal_crisis',
-    }, null as any, undefined).catch(() => null);
+    }, null as any, undefined).catch((e: any) => {
+      this.logger.warn(`CDSS adrenal crisis risk assessment failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -73,7 +79,10 @@ export class EndocrinologyService {
       context: 'endocrine_levothyroxine',
       specialty: 'endocrinology',
       module: 'thyroid_hormone_replacement',
-    }, false).catch(() => null);
+    }, false).catch((e: any) => {
+      this.logger.warn(`CDSS levothyroxine dosing guidance fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
   }
 }

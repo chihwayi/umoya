@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Request, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { LabOrderService } from '../services/lab-order.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -12,6 +12,8 @@ import { ProactiveAiService } from '../services/proactive-ai.service';
 @UseGuards(JwtAuthGuard)
 @Controller('lab-orders')
 export class LabOrderController {
+  private readonly logger = new Logger(LabOrderController.name);
+
   constructor(
     private labOrderService: LabOrderService,
     private proactiveAiService: ProactiveAiService,
@@ -42,7 +44,7 @@ export class LabOrderController {
         triggeredByUserId: (req.user as any)?.userId,
         triggerType: 'labs',
         freshLabs: resultsDto.results || [],
-      }).catch(() => {});
+      }).catch((e: any) => this.logger.warn(`Lab results proactive analysis trigger failed: ${e?.message}`));
     }
 
     return updated;
@@ -92,7 +94,7 @@ export class LabOrderController {
         triggeredByUserId: (req.user as any)?.userId,
         triggerType: 'labs',
         freshLabs: resultsDto.results || [],
-      }).catch(() => {});
+      }).catch((e: any) => this.logger.warn(`Lab results proactive analysis trigger failed: ${e?.message}`));
     }
 
     return updated;

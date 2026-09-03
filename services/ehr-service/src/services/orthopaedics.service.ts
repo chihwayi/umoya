@@ -137,7 +137,10 @@ export class OrthopaedicsService {
       specialty: 'orthopaedics',
       module: 'rehabilitation',
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS orthopaedic rehabilitation guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -151,7 +154,10 @@ export class OrthopaedicsService {
       context: 'dvt_prophylaxis',
       specialty: 'orthopaedics',
       module: 'vte_prevention',
-    }, null as any, undefined).catch(() => null);
+    }, null as any, undefined).catch((e: any) => {
+      this.logger.warn(`CDSS DVT risk assessment failed: ${e?.message}`);
+      return null;
+    });
     return { ...wells, cdss: cdss ?? { cdssUnavailable: true } };
   }
 }

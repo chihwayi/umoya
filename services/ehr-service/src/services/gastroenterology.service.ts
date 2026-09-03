@@ -93,7 +93,10 @@ export class GastroenterologyService {
       context: 'upper_gi_bleed',
       specialty: 'gastroenterology',
       module: 'gi_haemorrhage',
-    }, null as any, undefined).catch(() => null);
+    }, null as any, undefined).catch((e: any) => {
+      this.logger.warn(`CDSS upper GI bleed risk assessment failed: ${e?.message}`);
+      return null;
+    });
     return { ...rockall, cdss: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -104,7 +107,10 @@ export class GastroenterologyService {
       module: 'cirrhosis_management',
       childPughGrade: cp.grade,
       ...payload,
-    }).catch(() => null);
+    }).catch((e: any) => {
+      this.logger.warn(`CDSS cirrhosis management guideline fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...cp, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 
@@ -118,7 +124,10 @@ export class GastroenterologyService {
       context: 'gastroenterology_dyspepsia',
       specialty: 'gastroenterology',
       module: 'dyspepsia_management',
-    }, false).catch(() => null);
+    }, false).catch((e: any) => {
+      this.logger.warn(`CDSS dyspepsia diagnosis assistance fetch failed: ${e?.message}`);
+      return null;
+    });
     return { ...local, cdss: cdss ?? { cdssUnavailable: true } };
   }
 }

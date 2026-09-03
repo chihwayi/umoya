@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Param, Body, Query, Request, UseGuards,
+  Controller, Get, Post, Patch, Param, Body, Query, Request, UseGuards, Logger,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { TbService } from '../services/tb.service';
@@ -9,6 +9,8 @@ import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 @Controller('tb')
 @UseGuards(JwtAuthGuard)
 export class TbController {
+  private readonly logger = new Logger(TbController.name);
+
   constructor(
     private readonly tbService: TbService,
     private readonly outcomeLinkage: OutcomeLinkageService,
@@ -37,7 +39,7 @@ export class TbController {
       this.outcomeLinkage.scheduleFollowUpsFromDb(
         req.tenantDb, req.tenantId, tbPatient.id, 'tb_case',
         tbPatient.patientId, new Date(),
-      ).catch(() => undefined);
+      ).catch((e: any) => { this.logger.warn(`Schedule follow-ups from DB failed: ${e?.message}`); return undefined; });
     }
     return tbPatient;
   }

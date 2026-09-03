@@ -4,7 +4,7 @@
  * Supports: M-Pesa Daraja, MTN MoMo, EcoCash, Airtel Money, Flutterwave
  * All credentials read from env vars — no hardcoded keys.
  */
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { TenantService } from './tenant.service';
 import { BillingService } from './billing.service';
@@ -13,6 +13,8 @@ import { MobileMoneyTransaction } from '../entities/mobile-money-transaction.ent
 
 @Injectable()
 export class MobileMoneyService {
+  private readonly logger = new Logger(MobileMoneyService.name);
+
   constructor(
     private tenantService: TenantService,
     private billingService: BillingService,
@@ -52,7 +54,7 @@ export class MobileMoneyService {
     // Dispatch to provider — fire-and-forget; callback will update status
     this._dispatchToProvider(saved, body.provider).catch((err) => {
       // Non-blocking: log and mark failed if dispatch itself throws
-      this._markFailed(tenantId, saved.id, err?.message || 'Dispatch failed').catch(() => {});
+      this._markFailed(tenantId, saved.id, err?.message || 'Dispatch failed').catch((e: any) => { this.logger.warn(`Mobile money transaction failure mark failed: ${e?.message}`); });
     });
 
     return saved;

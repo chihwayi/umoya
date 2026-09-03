@@ -159,7 +159,7 @@ export class TelemedicinePostcallService {
            WHERE patient_id = $1 AND type = 'telemedicine_pending'`,
           [session.patient_id],
         )
-        .catch(() => null);
+        .catch((e: any) => { this.logger.warn(`Update of patient notifications for telemedicine pending failed: ${e?.message}`); return null; });
 
       await db.query(
         `INSERT INTO patient_notifications (patient_id, type, title, body, data)
