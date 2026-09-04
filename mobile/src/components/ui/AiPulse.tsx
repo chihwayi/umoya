@@ -2,7 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Image } from 'react-native';
 import { C } from '../../design/tokens';
 
-const LOGO = require('../../../assets/umoya-logo.png');
+// Fix (2026-09-04): was the wide wordmark (umoya-logo.png, ~1.86:1) squeezed
+// into a circular frame via resizeMode="contain", letterboxing with visible
+// white bars. umoya-icon-square.png is the canonical 1:1 Umoya brand mark
+// (pulse+leaf, from /brand) so it fills the circle edge-to-edge.
+const LOGO = require('../../../assets/umoya-icon-square.png');
 
 interface AiPulseProps {
   size?: number;
@@ -71,6 +75,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: C.teal + '50',
-    backgroundColor: '#ffffff',
+    backgroundColor: 'transparent',
   },
 });
