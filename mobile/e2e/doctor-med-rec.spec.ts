@@ -15,6 +15,9 @@ import { device, element, by, expect as detoxExpect, waitFor } from 'detox';
  */
 describe('Umoya Mobile — Doctor Med Rec', () => {
   beforeAll(async () => {
+    // See smoke.spec.ts — AiPulse's infinite decorative loop animation
+    // blocks Detox's default idle-sync launch handshake forever.
+    await device.disableSynchronization();
     await device.launchApp({ newInstance: true });
   });
 

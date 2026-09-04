@@ -2,6 +2,15 @@ import { device, element, by, expect as detoxExpect } from 'detox';
 
 describe('Umoya Mobile — Smoke Tests', () => {
   beforeAll(async () => {
+    // The tenant-select/login screens run a permanent decorative pulse
+    // animation (AiPulse) around the brand mark — intentional UX, not a bug.
+    // Detox's default launch handshake waits for the app to go fully idle
+    // (including animations) before returning, which never happens with an
+    // infinite Animated.loop, hanging launchApp() forever. Disabling
+    // synchronization is Detox's documented workaround; the specs already
+    // use explicit waitFor(...).withTimeout(...) for every real assertion,
+    // so this doesn't make them less reliable.
+    await device.disableSynchronization();
     await device.launchApp({ newInstance: true });
   });
 
