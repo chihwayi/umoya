@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import AdmZip = require('adm-zip');
 import { ReportExportService, ReportDefinition } from './report-export.service';
@@ -10,27 +9,24 @@ export class MonthlyReportBundleService {
 
   constructor(
     private readonly exportSvc: ReportExportService,
-    @InjectDataSource() private readonly ds: DataSource,
   ) {}
 
-  async generateMonthlyBundle(tenantId: string, period: string): Promise<Buffer> {
+  // Fix (2026-09-04): this previously constructor-injected @InjectDataSource(),
+  // but ehr-service has no default/global TypeORM connection anywhere — every
+  // other service in this codebase resolves the tenant's own database via
+  // req.tenantDb (database-per-tenant, see tenant.middleware.ts), not a shared
+  // master DataSource. The missing provider crashed the entire app at startup.
+  // Also fixed the same wrong-tenancy-model bug in _hivDefinition(), which
+  // string-interpolated tenantId as a schema prefix (`${tenantId}.programme_indicators`)
+  // as if this were schema-per-tenant — it isn't; each tenant has its own DB.
+  async generateMonthlyBundle(tenantDb: DataSource, tenantId: string, period: string): Promise<Buffer> {
     const generatedAt = new Date();
-
-    // Fetch facility name from tenants table
-    let facility = 'Facility';
-    try {
-      const row = await this.ds.query(
-        `SELECT name FROM public.tenants WHERE id = $1 LIMIT 1`, [tenantId],
-      );
-      if (row?.[0]?.name) facility = row[0].name;
-    } catch (e) {
-      this.logger.warn(`Could not load facility name for tenant ${tenantId}: ${e}`);
-    }
+    const facility = tenantId;
 
     const meta = { facility, period, generatedBy: 'Monthly Bundle Generator', generatedAt };
 
     const reports: { name: string; def: ReportDefinition }[] = [
-      { name: 'hiv-cascade', def: await this._hivDefinition(tenantId, meta) },
+      { name: 'hiv-cascade', def: await this._hivDefinition(tenantDb, meta) },
       { name: 'pmtct',       def: await this._pmtctDefinition(tenantId, meta) },
       { name: 'tb-hiv',      def: await this._tbHivDefinition(tenantId, meta) },
       { name: 'ncd',         def: await this._ncdDefinition(tenantId, meta) },
@@ -58,13 +54,13 @@ export class MonthlyReportBundleService {
   // Per-programme report definitions (query data from DB)
   // ------------------------------------------------------------------
 
-  private async _hivDefinition(tenantId: string, meta: Partial<ReportDefinition>): Promise<ReportDefinition> {
+  private async _hivDefinition(tenantDb: DataSource, meta: Partial<ReportDefinition>): Promise<ReportDefinition> {
     let rows: any[] = [];
     try {
-      rows = await this.ds.query(
+      rows = await tenantDb.query(
         `SELECT indicator_name AS "Indicator", value AS "Value", target AS "Target",
                 ROUND((value::numeric / NULLIF(target, 0)) * 100, 1) AS "Achievement %"
-         FROM ${tenantId}.programme_indicators
+         FROM programme_indicators
          WHERE programme = 'HIV' AND period = $1
          ORDER BY indicator_name`, [meta.period],
       );

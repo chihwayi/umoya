@@ -1,8 +1,9 @@
 import {
-  Controller, Post, Body, Param, Res, Query, UseGuards,
+  Controller, Post, Body, Param, Res, Query, Request, UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { ReportExportService, ReportDefinition } from '../services/report-export.service';
 import { MonthlyReportBundleService } from '../services/monthly-report-bundle.service';
 
@@ -68,8 +69,9 @@ export class ReportExportController {
     @Param('tenantId') tenantId: string,
     @Query('period') period: string,
     @Res() res: Response,
+    @Request() req: RequestWithTenant,
   ) {
-    const zip = await this.bundleSvc.generateMonthlyBundle(tenantId, period);
+    const zip = await this.bundleSvc.generateMonthlyBundle(req.tenantDb!, tenantId, period);
     const filename = `umoya-monthly-bundle-${period}.zip`;
     res.set({
       'Content-Type': 'application/zip',
