@@ -310,10 +310,18 @@ export class PatientAuthService {
     );
 
     // Generate JWT token
+    // Fix (2026-09-04): tenantId was missing from this payload entirely. Every
+    // tenant-scoped request runs through JwtAuthGuard.handleRequest(), which
+    // requires the JWT to carry a tenantId matching the request's tenant (the
+    // cross-tenant-replay check) — with no tenantId claim, EVERY authenticated
+    // patient-portal endpoint rejected every patient token with "Token does not
+    // carry a tenant claim". Matches the tenantId claim already present in the
+    // staff login JWT (auth.service.ts).
     const payload = {
       sub: patient.id,
       email: patient.email,
       role: 'patient',
+      tenantId,
       patientNumber: patient.patient_number,
       firstName: patient.first_name,
       lastName: patient.last_name,

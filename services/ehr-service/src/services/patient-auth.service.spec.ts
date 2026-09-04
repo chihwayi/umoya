@@ -1,3 +1,4 @@
+import * as bcrypt from 'bcrypt';
 import { PatientAuthService } from './patient-auth.service';
 
 describe('PatientAuthService', () => {
@@ -152,5 +153,56 @@ describe('PatientAuthService', () => {
       { persist: true, actorUserId: null },
     );
     expect(result.intakeAssessment).toBe(intakeAssessment);
+  });
+
+  // Regression test for the bug found 2026-09-04: the JWT payload had no
+  // tenantId claim, so JwtAuthGuard.handleRequest() rejected every
+  // authenticated patient-portal request with "Token does not carry a tenant
+  // claim" — it cross-validates that a tenant-scoped request's JWT carries a
+  // tenantId matching the request's tenant (staff JWTs already did this).
+  it('includes tenantId in the JWT payload on successful login', async () => {
+    const passwordHash = await bcrypt.hash('Secret123!', 4);
+    const patientRow = {
+      id: 'patient-1',
+      email: 'portal@clinic.test',
+      patient_number: 'MRN-001',
+      portal_access_enabled: true,
+      portal_email_verified: true,
+      portal_password_hash: passwordHash,
+      first_name: 'Tariro',
+      last_name: 'Moyo',
+      phone: '+263771234567',
+      date_of_birth: '1990-05-12',
+    };
+
+    const tenantConnection = {
+      query: jest.fn()
+        .mockResolvedValueOnce([patientRow]) // SELECT ... WHERE email = ...
+        .mockResolvedValueOnce(undefined),    // UPDATE portal_last_login
+      getRepository: jest.fn(),
+    };
+
+    const tenantService = { getTenantDatabase: jest.fn().mockResolvedValue(tenantConnection) };
+    const emailService = { sendEmail: jest.fn() };
+    const registrationIntelligenceService = { assessRegistrationIntake: jest.fn() };
+    const jwtService = { sign: jest.fn().mockReturnValue('signed.jwt.token') };
+
+    const service = new PatientAuthService(
+      jwtService as any,
+      tenantService as any,
+      emailService as any,
+      registrationIntelligenceService as any,
+    );
+
+    const result = await service.login(
+      { email: 'portal@clinic.test', password: 'Secret123!' },
+      'kids-clinic',
+    );
+
+    expect(result.success).toBe(true);
+    expect(jwtService.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'kids-clinic', sub: 'patient-1', role: 'patient' }),
+      { expiresIn: '7d' },
+    );
   });
 });
