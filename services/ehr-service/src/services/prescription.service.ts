@@ -107,10 +107,6 @@ export class PrescriptionService {
     prescriberId: string,
     tenantId?: string,
   ): Promise<Prescription & { cdssInsights?: any }> {
-    const prescriptionCount = await tenantDb.query('SELECT COUNT(*) as count FROM prescriptions');
-    const count = parseInt(prescriptionCount[0].count) + 1;
-    const prescriptionNumber = `RX${String(count).padStart(8, '0')}`;
-
     // Hard-stop contraindication check (Sprint 112 P0-4)
     if (this.cdssService && createDto.patientId) {
       const currentMeds = await tenantDb.query(
@@ -160,21 +156,26 @@ export class PrescriptionService {
     // Resolve SNOMED concept for medication_name
     const medicationConcept = await this.resolveConcept(tenantDb, createDto.medication_name_snomed || createDto.medicationNameSnomed);
 
-    // Use raw SQL to insert with SNOMED fields
+    // Fix (2026-09-04): this INSERT referenced 8 columns that have never existed
+    // in the real schema (prescription_number, prescriber_id, generic_name,
+    // strength, form, route, start_date, end_date, indication, pharmacy_notes —
+    // the entity itself documents most of these as "virtual fields that don't
+    // exist in database"), and omitted `duration`, which IS a real NOT NULL
+    // column — so prescription creation has never actually succeeded against
+    // the provisioned schema. Rewritten against the real `prescriptions` table.
     const result = await tenantDb.query(
       `
       INSERT INTO prescriptions (
-        prescription_number, patient_id, prescriber_id, medical_record_id,
+        patient_id, doctor_id, medical_record_id,
         medication_name, medication_name_snomed_code, medication_name_snomed_term,
         medication_name_snomed_module_id, medication_name_snomed_definition_status,
-        generic_name, strength, form, dosage, frequency, route, quantity, refills,
-        start_date, end_date, instructions, indication, status, pharmacy_notes
+        dosage, frequency, duration, quantity, refills, instructions,
+        is_controlled, controlled_schedule, status
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *
       `,
       [
-        prescriptionNumber,
         createDto.patientId,
         prescriberId,
         createDto.medicalRecordId ?? null,
@@ -183,24 +184,47 @@ export class PrescriptionService {
         medicationConcept?.term ?? null,
         medicationConcept?.moduleId ?? null,
         medicationConcept?.definitionStatus ?? null,
-        createDto.genericName ?? null,
-        createDto.strength,
-        createDto.form,
         createDto.dosage,
         createDto.frequency,
-        createDto.route,
+        createDto.duration ?? null,
         createDto.quantity,
-        createDto.refills ?? null,
-        new Date(createDto.startDate),
-        createDto.endDate ? new Date(createDto.endDate) : null,
+        createDto.refills ?? 0,
         createDto.instructions ?? null,
-        createDto.indication ?? null,
+        createDto.isControlled ?? false,
+        createDto.controlledSchedule ?? null,
         createDto.status ?? PrescriptionStatus.ACTIVE,
-        createDto.pharmacyNotes ?? null,
       ],
     );
 
-    const createdPrescription = result[0] as Prescription;
+    // Raw tenantDb.query() returns snake_case column names, not TypeORM's
+    // camelCase entity properties — map explicitly so downstream code
+    // (createdPrescription.patientId, .medicationName, .status below) and the
+    // API response shape both match what every other prescription endpoint
+    // (which reads via the repository) actually returns.
+    const row = result[0];
+    const createdPrescription = {
+      id: row.id,
+      patientId: row.patient_id,
+      prescriberId: row.doctor_id,
+      medicalRecordId: row.medical_record_id,
+      medicationName: row.medication_name,
+      medicationNameSnomedCode: row.medication_name_snomed_code,
+      medicationNameSnomedTerm: row.medication_name_snomed_term,
+      medicationNameSnomedModuleId: row.medication_name_snomed_module_id,
+      medicationNameSnomedDefinitionStatus: row.medication_name_snomed_definition_status,
+      dosage: row.dosage,
+      frequency: row.frequency,
+      duration: row.duration,
+      quantity: row.quantity,
+      refills: row.refills,
+      instructions: row.instructions,
+      isControlled: row.is_controlled,
+      controlledSchedule: row.controlled_schedule,
+      status: row.status,
+      prescribedDate: row.prescribed_date,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    } as unknown as Prescription;
 
     // Fire-and-forget soft lock — never blocks prescription creation
     if (this.storeroomService && createDto.quantity) {
