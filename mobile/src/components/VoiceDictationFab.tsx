@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import * as FileSystem from 'expo-file-system';
 import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW } from '../design/tokens';
@@ -26,35 +26,33 @@ export function VoiceDictationFab({ language = 'en', patientId, encounterId, onP
   const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   const startRecording = useCallback(async () => {
     setErrorMsg(null);
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
       if (!granted) {
         setErrorMsg(t('voice.error_mic'));
         setPhase('error');
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recordingRef.current = recording;
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
       setPhase('recording');
     } catch {
       setErrorMsg(t('voice.error_mic'));
       setPhase('error');
     }
-  }, [t]);
+  }, [t, audioRecorder]);
 
   const stopAndProcess = useCallback(async () => {
-    const recording = recordingRef.current;
-    if (!recording) return;
+    if (!audioRecorder.isRecording) return;
     setPhase('transcribing');
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      recordingRef.current = null;
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
       if (!uri) throw new Error('no uri');
 
       const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
@@ -72,7 +70,7 @@ export function VoiceDictationFab({ language = 'en', patientId, encounterId, onP
       setErrorMsg(t('voice.error_generic'));
       setPhase('error');
     }
-  }, [language, patientId, encounterId, onParsed, t]);
+  }, [language, patientId, encounterId, onParsed, t, audioRecorder]);
 
   const handlePress = useCallback(() => {
     if (phase === 'idle' || phase === 'done' || phase === 'error') startRecording();

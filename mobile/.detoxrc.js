@@ -19,9 +19,9 @@ module.exports = {
     'ios.debug': {
       type: 'ios.app',
       binaryPath:
-        'ios/build/Build/Products/Debug-iphonesimulator/Umoya.app',
+        'ios/build/Build/Products/Debug-iphonesimulator/UmoyaClinical.app',
       build:
-        'xcodebuild -workspace ios/Umoya.xcworkspace -scheme Umoya -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
+        'xcodebuild -workspace ios/UmoyaClinical.xcworkspace -scheme UmoyaClinical -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
     },
   },
   devices: {
