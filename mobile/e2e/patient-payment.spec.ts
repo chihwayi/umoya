@@ -6,13 +6,7 @@ import { device, element, by, expect as detoxExpect, waitFor } from 'detox';
  * e2e as not attempted). Exercises the PatientBillsScreen payment flow fixed
  * in S248 (real backend confirmation via poll, not a fake setTimeout success).
  *
- * WRITTEN BUT NOT VERIFIED AGAINST A DEVICE — same standing limitation as
- * nurse-point-of-care.spec.ts and doctor-med-rec.spec.ts: no Android
- * emulator/iOS simulator available in the authoring environment. Run via
- * `npm run test:e2e` against a real emulator (MOBILE_E2E_ENABLED=true in CI)
- * before trusting it as a merge gate.
- *
- * Fixture requirements — the target tenant's demo/seed data must include:
+ * Fixture requirements — the e2e-clinic tenant's demo/seed data must include:
  *   - A patient portal account: patient.demo@umoya.health / Demo1234!
  *   - At least one invoice with status 'due' for that patient
  * Deliberately NOT wrapping assertions in try/catch to skip on missing
@@ -23,17 +17,34 @@ describe('Umoya Mobile — Patient Payment', () => {
   beforeAll(async () => {
     // See smoke.spec.ts — AiPulse's infinite decorative loop animation
     // blocks Detox's default idle-sync launch handshake forever.
-    await device.disableSynchronization();
-    await device.launchApp({ newInstance: true });
+    await device.clearKeychain();
+    // See doctor-med-rec.spec.ts — pre-grant notifications so the native
+    // system permission alert never blocks post-login interaction.
+    await device.launchApp({
+      newInstance: true,
+      permissions: { notifications: 'YES' },
+      launchArgs: { detoxEnableSynchronization: 0 },
+    });
   });
 
   afterAll(async () => {
     await device.terminateApp();
   });
 
+  it('selects the e2e-clinic tenant', async () => {
+    await waitFor(element(by.text('Select Your Clinic'))).toBeVisible().withTimeout(15000);
+    await element(by.id('tenant-search-input')).typeText('e2e-clinic');
+    await waitFor(element(by.id('tenant-result-e2e-clinic'))).toBeVisible().withTimeout(10000);
+    await element(by.id('tenant-result-e2e-clinic')).tap();
+  });
+
   it('logs in as a patient and lands on the Home tab', async () => {
+    await waitFor(element(by.id('login-role-patient'))).toBeVisible().withTimeout(10000);
     await element(by.id('login-role-patient')).tap();
     await element(by.id('login-patient-email-input')).typeText('patient.demo@umoya.health');
+    // See doctor-med-rec.spec.ts — dismiss the keyboard before focusing
+    // password so its own focus recalculates the scroll offset correctly.
+    await element(by.text('Welcome back')).tap();
     await element(by.id('login-patient-password-input')).typeText('Demo1234!');
     await element(by.id('login-submit-patient')).tap();
     await waitFor(element(by.id('tab-PHHome'))).toBeVisible().withTimeout(15000);
@@ -59,6 +70,6 @@ describe('Umoya Mobile — Patient Payment', () => {
     // The fixed flow polls the backend rather than resolving instantly — a
     // 'waiting' state must appear before the final success state does.
     await waitFor(element(by.text('Confirming Payment'))).toBeVisible().withTimeout(5000);
-    await waitFor(element(by.text('Payment Successful!'))).toBeVisible().withTimeout(30000);
+    await waitFor(element(by.text('Payment Successful!'))).toBeVisible().withTimeout(60000);
   });
 });

@@ -5,10 +5,10 @@ import { device, element, by, expect as detoxExpect, waitFor } from 'detox';
  * from Rounds, launch Med Rec, set a reconciliation decision per medication,
  * and run the AI reconciliation check. Previously uncovered by any e2e test.
  *
- * WRITTEN BUT NOT VERIFIED AGAINST A DEVICE — see nurse-point-of-care.spec.ts
- * for the same caveat and fixture-data expectations. This suite additionally
  * requires:
- *   - A doctor account: doctor.demo@umoya.health / Demo1234!
+ *   - The e2e-clinic tenant (slug "e2e-clinic") provisioned and reachable
+ *     via the tenant search/discovery endpoint
+ *   - A doctor account in that tenant: doctor@e2e-clinic.com / Demo1234!
  *   - At least one rounds patient with an active medication list
  * Assertions are not wrapped in fixture-missing fallbacks — a failure here
  * should surface as a real signal, not be silently absorbed.
@@ -17,19 +17,54 @@ describe('Umoya Mobile — Doctor Med Rec', () => {
   beforeAll(async () => {
     // See smoke.spec.ts — AiPulse's infinite decorative loop animation
     // blocks Detox's default idle-sync launch handshake forever.
-    await device.disableSynchronization();
-    await device.launchApp({ newInstance: true });
+    await device.clearKeychain();
+    // Pre-grant notifications so the native "Would Like to Send You
+    // Notifications" system alert (triggered by registerPushToken() right
+    // after login) never appears — it sits outside the RN view hierarchy
+    // and silently blocks every subsequent element match.
+    await device.launchApp({
+      newInstance: true,
+      permissions: { notifications: 'YES' },
+      launchArgs: { detoxEnableSynchronization: 0 },
+    });
   });
 
   afterAll(async () => {
     await device.terminateApp();
   });
 
+  it('selects the e2e-clinic tenant', async () => {
+    await waitFor(element(by.text('Select Your Clinic'))).toBeVisible().withTimeout(15000);
+    await element(by.id('tenant-search-input')).typeText('e2e-clinic');
+    await waitFor(element(by.id('tenant-result-e2e-clinic'))).toBeVisible().withTimeout(10000);
+    await element(by.id('tenant-result-e2e-clinic')).tap();
+  });
+
   it('logs in as a doctor and lands on Rounds', async () => {
+    await waitFor(element(by.id('login-role-doctor'))).toBeVisible().withTimeout(10000);
     await element(by.id('login-role-doctor')).tap();
-    await element(by.id('login-email-input')).typeText('doctor.demo@umoya.health');
+    await element(by.id('login-email-input')).typeText('doctor@e2e-clinic.com');
+    // Dismiss the keyboard before focusing password — while email's keyboard
+    // is still up, the ScrollView's keyboard-avoidance leaves the password
+    // field clipped just below the fold. Tapping the (non-interactive)
+    // headline collapses the keyboard so password's own focus recalculates
+    // the scroll offset correctly.
+    await element(by.text('Welcome back')).tap();
     await element(by.id('login-password-input')).typeText('Demo1234!');
     await element(by.id('login-submit-staff')).tap();
+    // iOS's native "Save Password?" Keychain prompt appears after a
+    // successful login and sits outside the RN view hierarchy. Detox's
+    // matchers can't see it while synchronization is disabled (its
+    // accessibility-tree snapshot never picks up the new alert window) —
+    // briefly re-enable sync so Detox can find and dismiss it.
+    await device.enableSynchronization();
+    try {
+      await waitFor(element(by.text('Not Now'))).toBeVisible().withTimeout(5000);
+      await element(by.text('Not Now')).tap();
+    } catch {
+      // Prompt didn't appear this run — nothing to dismiss.
+    }
+    await device.disableSynchronization();
     await waitFor(element(by.id('tab-DRounds'))).toBeVisible().withTimeout(15000);
   });
 

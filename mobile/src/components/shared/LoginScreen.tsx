@@ -232,6 +232,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         style={[styles.flex, { paddingTop: insets.top }]}
       >
         <ScrollView
+          testID="login-scroll-view"
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
