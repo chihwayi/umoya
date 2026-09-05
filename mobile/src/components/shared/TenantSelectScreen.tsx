@@ -98,9 +98,14 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
   };
 
   const select = async (tenant: Tenant) => {
-    await setTenant(tenant);
-    buildApiClient(tenant.baseUrl);
-    onSelected();
+    try {
+      await setTenant(tenant);
+      buildApiClient(tenant.baseUrl);
+      onSelected();
+    } catch (error) {
+      console.error('[TenantSelect] Failed to select clinic:', error);
+      Alert.alert('Failed to select clinic', 'Please check your connection and try again.');
+    }
   };
 
   const openQr = async () => {
@@ -180,6 +185,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
           <View style={styles.searchBox}>
             <Icon name="search" size={16} color={C.textMuted} />
             <TextInput
+              testID="tenant-search-input"
               style={styles.searchInput}
               placeholder="Search clinic name or subdomain…"
               placeholderTextColor={C.textMuted}
@@ -203,8 +209,10 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
             keyExtractor={item => item.slug}
             contentContainerStyle={styles.list}
             style={styles.listContainer}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
+                testID={`tenant-result-${item.slug}`}
                 onPress={() => select(item)}
                 activeOpacity={0.75}
               >
