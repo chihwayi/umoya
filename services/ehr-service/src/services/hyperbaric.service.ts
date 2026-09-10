@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class HyperbaricService {
@@ -96,6 +97,6 @@ export class HyperbaricService {
        WHERE id=$3 RETURNING *`,
       [body.outcome, body.status ?? null, id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 }

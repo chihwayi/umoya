@@ -5,6 +5,7 @@ import {
   ApproveRequestDto, CreateTransferDto, ReceiveTransferItemDto,
   StockUnavailableException,
 } from './storeroom.dto';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class StoreroomService {
@@ -50,12 +51,13 @@ export class StoreroomService {
     if (fields.length === 0) return this.getLocationById(tenantDb, id);
     fields.push(`updated_at = NOW()`);
     vals.push(id);
-    const { rows } = await tenantDb.query(
+    const result = await tenantDb.query(
       `UPDATE inventory_locations SET ${fields.join(',')} WHERE id = $${i} RETURNING *`,
       vals,
     );
-    if (!rows[0]) throw new NotFoundException(`Location ${id} not found`);
-    return rows[0];
+    const row = firstReturningRow(result);
+    if (!row) throw new NotFoundException(`Location ${id} not found`);
+    return row;
   }
 
   async getLocationById(tenantDb: any, id: string): Promise<any> {
@@ -139,12 +141,13 @@ export class StoreroomService {
     if (fields.length === 0) return this.getCatalogItemById(tenantDb, id);
     fields.push(`updated_at = NOW()`);
     vals.push(id);
-    const { rows } = await tenantDb.query(
+    const result = await tenantDb.query(
       `UPDATE storeroom_catalog SET ${fields.join(',')} WHERE id = $${i} RETURNING *`,
       vals,
     );
-    if (!rows[0]) throw new NotFoundException(`Catalog item ${id} not found`);
-    return rows[0];
+    const row = firstReturningRow(result);
+    if (!row) throw new NotFoundException(`Catalog item ${id} not found`);
+    return row;
   }
 
   async getCatalogItemById(tenantDb: any, id: string): Promise<any> {
@@ -376,20 +379,21 @@ export class StoreroomService {
   }
 
   async releaseReservation(tenantDb: any, reservationId: string): Promise<void> {
-    const { rows } = await tenantDb.query(
+    const result = await tenantDb.query(
       `UPDATE stock_reservations
           SET status = 'released', released_at = NOW()
         WHERE id = $1 AND status = 'active'
         RETURNING batch_id, quantity`,
       [reservationId],
     );
-    if (!rows[0]) return;
+    const row = firstReturningRow(result);
+    if (!row) return;
 
     await tenantDb.query(
       `UPDATE location_stock
           SET quantity_reserved = GREATEST(0, quantity_reserved - $1)
         WHERE id = $2`,
-      [rows[0].quantity, rows[0].batch_id],
+      [row.quantity, row.batch_id],
     );
   }
 
@@ -758,7 +762,7 @@ export class StoreroomService {
   async rejectStockRequest(
     tenantDb: any, requestId: string, reason: string, userId: string,
   ): Promise<any> {
-    const { rows } = await tenantDb.query(
+    const result = await tenantDb.query(
       `UPDATE stock_requests
           SET status = 'rejected', rejection_reason = $1,
               approved_by = $2, approved_at = NOW(), updated_at = NOW()
@@ -766,8 +770,9 @@ export class StoreroomService {
         RETURNING *`,
       [reason, userId, requestId],
     );
-    if (!rows[0]) throw new NotFoundException(`Stock request ${requestId} not found`);
-    return rows[0];
+    const row = firstReturningRow(result);
+    if (!row) throw new NotFoundException(`Stock request ${requestId} not found`);
+    return row;
   }
 
   // ── Transfers ──────────────────────────────────────────────────────────────
@@ -1224,7 +1229,7 @@ export class StoreroomService {
     receivedBy: string,
   ): Promise<void> {
     for (const r of received) {
-      const { rows } = await tenantDb.query(
+      const result = await tenantDb.query(
         `UPDATE storeroom_po_items
             SET quantity_received = quantity_received + $1,
                 received_at = NOW(),
@@ -1233,7 +1238,8 @@ export class StoreroomService {
           RETURNING catalog_id, to_location_id`,
         [r.quantityReceived, r.unitCost ?? null, r.poItemId],
       );
-      if (!rows[0]) continue;
+      const row = firstReturningRow(result);
+      if (!row) continue;
 
       await tenantDb.query(
         `INSERT INTO location_stock
@@ -1241,7 +1247,7 @@ export class StoreroomService {
          VALUES ($1, $2, $3, $4, $5::DATE, $6)
          ON CONFLICT (location_id, catalog_id, COALESCE(batch_number, ''))
          DO UPDATE SET quantity_on_hand = location_stock.quantity_on_hand + EXCLUDED.quantity_on_hand`,
-        [rows[0].to_location_id, rows[0].catalog_id, r.quantityReceived,
+        [row.to_location_id, row.catalog_id, r.quantityReceived,
          r.batchNumber ?? null, r.expiryDate ?? null, r.unitCost ?? null],
       );
     }

@@ -1,9 +1,14 @@
 import { UseGuards, Controller, Post, Get, Body, Query } from '@nestjs/common';
 import { HimisReportingService } from '../services/himis-reporting.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 
+// A-004/MOAS-20: national MoHCC/HIMIS submission (including migrating from
+// OpenMRS) is an administrative reporting function, not clinical-staff-facing.
 @Controller('himis')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class HimisReportingController {
   constructor(private readonly svc: HimisReportingService) {}
 

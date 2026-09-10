@@ -5,6 +5,7 @@ import { DicomStudy } from '../entities/dicom-study.entity';
 import { RadiologyAiFinding } from '../entities/radiology-ai-finding.entity';
 import { AlertDeliveryService } from './alert-delivery.service';
 import { AiSurfaceContractService } from './ai-surface-contract.service';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class RadiologyAiService {
@@ -313,7 +314,7 @@ export class RadiologyAiService {
        RETURNING *`,
       [findingId, status, reviewerId, comment ?? null],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async getPatientRadiologyAiHistory(patientId: string, db: any): Promise<unknown[]> {

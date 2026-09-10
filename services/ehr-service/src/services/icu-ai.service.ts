@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 const VENT_LIMITS = {
   plateau_max_cmH2O: 30,
@@ -58,7 +59,7 @@ export class IcuAiService {
        WHERE id=$2 RETURNING *`,
       [acknowledgedBy, id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async runVentSafetyCheck(db: any, body: any): Promise<any> {

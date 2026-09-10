@@ -2,9 +2,16 @@ import { UseGuards, Controller, Post, Get, Body, Param, Query } from '@nestjs/co
 import { ModelRegistryService, ShadowEvaluationReviewRequest } from '../services/model-registry.service';
 import { FederatedLearningService } from '../services/federated-learning.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 
+// Read endpoints (production status/history/cards) stay open to any
+// authenticated role — clinical staff reviewing AI model transparency cards
+// is legitimate. The mutating endpoints (promote/rollback/review/train) are
+// admin-only below — these had no role restriction at all before, found
+// while verifying the FL/model-governance pipeline live.
 @Controller('model-registry')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ModelRegistryController {
   constructor(
     private readonly registry: ModelRegistryService,
@@ -54,6 +61,7 @@ export class ModelRegistryController {
   }
 
   @Post('shadow-evaluations/:id/review')
+  @Roles('admin', 'super_admin')
   reviewShadowEvaluation(
     @Param('id') id: string,
     @Query('subdomain') subdomain: string,
@@ -63,6 +71,7 @@ export class ModelRegistryController {
   }
 
   @Post(':id/promote')
+  @Roles('admin', 'super_admin')
   promote(
     @Param('id') id: string,
     @Query('subdomain') subdomain: string,
@@ -80,6 +89,7 @@ export class ModelRegistryController {
   }
 
   @Post(':modelName/rollback')
+  @Roles('admin', 'super_admin')
   rollback(
     @Param('modelName') modelName: string,
     @Query('subdomain') subdomain: string,
@@ -88,6 +98,7 @@ export class ModelRegistryController {
   }
 
   @Post('train/:modelName')
+  @Roles('admin', 'super_admin')
   triggerTraining(
     @Param('modelName') modelName: string,
     @Body('subdomain') subdomain: string,

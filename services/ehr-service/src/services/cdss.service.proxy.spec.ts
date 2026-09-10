@@ -30,6 +30,7 @@ describe('CdssService proxy routing', () => {
       '/guidelines/check',
       {
         condition: 'sepsis',
+        diagnosis_code: null,
         patient_age: 41,
         patient_gender: 'female',
         comorbidities: ['hypertension'],

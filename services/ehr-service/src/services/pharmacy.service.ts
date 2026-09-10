@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException, Inject, Opt
 import { DataSource } from 'typeorm';
 import { BillingService } from './billing.service';
 import { StoreroomService } from './storeroom.service';
+import { firstReturningRow } from '../utils/returning-row';
 import {
   CreateSupplierDto,
   UpdateSupplierDto,
@@ -153,10 +154,11 @@ export class PharmacyService {
       `UPDATE pharmacy_suppliers SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`,
       params,
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Supplier ${id} not found`);
     }
-    return result[0];
+    return row;
   }
 
   async deleteSupplier(tenantDb: DataSource, id: string) {
@@ -165,10 +167,11 @@ export class PharmacyService {
       'DELETE FROM pharmacy_suppliers WHERE id = $1 RETURNING id',
       [id],
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Supplier ${id} not found`);
     }
-    return { id: result[0].id };
+    return { id: row.id };
   }
 
   async getSupplierStatistics(tenantDb: DataSource, supplierId: string) {
@@ -372,10 +375,11 @@ export class PharmacyService {
       `UPDATE pharmacy_inventory SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`,
       params,
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Inventory item ${id} not found`);
     }
-    return result[0];
+    return row;
   }
 
   async deleteInventory(tenantDb: DataSource, id: string) {
@@ -384,10 +388,11 @@ export class PharmacyService {
       'DELETE FROM pharmacy_inventory WHERE id = $1 RETURNING id',
       [id],
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Inventory item ${id} not found`);
     }
-    return { id: result[0].id };
+    return { id: row.id };
   }
 
   async getLowStockItems(tenantDb: DataSource) {
@@ -536,10 +541,11 @@ export class PharmacyService {
       `UPDATE pharmacy_purchase_orders SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`,
       params,
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Purchase order ${id} not found`);
     }
-    return result[0];
+    return row;
   }
 
   // ============================================
@@ -1386,10 +1392,11 @@ export class PharmacyService {
       `UPDATE pharmacy_dispensings SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`,
       params,
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Dispensing ${id} not found`);
     }
-    return result[0];
+    return row;
   }
 
   // ============================================
@@ -1698,10 +1705,11 @@ export class PharmacyService {
       `UPDATE pharmacy_pricing_rules SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`,
       params,
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Pricing rule ${id} not found`);
     }
-    return result[0];
+    return row;
   }
 
   // ============================================
@@ -1806,10 +1814,11 @@ export class PharmacyService {
       `UPDATE pharmacy_formulary SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`,
       params,
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Formulary item ${id} not found`);
     }
-    return result[0];
+    return row;
   }
 
   // ============================================
@@ -1904,10 +1913,11 @@ export class PharmacyService {
       `UPDATE pharmacy_alerts SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${params.length} RETURNING *`,
       params,
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Alert ${id} not found`);
     }
-    return result[0];
+    return row;
   }
 
   async createPrescriptionWithContraindicationOverride(dto: any, userId: string, tenantDb: DataSource): Promise<any> {

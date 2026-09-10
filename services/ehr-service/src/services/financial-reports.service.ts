@@ -74,7 +74,7 @@ export class FinancialReportsService {
     // Build base query
     let query = `
       SELECT 
-        DATE(ft.transaction_date) as date,
+        DATE(ft.created_at) as date,
         ft.source_module as service_type,
         ft.patient_id,
         ft.amount,
@@ -85,10 +85,10 @@ export class FinancialReportsService {
         u.first_name as doctor_first_name,
         u.last_name as doctor_last_name
       FROM financial_transactions ft
-      LEFT JOIN billing b ON b.id::text = ft.source_reference_id AND ft.source_module = 'billing'
+      LEFT JOIN billing b ON b.id = ft.source_reference_id AND ft.source_module = 'billing'
       LEFT JOIN appointments a ON a.id = b.appointment_id
       LEFT JOIN users u ON u.id = a.doctor_id
-      WHERE ft.transaction_date >= $1 AND ft.transaction_date <= $2
+      WHERE ft.created_at >= $1 AND ft.created_at <= $2
         AND ft.payment_status = 'paid'
     `;
 
@@ -179,7 +179,7 @@ export class FinancialReportsService {
     const [previousPeriodData] = await tenantDb.query(
       `SELECT COALESCE(SUM(amount), 0) as total_revenue
        FROM financial_transactions
-       WHERE transaction_date >= $1 AND transaction_date <= $2
+       WHERE created_at >= $1 AND created_at <= $2
          AND payment_status = 'paid'`,
       [previousPeriodStart, previousPeriodEnd],
     );
@@ -229,7 +229,7 @@ export class FinancialReportsService {
         COALESCE(SUM(amount), 0) as total_income,
         COUNT(*) as transaction_count
        FROM financial_transactions
-       WHERE transaction_date >= $1 AND transaction_date <= $2
+       WHERE created_at >= $1 AND created_at <= $2
          AND payment_status = 'paid'
          AND amount > 0`,
       [dateFrom, dateTo],
@@ -242,7 +242,7 @@ export class FinancialReportsService {
         COALESCE(SUM(amount), 0) as amount,
         COUNT(*) as count
        FROM financial_transactions
-       WHERE transaction_date >= $1 AND transaction_date <= $2
+       WHERE created_at >= $1 AND created_at <= $2
          AND payment_status = 'paid'
          AND amount > 0
        GROUP BY source_module
@@ -294,7 +294,7 @@ export class FinancialReportsService {
           `SELECT 
             COALESCE(SUM(ABS(amount)), 0) as total_expenses
            FROM financial_transactions
-           WHERE transaction_date >= $1 AND transaction_date <= $2
+           WHERE created_at >= $1 AND created_at <= $2
              AND amount < 0`,
           [dateFrom, dateTo],
         );
@@ -485,7 +485,7 @@ export class FinancialReportsService {
         ft.patient_id,
         ft.amount,
         ft.balance,
-        ft.transaction_date,
+        ft.created_at,
         ft.due_date,
         ft.source_module,
         ft.source_reference_id,
@@ -549,7 +549,7 @@ export class FinancialReportsService {
           patientNumber: tx.patient_number,
           amount: Number(tx.amount || 0),
           balance: Number(tx.balance || 0),
-          transactionDate: tx.transaction_date,
+          transactionDate: tx.created_at,
           dueDate: tx.due_date,
           daysOverdue: tx.days_overdue,
           sourceModule: tx.source_module,

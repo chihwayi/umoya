@@ -1,12 +1,19 @@
 import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { FinancialReportsService } from '../services/financial-reports.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
+// A-004/MOAS-20: every route here is pure financial reporting (revenue,
+// P&L, cash flow, AR aging) with no clinical content — was JwtAuthGuard-only,
+// so any staff role could pull P&L/cash-flow statements. Class-level
+// @Roles() since the whole controller is one sensitivity class.
 @ApiTags('Financial Reports')
 @Controller('financial-reports')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('accounts', 'admin')
 @ApiBearerAuth()
 export class FinancialReportsController {
   constructor(private readonly financialReportsService: FinancialReportsService) {}

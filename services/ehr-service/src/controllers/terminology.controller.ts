@@ -5,20 +5,26 @@ import { TerminologyImportService } from '../services/terminology-import.service
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
-import { Public } from '../decorators/public.decorator';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 
 @ApiTags('Terminology (SNOMED CT & RxNorm)')
 @ApiBearerAuth()
 @Controller('terminology')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class TerminologyController {
   constructor(
     private readonly terminologyService: TerminologyService,
     private readonly terminologyImportService: TerminologyImportService,
   ) {}
 
+  // A-026: this endpoint TRUNCATEs core clinical terminology tables when
+  // replace=true and was previously @Public() (no auth at all) — anyone
+  // reachable on the network could wipe/replace ICD-10/SNOMED data for
+  // every tenant. Admin-only, matching the pattern applied to /fl/round and
+  // /model-registry/* mutating endpoints (gap A-021) in this same session.
   @Post('import/upload')
-  @Public()
+  @Roles('admin', 'super_admin')
   @ApiOperation({ summary: 'Upload and import terminology data (SNOMED/ICD10)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -55,7 +61,7 @@ export class TerminologyController {
   }
 
   @Get('import/jobs')
-  @Public()
+  @Roles('admin', 'super_admin')
   @ApiOperation({ summary: 'Get all import jobs' })
   @ApiResponse({ status: 200, description: 'List of import jobs' })
   async getImportJobs() {
@@ -63,7 +69,7 @@ export class TerminologyController {
   }
 
   @Get('import/stats')
-  @Public()
+  @Roles('admin', 'super_admin')
   @ApiOperation({ summary: 'Get terminology statistics' })
   @ApiResponse({ status: 200, description: 'System terminology statistics' })
   async getStats() {
@@ -71,7 +77,7 @@ export class TerminologyController {
   }
 
   @Get('import/status/:jobId')
-  @Public()
+  @Roles('admin', 'super_admin')
   @ApiOperation({ summary: 'Get import job status' })
   @ApiParam({ name: 'jobId', description: 'Job ID' })
   @ApiResponse({ status: 200, description: 'Job status' })
@@ -122,14 +128,23 @@ export class TerminologyController {
   @Get('snomed/validate/:conceptId')
   @ApiOperation({ summary: 'Validate a SNOMED CT concept code' })
   @ApiParam({ name: 'conceptId', description: 'SNOMED CT concept ID', required: true })
+  @ApiQuery({ name: 'asOfDate', description: 'TERM-10: check whether this concept (in its currently-loaded form) was effective as of this date (YYYY-MM-DD)', required: false })
   @ApiResponse({ status: 200, description: 'Concept validated successfully' })
   @ApiResponse({ status: 400, description: 'Invalid concept ID format' })
   @ApiResponse({ status: 404, description: 'Concept not found or inactive' })
   async validateConcept(
     @Param('conceptId') conceptId: string,
     @Request() req: RequestWithTenant,
+    @Query('asOfDate') asOfDate?: string,
   ) {
-    return this.terminologyService.validateConcept(req.tenantDb, conceptId);
+    return this.terminologyService.validateConcept(req.tenantDb, conceptId, asOfDate);
+  }
+
+  @Get('releases')
+  @ApiOperation({ summary: 'TERM-10: version/release history for loaded terminology data (SNOMED effective_time, ICD-10 import date)' })
+  @ApiResponse({ status: 200, description: 'Release history returned successfully' })
+  async getReleases() {
+    return this.terminologyImportService.getReleaseHistory();
   }
 
   @Get('snomed/concepts/:conceptId/details')

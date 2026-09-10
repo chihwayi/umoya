@@ -66,6 +66,7 @@ def evaluate_suite(payload: Dict[str, Any], base_dir: Path) -> Dict[str, Any]:
         dataset_payload = json.loads(dataset_path.read_text(encoding="utf-8"))
         report = evaluate_dataset(dataset_payload)
         summary = report["summary"]
+        subgroup_summary = report.get("subgroup_summary")
         gates = [
             _gate("citation_support_rate", _metric_value(summary, "citation_support_rate"), thresholds["citation_support_rate"]),
             _gate("abstain_correctness", _metric_value(summary, "abstain_correctness"), thresholds["abstain_correctness"]),
@@ -84,6 +85,7 @@ def evaluate_suite(payload: Dict[str, Any], base_dir: Path) -> Dict[str, Any]:
                 "dataset_version": summary.get("dataset_version"),
                 "total_cases": summary.get("total_cases"),
                 "metrics": summary.get("metrics"),
+                "subgroup_summary": subgroup_summary,
                 "gates": gates,
                 "blocked": blocked,
             }

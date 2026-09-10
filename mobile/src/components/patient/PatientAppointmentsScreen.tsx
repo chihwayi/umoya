@@ -290,7 +290,7 @@ const s = StyleSheet.create({
   sheetHandle:  { width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 4 },
   sheetTitle:   { fontFamily: FONT.uiBd, fontSize: 18, color: C.text, marginBottom: 4 },
   fieldLabel:   { fontFamily: FONT.uiBd, fontSize: 13, color: C.textMuted },
-  typeRow:      { gap: 8, paddingVertical: 4 },
+  typeRow:      { gap: 8, paddingVertical: 4, alignItems: 'center' },
   typeChip:     { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: C.border, backgroundColor: C.bg },
   typeChipActive: { borderColor: C.teal, backgroundColor: C.teal + '18' },
   typeChipText: { fontFamily: FONT.ui, fontSize: 13, color: C.text },

@@ -301,6 +301,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={!showPw}
+                      // iOS's "Save Password?" Keychain sheet is a real system
+                      // UI (not part of the app's own view tree) that Detox's
+                      // accessibility-tree matchers cannot reliably find or
+                      // dismiss regardless of synchronization state, which
+                      // hangs e2e login flows. textContentType="password"
+                      // is what triggers that prompt; "oneTimeCode" opts out
+                      // of it. Scoped to __DEV__ (debug/Detox builds only,
+                      // always false in production/EAS release builds) so
+                      // real users keep the normal iOS password-save offer.
+                      textContentType={__DEV__ ? 'oneTimeCode' : 'password'}
                     />
                     <TouchableOpacity onPress={() => setShowPw(p => !p)}>
                       <Icon name={showPw ? 'eyeOff' : 'eye'} size={16} color={C.textMuted} />
@@ -373,6 +383,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={!showPw}
+                      // iOS's "Save Password?" Keychain sheet is a real system
+                      // UI (not part of the app's own view tree) that Detox's
+                      // accessibility-tree matchers cannot reliably find or
+                      // dismiss regardless of synchronization state, which
+                      // hangs e2e login flows. textContentType="password"
+                      // is what triggers that prompt; "oneTimeCode" opts out
+                      // of it. Scoped to __DEV__ (debug/Detox builds only,
+                      // always false in production/EAS release builds) so
+                      // real users keep the normal iOS password-save offer.
+                      textContentType={__DEV__ ? 'oneTimeCode' : 'password'}
                     />
                     <TouchableOpacity onPress={() => setShowPw(p => !p)}>
                       <Icon name={showPw ? 'eyeOff' : 'eye'} size={16} color={C.textMuted} />

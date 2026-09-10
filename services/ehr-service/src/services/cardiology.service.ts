@@ -5,6 +5,7 @@ import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { TerminologyService } from './terminology.service';
 import { CdssService } from './cdss.service';
 import { EcgRecord } from '../entities/ecg-record.entity';
+import { firstReturningRow } from '../utils/returning-row';
 
 interface CardiologyFilters {
   patientId?: string;
@@ -508,11 +509,12 @@ export class CardiologyService {
       params,
     );
 
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Cardiology encounter ${encounterId} not found`);
     }
 
-    return result[0];
+    return row;
   }
 
   async getDashboardSummary(tenantDb: DataSource) {

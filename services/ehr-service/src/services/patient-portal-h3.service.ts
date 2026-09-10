@@ -4,6 +4,7 @@ import { Bill } from '../entities/billing.entity';
 import { PatientPortalPayment } from '../entities/patient-portal-payment.entity';
 import { HealthEducationContent } from '../entities/health-education-content.entity';
 import { PatientFamilyAccess } from '../entities/patient-family-access.entity';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class PatientPortalH3Service {
@@ -168,8 +169,9 @@ export class PatientPortalH3Service {
        WHERE patient_id = $1 AND app_id = $2 AND is_connected = true RETURNING *`,
       [patientId, appId],
     );
-    if (!rows.length) throw new NotFoundException('Integration not found or not connected');
-    return rows[0];
+    const result = firstReturningRow(rows);
+    if (!result) throw new NotFoundException('Integration not found or not connected');
+    return result;
   }
 }
 

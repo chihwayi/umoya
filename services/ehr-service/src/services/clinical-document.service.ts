@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ClinicalLlmService } from './clinical-llm.service';
 import { AbstentionLogService } from './abstention-log.service';
+import { firstReturningRow } from '../utils/returning-row';
 
 type DocumentType = 'referral_letter' | 'discharge_summary' | 'pre_auth' | 'sick_note' | 'other';
 
@@ -122,7 +123,7 @@ export class ClinicalDocumentService {
        RETURNING *`,
       [documentId, signedBy],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async updateContent(documentId: string, content: string, db: any): Promise<unknown> {
@@ -133,7 +134,7 @@ export class ClinicalDocumentService {
        RETURNING *`,
       [documentId, content],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async getDocuments(patientId: string, db: any): Promise<unknown[]> {

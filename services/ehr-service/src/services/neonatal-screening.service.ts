@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 // AAP 2011 CCHD pulse-oximetry algorithm
 function interpretCchd(rightHandSpo2: number, footSpo2: number, attempt: number): string {
@@ -43,7 +44,7 @@ export class NeonatalScreeningService {
        WHERE id=$7 RETURNING *, tsh_abnormal, pku_abnormal, any_abnormal`,
       [body.tshResult ?? null, body.pkuResult ?? null, body.g6pdResult ?? null, body.scdResult ?? null, body.scdAbnormal ?? false, body.resultStatus, id],
     );
-    const result = rows[0];
+    const result = firstReturningRow(rows);
     return {
       ...result,
       cdss_alert: result?.any_abnormal

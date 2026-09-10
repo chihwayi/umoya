@@ -543,7 +543,6 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onPay }) => {
     <Card accentSide accent={statusColor} style={invStyles.card}>
       <View style={invStyles.topRow}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={invStyles.invId}>{invoice.id}</Text>
           <Text style={invStyles.invDesc}>{invoice.description}</Text>
           <Text style={invStyles.invDate}>{invoice.date}</Text>
         </View>
@@ -581,7 +580,6 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({ invoice, onPay }) => {
 const invStyles = StyleSheet.create({
   card: { marginBottom: 10, gap: 10 },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  invId: { fontFamily: FONT.mono, fontSize: 10, color: C.textMuted },
   invDesc: { fontFamily: FONT.uiBd, fontSize: 13, color: C.textPrimary, lineHeight: 19 },
   invDate: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted },
   rightCol: { alignItems: 'flex-end', gap: 4 },

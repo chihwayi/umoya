@@ -163,7 +163,7 @@ const VisitSelector: React.FC<VisitSelectorProps> = ({ visits, selected, onSelec
 );
 
 const vsStyles = StyleSheet.create({
-  row: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
+  row: { paddingHorizontal: 16, gap: 8, paddingVertical: 10, alignItems: 'center' },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8,
     backgroundColor: C.card, borderRadius: RADIUS.md,

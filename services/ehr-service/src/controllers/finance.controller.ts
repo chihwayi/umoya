@@ -29,6 +29,7 @@ export class FinanceController {
   @Get('dashboard/summary')
   @ApiOperation({ summary: 'Get finance dashboard summary' })
   @ApiResponse({ status: 200 })
+  @Roles('accounts', 'nurse_accounts')
   async getSummary(@Request() req: RequestWithTenant) {
     return this.financeService.getDashboardSummary(req.tenantDb);
   }
@@ -43,6 +44,7 @@ export class FinanceController {
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'offset', required: false, type: Number })
+  @Roles('accounts', 'nurse_accounts')
   async listTransactions(
     @Request() req: RequestWithTenant,
     @Query('status') status?: string,
@@ -68,24 +70,28 @@ export class FinanceController {
 
   @Get('transactions/:id')
   @ApiOperation({ summary: 'Get a transaction detail' })
+  @Roles('accounts', 'nurse_accounts')
   async getTransactionDetail(@Request() req: RequestWithTenant, @Param('id') id: string) {
     return this.financeService.getTransactionDetail(req.tenantDb, id);
   }
 
   @Get('transactions/:id/status')
   @ApiOperation({ summary: 'Get payment status for a transaction' })
+  @Roles('accounts', 'nurse_accounts')
   async getTransactionStatus(@Request() req: RequestWithTenant, @Param('id') id: string) {
     return this.financeService.getTransactionStatus(req.tenantDb, id);
   }
 
   @Get('transactions/:id/quote')
   @ApiOperation({ summary: 'Generate and persist a patient financial quote for a transaction' })
+  @Roles('accounts', 'nurse_accounts')
   async getPatientQuote(@Request() req: RequestWithTenant, @Param('id') id: string) {
     return this.financeService.generatePatientQuote(req.tenantDb, id);
   }
 
   @Get('transactions/:id/invoice.pdf')
   @ApiOperation({ summary: 'Download invoice PDF for a transaction' })
+  @Roles('accounts', 'nurse_accounts')
   async downloadInvoicePdf(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -133,12 +139,14 @@ export class FinanceController {
 
   @Get('invoice-templates')
   @ApiOperation({ summary: 'List invoice templates' })
+  @Roles('accounts', 'nurse_accounts')
   async listInvoiceTemplates(@Request() req: RequestWithTenant) {
     return this.invoiceTemplateService.listTemplates(req.tenantDb);
   }
 
   @Post('invoice-templates')
   @ApiOperation({ summary: 'Create an invoice template' })
+  @Roles('accounts', 'nurse_accounts')
   async createInvoiceTemplate(
     @Request() req: RequestWithTenant,
     @Body() payload: CreateInvoiceTemplateDto,
@@ -149,6 +157,7 @@ export class FinanceController {
 
   @Put('invoice-templates/:id')
   @ApiOperation({ summary: 'Update an invoice template' })
+  @Roles('accounts', 'nurse_accounts')
   async updateInvoiceTemplate(
     @Request() req: RequestWithTenant,
     @Param('id') id: string,
@@ -159,6 +168,7 @@ export class FinanceController {
 
   @Post('invoice-templates/:id/default')
   @ApiOperation({ summary: 'Mark template as default' })
+  @Roles('accounts', 'nurse_accounts')
   async setDefaultInvoiceTemplate(@Request() req: RequestWithTenant, @Param('id') id: string) {
     return this.invoiceTemplateService.setDefaultTemplate(req.tenantDb, id);
   }
@@ -169,6 +179,7 @@ export class FinanceController {
   @ApiQuery({ name: 'dateFrom', required: false })
   @ApiQuery({ name: 'dateTo', required: false })
   @ApiQuery({ name: 'groupBy', required: false, enum: ['day', 'week', 'month', 'year'] })
+  @Roles('accounts', 'nurse_accounts')
   async getFinancialReports(
     @Request() req: RequestWithTenant,
     @Query('reportType') reportType: 'revenue' | 'profit_loss' | 'cash_flow' | 'aging',
@@ -188,6 +199,7 @@ export class FinanceController {
   @ApiOperation({ summary: 'Get tax summary' })
   @ApiQuery({ name: 'dateFrom', required: false })
   @ApiQuery({ name: 'dateTo', required: false })
+  @Roles('accounts', 'nurse_accounts')
   async getTaxSummary(
     @Request() req: RequestWithTenant,
     @Query('dateFrom') dateFrom?: string,
@@ -198,6 +210,7 @@ export class FinanceController {
 
   @Post('tax/calculate')
   @ApiOperation({ summary: 'Calculate tax for an amount' })
+  @Roles('accounts', 'nurse_accounts')
   async calculateTax(
     @Body() body: { amount: number; taxRate?: number },
   ) {
@@ -206,6 +219,7 @@ export class FinanceController {
 
   @Post('reconciliation')
   @ApiOperation({ summary: 'Reconcile a payment' })
+  @Roles('accounts', 'nurse_accounts')
   async reconcilePayment(
     @Request() req: RequestWithTenant,
     @Body() reconciliationData: {
@@ -224,6 +238,7 @@ export class FinanceController {
   @ApiOperation({ summary: 'Get reconciliation report' })
   @ApiQuery({ name: 'dateFrom', required: false })
   @ApiQuery({ name: 'dateTo', required: false })
+  @Roles('accounts', 'nurse_accounts')
   async getReconciliationReport(
     @Request() req: RequestWithTenant,
     @Query('dateFrom') dateFrom?: string,

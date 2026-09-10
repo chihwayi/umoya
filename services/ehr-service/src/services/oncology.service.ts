@@ -5,6 +5,7 @@ import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { TerminologyService } from './terminology.service';
 import { CdssService } from './cdss.service';
 import { AiSurfaceContractService } from './ai-surface-contract.service';
+import { firstReturningRow } from '../utils/returning-row';
 import {
   CreateOncologyImagingFindingDto,
   CreateOncologyPathologyDto,
@@ -1456,13 +1457,14 @@ export class OncologyService {
       recist = 'PD';
     }
 
-    const { rows } = await tenantDb.query(
+    const result = await tenantDb.query(
       `UPDATE oncology_imaging_findings SET recist_response = $1, recist_criteria_met = true, updated_at = NOW() WHERE id = $2 RETURNING *`,
       [recist, findingId],
     );
+    const updatedFinding = firstReturningRow(result);
 
     return {
-      finding: rows[0],
+      finding: updatedFinding,
       percentChange: Number(percentChange.toFixed(2)),
     };
   }

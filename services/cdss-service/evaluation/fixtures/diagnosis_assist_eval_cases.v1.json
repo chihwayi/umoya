@@ -7,13 +7,22 @@
       "id": "dx-001",
       "query": "Community acquired pneumonia empiric treatment in stable adult",
       "expected": {
-        "relevant_citation_ids": ["who-cap-first-line"],
-        "supporting_citation_ids": ["who-cap-first-line"],
+        "relevant_citation_ids": [
+          "who-cap-first-line"
+        ],
+        "supporting_citation_ids": [
+          "who-cap-first-line"
+        ],
         "requires_citation_support": true,
         "should_abstain": false
       },
       "prediction": {
-        "citations": [{ "id": "who-cap-first-line", "title": "WHO adult CAP first-line guidance" }],
+        "citations": [
+          {
+            "id": "who-cap-first-line",
+            "title": "WHO adult CAP first-line guidance"
+          }
+        ],
         "abstained": false,
         "clinical_recommendation": {
           "text": "Use first-line community acquired pneumonia therapy and review response to treatment."
@@ -23,6 +32,121 @@
     {
       "id": "dx-002",
       "query": "Unclear dizziness without vitals or neurologic exam",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
+        }
+      }
+    },
+    {
+      "id": "dx-eng-001",
+      "subgroup": "pediatric",
+      "query": "[placeholder] urinary tract infection guidance query for pediatric case dx-eng-001",
+      "expected": {
+        "relevant_citation_ids": [
+          "idsa-uti-uncomplicated"
+        ],
+        "supporting_citation_ids": [
+          "idsa-uti-uncomplicated"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "idsa-uti-uncomplicated",
+            "title": "urinary tract infection guidance (idsa-uti-uncomplicated)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Follow the documented urinary tract infection guidance for this presentation."
+        }
+      }
+    },
+    {
+      "id": "dx-eng-002",
+      "subgroup": "adult",
+      "query": "[placeholder] Incomplete acute otitis media presentation for adult case dx-eng-002 (missing vitals/history)",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
+        }
+      }
+    },
+    {
+      "id": "dx-eng-003",
+      "subgroup": "elderly",
+      "query": "[placeholder] Ambiguous cellulitis presentation for elderly case dx-eng-003",
+      "expected": {
+        "relevant_citation_ids": [
+          "idsa-cellulitis-empiric"
+        ],
+        "supporting_citation_ids": [
+          "idsa-cellulitis-empiric"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "idsa-cellulitis-empiric-adjacent",
+            "title": "cellulitis adjacent guidance (idsa-cellulitis-empiric-adjacent)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Consider the adjacent cellulitis pathway pending further evaluation."
+        }
+      }
+    },
+    {
+      "id": "dx-eng-004",
+      "subgroup": "maternity",
+      "query": "[placeholder] viral pharyngitis vs strep guidance query for maternity case dx-eng-004",
+      "expected": {
+        "relevant_citation_ids": [
+          "cdc-strep-throat-testing"
+        ],
+        "supporting_citation_ids": [
+          "cdc-strep-throat-testing"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "cdc-strep-throat-testing",
+            "title": "viral pharyngitis vs strep guidance (cdc-strep-throat-testing)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Follow the documented viral pharyngitis vs strep guidance for this presentation."
+        }
+      }
+    },
+    {
+      "id": "dx-eng-005",
+      "subgroup": "general",
+      "query": "[placeholder] Incomplete acute bronchitis presentation for general case dx-eng-005 (missing vitals/history)",
       "expected": {
         "relevant_citation_ids": [],
         "requires_citation_support": false,

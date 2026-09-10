@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon } from '../../components/ui/Icon';
 
@@ -18,11 +19,12 @@ const REPORTS = [
 
 export default function ReportsHomeScreen() {
   const nav = useNavigation<any>();
+  const insets = useSafeAreaInsets();
 
   return (
     <ScrollView
       style={s.container}
-      contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+      contentContainerStyle={{ padding: 20, paddingTop: insets.top + 20, paddingBottom: 40 }}
     >
       <Text style={s.heading}>Clinical Reports</Text>
       <Text style={s.sub}>Analytics & quality indicators</Text>

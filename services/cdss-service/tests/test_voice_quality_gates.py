@@ -7,7 +7,7 @@ class _DummyLLM:
     def __init__(self, payload):
         self.payload = payload
 
-    async def generate_json(self, prompt, schema):
+    async def generate_json(self, prompt, schema, **kwargs):
         return self.payload
 
 

@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import axios, { AxiosInstance } from 'axios';
 
 interface DailyRoom {
@@ -59,24 +59,48 @@ export class TelemedicineVideoService {
     const notBeforeAt = Math.floor(Date.now() / 1000) - 15 * 60;
     const roomName = `mc-${consultationId.slice(0, 8)}-${Date.now()}`;
 
-    const { data: room } = await this.daily.post<DailyRoom>('/rooms', {
-      name: roomName,
-      privacy: 'private',
-      properties: {
-        enable_recording: 'cloud',
-        recording_type: 'cloud',
-        enable_chat: true,
-        enable_screenshare: true,
-        enable_knocking: true,
-        exp: expiresAt,
-        nbf: notBeforeAt,
-        max_participants: 3, // patient + doctor + optional interpreter
-        lang: 'en',
-        // Metadata stored on the room for webhook attribution
-        eject_at_token_exp: true,
-        eject_after_elapsed: 7200,
-      },
-    });
+    // A-002/MOAS-06: this used to let a raw Axios error from Daily.co (e.g.
+    // an expired/invalid API key, rate limit, or outage) propagate straight
+    // up as an opaque 500 "Request failed with status code 400" — no
+    // indication anywhere that the problem was the video provider, not the
+    // booking itself. Catch it here and surface a typed, actionable error
+    // instead.
+    // Cloud recording requires a Daily.co plan that supports it — it's a
+    // nice-to-have, not core to "create a video room and join a call", so
+    // it must never block booking a consultation on plans that don't have
+    // it (a plain 'unavailable feature' response from the provider is a
+    // very different situation from an outage or bad credentials).
+    const recordingEnabled = process.env.DAILY_ENABLE_RECORDING === 'true';
+
+    let room: DailyRoom;
+    try {
+      const response = await this.daily.post<DailyRoom>('/rooms', {
+        name: roomName,
+        privacy: 'private',
+        properties: {
+          ...(recordingEnabled ? { enable_recording: 'cloud' } : {}),
+          enable_chat: true,
+          enable_screenshare: true,
+          enable_knocking: true,
+          exp: expiresAt,
+          nbf: notBeforeAt,
+          max_participants: 3, // patient + doctor + optional interpreter
+          lang: 'en',
+          eject_at_room_exp: true,
+        },
+      });
+      room = response.data;
+    } catch (err: any) {
+      const providerStatus = err?.response?.status;
+      const providerMessage = err?.response?.data?.info || err?.response?.data?.error || err?.message || 'unknown error';
+      this.logger.error(
+        `Daily.co room creation failed for consultation ${consultationId}: HTTP ${providerStatus ?? 'no response'} — ${providerMessage}`,
+      );
+      throw new ServiceUnavailableException({
+        code: 'VIDEO_PROVIDER_UNAVAILABLE',
+        message: `Telemedicine video provider (Daily.co) rejected the room-creation request: ${providerMessage}. This consultation was not created — no partial/broken state was left behind. Check DAILY_API_KEY validity and Daily.co account status.`,
+      });
+    }
 
     this.logger.log(`Daily.co room created: ${room.name} for consultation ${consultationId}`);
 
@@ -142,20 +166,31 @@ export class TelemedicineVideoService {
 
     const expiresAt = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
 
-    const { data } = await this.daily.post<{ token: string }>('/meeting-tokens', {
-      properties: {
-        room_name: meetingRoomId,
-        user_id: userId,
-        user_name: displayName ?? (role === 'doctor' ? 'Doctor' : 'Patient'),
-        is_owner: role === 'doctor',
-        enable_recording: role === 'doctor', // only doctor can start recording
-        exp: expiresAt,
-        // Prevent sharing token: each token is single-use bound to user_id
-        close_tab_on_exit: true,
-      },
-    });
-
-    return data.token;
+    try {
+      const { data } = await this.daily.post<{ token: string }>('/meeting-tokens', {
+        properties: {
+          room_name: meetingRoomId,
+          user_id: userId,
+          user_name: displayName ?? (role === 'doctor' ? 'Doctor' : 'Patient'),
+          is_owner: role === 'doctor',
+          enable_recording: process.env.DAILY_ENABLE_RECORDING === 'true' && role === 'doctor', // only doctor can start recording, and only on plans that support it
+          exp: expiresAt,
+          // Prevent sharing token: each token is single-use bound to user_id
+          close_tab_on_exit: true,
+        },
+      });
+      return data.token;
+    } catch (err: any) {
+      const providerStatus = err?.response?.status;
+      const providerMessage = err?.response?.data?.info || err?.response?.data?.error || err?.message || 'unknown error';
+      this.logger.error(
+        `Daily.co meeting-token request failed for room ${meetingRoomId}: HTTP ${providerStatus ?? 'no response'} — ${providerMessage}`,
+      );
+      throw new ServiceUnavailableException({
+        code: 'VIDEO_PROVIDER_UNAVAILABLE',
+        message: `Telemedicine video provider (Daily.co) could not issue a join token: ${providerMessage}. Check DAILY_API_KEY validity and Daily.co account status.`,
+      });
+    }
   }
 
   // ── Recording ────────────────────────────────────────────────────────────────

@@ -4,35 +4,31 @@ import {
 } from 'react-native';
 import { api } from '../../services/api';
 import { C, FONT, RADIUS } from '../../design/tokens';
-import { PeriodSelector, Period } from '../../components/reports/PeriodSelector';
 
-interface PtPanel {
-  panel_name: string;
-  passed: boolean;
-  score?: number;
-  tested_at?: string;
+interface LabQualitySummary {
+  eqa_scores: { satisfactory: number; warning: number; unsatisfactory: number };
+  qc_failures: { total: number; by_analyte: Record<string, number> };
+  repeat_test_flags: { possible_error: number; clinically_close: number; total: number };
+  turnaround_p50_hours: number | null;
+  turnaround_p95_hours: number | null;
+  critical_value_notification_rate: number | null;
+  specimen_rejection_rate: number | null;
 }
 
-interface LabQualityData {
-  pt_pass_rate: number;
-  avg_tat_hours: number;
-  critical_tat_hours: number;
-  critical_values_notified_pct: number;
-  pt_panels: PtPanel[];
-}
-
+// Backend (lab/quality/summary) only supports a single calendar-month period
+// (DATE_TRUNC('month', ...) — no week/quarter/year granularity), unlike most
+// other report screens' PeriodSelector, so this always shows the current month.
 export default function LabQualityScreen() {
-  const [period, setPeriod] = useState<Period>('month');
-  const [data, setData] = useState<LabQualityData | null>(null);
+  const [data, setData] = useState<LabQualitySummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    api.get(`/lab-quality/dashboard?period=${period}`)
+    const period = new Date().toISOString().slice(0, 7).replace('-', '');
+    api.get(`/lab/quality/summary?period=${period}`)
       .then((d: any) => setData(d.data ?? d))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [period]);
+  }, []);
 
   if (loading) {
     return (
@@ -42,60 +38,87 @@ export default function LabQualityScreen() {
     );
   }
 
-  const panels = data?.pt_panels ?? [];
+  const eqaTotal = (data?.eqa_scores.satisfactory ?? 0) + (data?.eqa_scores.warning ?? 0) + (data?.eqa_scores.unsatisfactory ?? 0);
+  const eqaPassRate = eqaTotal > 0 ? (data!.eqa_scores.satisfactory / eqaTotal) * 100 : null;
+  const analytes = Object.entries(data?.qc_failures.by_analyte ?? {});
 
   return (
     <ScrollView style={s.container} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-      <PeriodSelector value={period} onChange={setPeriod} />
+      <Text style={s.monthLabel}>{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</Text>
 
       <View style={s.metrics}>
         <KpiCard
-          label="PT Pass Rate"
-          value={data?.pt_pass_rate != null ? `${data.pt_pass_rate.toFixed(0)}%` : '—'}
-          color={data?.pt_pass_rate != null && data.pt_pass_rate >= 80 ? C.green : C.coral}
+          label="EQA Pass Rate"
+          value={eqaPassRate != null ? `${eqaPassRate.toFixed(0)}%` : '—'}
+          color={eqaPassRate != null && eqaPassRate >= 80 ? C.green : C.coral}
         />
         <KpiCard
-          label="Avg TAT"
-          value={data?.avg_tat_hours != null ? `${data.avg_tat_hours.toFixed(1)}h` : '—'}
+          label="Median TAT"
+          value={data?.turnaround_p50_hours != null ? `${data.turnaround_p50_hours.toFixed(1)}h` : '—'}
           color={C.blue}
         />
         <KpiCard
-          label="Critical TAT"
-          value={data?.critical_tat_hours != null ? `${data.critical_tat_hours.toFixed(1)}h` : '—'}
+          label="P95 TAT"
+          value={data?.turnaround_p95_hours != null ? `${data.turnaround_p95_hours.toFixed(1)}h` : '—'}
           color={C.amber}
         />
       </View>
 
-      {data?.critical_values_notified_pct != null && (
+      {data?.critical_value_notification_rate != null && (
         <View style={s.notifyCard}>
-          <Text style={s.notifyLabel}>Critical Values Notified</Text>
-          <Text style={[s.notifyValue, { color: data.critical_values_notified_pct >= 95 ? C.green : C.coral }]}>
-            {data.critical_values_notified_pct.toFixed(0)}%
+          <Text style={s.notifyLabel}>Critical Values Notified Within 1h</Text>
+          <Text style={[s.notifyValue, { color: data.critical_value_notification_rate >= 95 ? C.green : C.coral }]}>
+            {data.critical_value_notification_rate.toFixed(0)}%
           </Text>
         </View>
       )}
 
-      {panels.length > 0 && (
+      {data?.specimen_rejection_rate != null && (
+        <View style={s.notifyCard}>
+          <Text style={s.notifyLabel}>Specimen Rejection Rate</Text>
+          <Text style={[s.notifyValue, { color: data.specimen_rejection_rate <= 2 ? C.green : C.coral }]}>
+            {data.specimen_rejection_rate.toFixed(1)}%
+          </Text>
+        </View>
+      )}
+
+      <Text style={s.sectionTitle}>EQA Scores This Month</Text>
+      <View style={s.panelRow}>
+        <Text style={s.panelName}>Satisfactory</Text>
+        <Text style={[s.panelStatus, { color: C.green }]}>{data?.eqa_scores.satisfactory ?? 0}</Text>
+      </View>
+      <View style={s.panelRow}>
+        <Text style={s.panelName}>Warning</Text>
+        <Text style={[s.panelStatus, { color: C.amber }]}>{data?.eqa_scores.warning ?? 0}</Text>
+      </View>
+      <View style={s.panelRow}>
+        <Text style={s.panelName}>Unsatisfactory</Text>
+        <Text style={[s.panelStatus, { color: C.coral }]}>{data?.eqa_scores.unsatisfactory ?? 0}</Text>
+      </View>
+
+      {analytes.length > 0 && (
         <>
-          <Text style={s.sectionTitle}>PT Panel Results</Text>
-          {panels.map((p, i) => (
-            <View key={i} style={[s.panelRow, { borderLeftColor: p.passed ? C.green : C.coral }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.panelName}>{p.panel_name}</Text>
-                {p.tested_at && (
-                  <Text style={s.panelDate}>{new Date(p.tested_at).toLocaleDateString()}</Text>
-                )}
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[s.panelStatus, { color: p.passed ? C.green : C.coral }]}>
-                  {p.passed ? '✓ PASS' : '✗ FAIL'}
-                </Text>
-                {p.score != null && (
-                  <Text style={s.panelScore}>{p.score.toFixed(0)}%</Text>
-                )}
-              </View>
+          <Text style={s.sectionTitle}>QC Failures by Analyte</Text>
+          {analytes.map(([analyte, count]) => (
+            <View key={analyte} style={[s.panelRow, { borderLeftColor: C.coral }]}>
+              <Text style={s.panelName}>{analyte}</Text>
+              <Text style={[s.panelStatus, { color: C.coral }]}>{count}</Text>
             </View>
           ))}
+        </>
+      )}
+
+      {(data?.repeat_test_flags.total ?? 0) > 0 && (
+        <>
+          <Text style={s.sectionTitle}>Repeat Test Flags</Text>
+          <View style={s.panelRow}>
+            <Text style={s.panelName}>Possible Error</Text>
+            <Text style={[s.panelStatus, { color: C.coral }]}>{data?.repeat_test_flags.possible_error}</Text>
+          </View>
+          <View style={s.panelRow}>
+            <Text style={s.panelName}>Clinically Justified</Text>
+            <Text style={[s.panelStatus, { color: C.textSecondary }]}>{data?.repeat_test_flags.clinically_close}</Text>
+          </View>
         </>
       )}
     </ScrollView>
@@ -112,17 +135,16 @@ const KpiCard: React.FC<{ label: string; value: string; color: string }> = ({ la
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg },
+  monthLabel: { fontFamily: FONT.uiSb, fontSize: 13, color: C.textMuted, marginBottom: 14 },
   metrics: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   kpi: { flex: 1, backgroundColor: C.surface, borderRadius: RADIUS.md, padding: 12, borderTopWidth: 3, alignItems: 'center' },
   kpiValue: { fontFamily: FONT.uiBd, fontSize: 18 },
   kpiLabel: { fontFamily: FONT.uiMd, fontSize: 10, color: C.textSecondary, marginTop: 2, textAlign: 'center' },
-  notifyCard: { backgroundColor: C.surface, borderRadius: RADIUS.md, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  notifyLabel: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textSecondary },
+  notifyCard: { backgroundColor: C.surface, borderRadius: RADIUS.md, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  notifyLabel: { fontFamily: FONT.uiMd, fontSize: 13, color: C.textSecondary, flex: 1 },
   notifyValue: { fontFamily: FONT.uiBd, fontSize: 20 },
-  sectionTitle: { fontFamily: FONT.uiSb, fontSize: 14, color: C.textSecondary, marginBottom: 10 },
-  panelRow: { backgroundColor: C.surface, borderRadius: RADIUS.sm, padding: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderLeftWidth: 3 },
+  sectionTitle: { fontFamily: FONT.uiSb, fontSize: 14, color: C.textSecondary, marginBottom: 10, marginTop: 8 },
+  panelRow: { backgroundColor: C.surface, borderRadius: RADIUS.sm, padding: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderLeftWidth: 3, borderLeftColor: C.border },
   panelName: { fontFamily: FONT.uiMd, fontSize: 14, color: C.text },
-  panelDate: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, marginTop: 2 },
-  panelStatus: { fontFamily: FONT.uiSb, fontSize: 13 },
-  panelScore: { fontFamily: FONT.uiMd, fontSize: 11, color: C.textSecondary },
+  panelStatus: { fontFamily: FONT.uiSb, fontSize: 14 },
 });

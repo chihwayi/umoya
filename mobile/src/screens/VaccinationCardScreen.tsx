@@ -20,10 +20,54 @@ export default function VaccinationCardScreen({ route }: { route: any }) {
 
   useEffect(() => {
     if (!patientId) { setLoading(false); return; }
-    api.get(`/immunisation/patients/${patientId}/schedule`)
-      .then((r: any) => setSchedule(r.data ?? r))
-      .catch(() => Alert.alert('Error', 'Could not load vaccination schedule.'))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const patient: any = await api.get(`/patients/${patientId}`).then((r: any) => r.data ?? r);
+        const dateOfBirth = patient?.dateOfBirth ?? patient?.date_of_birth;
+        const [history, forecast]: [any, any] = await Promise.all([
+          api.get(`/immunizations/patient/${patientId}`).then((r: any) => r.data ?? r),
+          dateOfBirth
+            ? api.get(`/immunizations/patient/${patientId}/forecast?dateOfBirth=${encodeURIComponent(dateOfBirth)}`).then((r: any) => r.data ?? r)
+            : Promise.resolve([]),
+        ]);
+
+        const byAntigen = new Map<string, ScheduleRow>();
+        for (const dose of history ?? []) {
+          const code = dose.vaccineCode ?? dose.vaccine_code;
+          const row = byAntigen.get(code) ?? {
+            antigen_code: code,
+            antigen_name: dose.vaccineName ?? dose.vaccine_name ?? code,
+            doses_required: 0,
+            doses_given: 0,
+            doses_remaining: 0,
+            min_age_weeks: 0,
+          };
+          row.doses_given += 1;
+          byAntigen.set(code, row);
+        }
+        for (const due of forecast ?? []) {
+          const code = due.vaccineCode ?? due.vaccine_code;
+          const row = byAntigen.get(code) ?? {
+            antigen_code: code,
+            antigen_name: due.vaccineName ?? due.vaccine_name ?? code,
+            doses_required: 0,
+            doses_given: 0,
+            doses_remaining: 0,
+            min_age_weeks: 0,
+          };
+          row.doses_remaining += 1;
+          byAntigen.set(code, row);
+        }
+        for (const row of byAntigen.values()) {
+          row.doses_required = row.doses_given + row.doses_remaining;
+        }
+        setSchedule(Array.from(byAntigen.values()));
+      } catch {
+        Alert.alert('Error', 'Could not load vaccination schedule.');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [patientId]);
 
   if (loading) return <View style={s.center}><ActivityIndicator color={C.teal} /></View>;

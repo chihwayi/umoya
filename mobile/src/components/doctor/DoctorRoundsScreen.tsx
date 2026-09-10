@@ -12,15 +12,18 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW, SEVERITY } from '../../design/tokens';
 import { Icon, Badge, Dot, SlaTimer, Sparkline, Card, ScreenHeader, SectionHeader, AiBadge } from '../ui';
 import { PatientsService, patientName, patientAge } from '../../services/patients';
 import { VitalsService } from '../../services/vitals';
 import { EscalationsService } from '../../services/escalations';
+import { NurseTasksService } from '../../services/nurseTasks';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { CdssService, HerbDrugResult } from '../../services/cdss';
 import { PrescriptionsService } from '../../services/prescriptions';
@@ -302,7 +305,36 @@ interface PatientDetailProps {
 
 const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose, onOpenImaging, onOpenMedRec }) => {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const slideAnim = useRef(new Animated.Value(600)).current;
+
+  const referToNurse = (priority: 'routine' | 'urgent') => {
+    if (!patient) return;
+    NurseTasksService.create({
+      patientId: patient.id,
+      taskType: 'doctor_referral',
+      title: `Doctor referral — ${patientName(patient)}`,
+      priority,
+      sourceType: 'rounds',
+    }).then(() => {
+      Alert.alert('Referred to nurse', 'The nursing team has been notified.');
+    }).catch(() => {
+      Alert.alert('Referral failed', 'Could not reach the server. Please try again.');
+    });
+  };
+
+  const handleReferToNurse = () => {
+    if (!patient) return;
+    Alert.alert(
+      'Refer to Nurse',
+      `Create a follow-up task for the nursing team for ${patientName(patient)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Routine', onPress: () => referToNurse('routine') },
+        { text: 'Urgent', style: 'destructive', onPress: () => referToNurse('urgent') },
+      ],
+    );
+  };
 
   useEffect(() => {
     if (patient) {
@@ -529,18 +561,22 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ patient, onClose, onOpenI
               <Text style={[detailStyles.actionBtnText, { color: C.orange }]}>Med Rec</Text>
             </TouchableOpacity>
             {patient.postVisitPending && (
-              <TouchableOpacity style={[detailStyles.actionBtn, { backgroundColor: C.purple + '20', borderColor: C.purple + '40' }]} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={[detailStyles.actionBtn, { backgroundColor: C.purple + '20', borderColor: C.purple + '40' }]}
+                activeOpacity={0.8}
+                onPress={() => { handleClose(); setTimeout(() => navigation.navigate('DPostVisit'), 300); }}
+              >
                 <Icon name="sparkle" size={16} color={C.purple} />
                 <Text style={[detailStyles.actionBtnText, { color: C.purple }]}>Sign PostVisit Note</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={[detailStyles.actionBtn, { backgroundColor: C.red + '20', borderColor: C.red + '40' }]} activeOpacity={0.8}>
-              <Icon name="escalate" size={16} color={C.red} />
-              <Text style={[detailStyles.actionBtnText, { color: C.red }]}>Escalate</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[detailStyles.actionBtn, { backgroundColor: C.teal + '20', borderColor: C.teal + '40' }]} activeOpacity={0.8}>
-              <Icon name="check" size={16} color={C.teal} />
-              <Text style={[detailStyles.actionBtnText, { color: C.teal }]}>Mark Rounded</Text>
+            <TouchableOpacity
+              style={[detailStyles.actionBtn, { backgroundColor: C.blue + '20', borderColor: C.blue + '40' }]}
+              activeOpacity={0.8}
+              onPress={handleReferToNurse}
+            >
+              <Icon name="escalate" size={16} color={C.blue} />
+              <Text style={[detailStyles.actionBtnText, { color: C.blue }]}>Refer to Nurse</Text>
             </TouchableOpacity>
           </View>
 
@@ -671,7 +707,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ active, onSelect, counts }) => {
 };
 
 const filterStyles = StyleSheet.create({
-  row: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
+  row: { paddingHorizontal: 16, gap: 8, paddingVertical: 10, alignItems: 'center' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -692,6 +728,7 @@ const filterStyles = StyleSheet.create({
 
 export const DoctorRoundsScreen: React.FC = () => {
   const insets  = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const { t } = useTranslation();
   const { user } = useAuthStore();
   const [patients,   setPatients]   = useState<Patient[]>([]);
@@ -826,9 +863,22 @@ export const DoctorRoundsScreen: React.FC = () => {
         subtitle={loading ? t('common.loading') : `${patients.length} ${t('nav.patients').toLowerCase()}`}
         accent={C.teal}
         rightSlot={
-          <TouchableOpacity style={styles.filterBtn} activeOpacity={0.8}>
-            <Icon name="settings" size={18} color={C.textSecondary} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              style={styles.filterBtn}
+              activeOpacity={0.8}
+              onPress={() => navigation.getParent()?.navigate('SpecialtyModules')}
+            >
+              <Icon name="briefcase" size={18} color={C.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.filterBtn}
+              activeOpacity={0.8}
+              onPress={() => navigation.getParent()?.navigate('AccountSettings')}
+            >
+              <Icon name="settings" size={18} color={C.textSecondary} />
+            </TouchableOpacity>
+          </View>
         }
       />
 

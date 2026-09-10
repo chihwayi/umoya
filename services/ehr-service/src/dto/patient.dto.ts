@@ -122,6 +122,12 @@ export class CreatePatientDto {
   @IsOptional() @IsString() pregnancyStatus?: string;
   @IsOptional() @IsInt() gestationalAgeWeeks?: number;
   @IsOptional() @IsBoolean() advanceDirectiveOnFile?: boolean;
+
+  @ApiProperty({
+    required: false,
+    description: 'Set true to proceed after the API returned a 409 possible-duplicate response for this registration. The decision is written to the audit log.',
+  })
+  @IsOptional() @IsBoolean() confirmDuplicate?: boolean;
 }
 
 export class UpdatePatientDto {
@@ -164,6 +170,16 @@ export class UpdatePatientDto {
   @IsOptional()
   @IsString()
   emergencyContactPhone?: string;
+
+  @ApiProperty({ required: false, description: 'VIP/priority patient flag' })
+  @IsOptional()
+  @IsBoolean()
+  vipFlag?: boolean;
+
+  @ApiProperty({ required: false, enum: ['standard', 'restricted', 'confidential'] })
+  @IsOptional()
+  @IsEnum(['standard', 'restricted', 'confidential'])
+  confidentialityTier?: 'standard' | 'restricted' | 'confidential';
 
   @ApiProperty({ required: false })
   @IsOptional()

@@ -1,10 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import 'multer';
 import axios from 'axios';
 import FormData from 'form-data';
 import { createHash } from 'crypto';
 import { config, env } from '@umoya/config';
+import { firstReturningRow } from '../utils/returning-row';
 import {
   CuratePostVisitCompanionMemoryDto,
   CreatePostVisitSessionDto,
@@ -3860,10 +3861,10 @@ export class PostVisitService {
       ],
     );
 
-    if (!rows?.length) {
+    const updated = firstReturningRow(rows);
+    if (!updated) {
       throw new NotFoundException('Trial match not found for this post-visit session');
     }
-    const updated = rows[0];
 
     await tenantDb.query(
       `
@@ -6722,7 +6723,7 @@ export class PostVisitService {
 
     const limit = Math.min(Math.max(Number(options.limit || 50), 1), 200);
     const offset = Math.max(Number(options.offset || 0), 0);
-    const thread = await this.ensureCompanionThread(tenantDb, sessionRow, patientId);
+    const thread = await this.ensureCompanionThread(tenantDb, sessionRow, null);
 
     const rows = await tenantDb.query(
       `
@@ -6793,7 +6794,32 @@ export class PostVisitService {
       throw new ForbiddenException('Companion messaging is unavailable until doctor-approved checklist is published');
     }
 
-    const thread = await this.ensureCompanionThread(tenantDb, sessionRow, patientId);
+    const thread = await this.ensureCompanionThread(tenantDb, sessionRow, null);
+
+    // MOAS-07/B-002: a double-tap on "send" or a client retry after a slow
+    // response with no idempotency key would otherwise create a second
+    // patient message, a second escalation event and a second follow-up
+    // orchestration row for the exact same signal — confirmed live (two
+    // identical submissions produced two separate escalation events and two
+    // separate patient_followup_orchestrations rows). Block an identical
+    // resubmission to the same thread within a short window instead of
+    // silently duplicating downstream safety records.
+    const recentDuplicateRows = await tenantDb.query(
+      `
+        SELECT id FROM post_visit_companion_messages
+        WHERE thread_id = $1 AND sender_type = 'patient' AND message_text = $2
+          AND created_at > now() - interval '15 seconds'
+        LIMIT 1
+      `,
+      [thread.id, messageText],
+    );
+    if (recentDuplicateRows[0]) {
+      throw new ConflictException({
+        code: 'DUPLICATE_MESSAGE_SUBMISSION',
+        message: 'This message was already submitted a moment ago — not resubmitted to avoid creating duplicate escalations/follow-ups.',
+      });
+    }
+
     const groundedContext = {
       summary_artifact_id: visitSummaryArtifact.id,
       recommendation_artifact_id: recommendationArtifact.id,
@@ -10943,7 +10969,7 @@ Object.assign(PostVisitService.prototype as any, {
           sla_due_at,
           metadata
         ) VALUES (
-          $1,$2,$3,$4,'open',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb
+          $1,$2,$3,$4,'open',$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16::jsonb
         )
         RETURNING *
       `,
@@ -10955,7 +10981,7 @@ Object.assign(PostVisitService.prototype as any, {
         severity,
         routeTarget,
         args.triggerType || detection.triggerType || 'patient_message',
-        args.triggerTerms || detection.triggerTerms || [],
+        JSON.stringify(args.triggerTerms || detection.triggerTerms || []),
         messageText,
         typeof args.classificationConfidence === 'number' ? args.classificationConfidence : detection.confidence ?? null,
         args.classificationTemporality || detection.temporality || null,
@@ -10982,7 +11008,18 @@ Object.assign(PostVisitService.prototype as any, {
       clinicianEmail: false,
     };
 
-    if (this.patientNotificationsService?.createNotification && patientId) {
+    // A-005/MOAS-08: never send patient-facing comms (in-app, SMS, email)
+    // for a deceased patient. Clinician-facing escalation/notification below
+    // is intentionally NOT suppressed — the care team still needs to know
+    // this message came in and be able to review/close it out.
+    const patientIsDeceased = patientId
+      ? await tenantDb
+          .query(`SELECT deceased_at FROM patients WHERE id = $1 LIMIT 1`, [patientId])
+          .then((rows: any[]) => !!rows?.[0]?.deceased_at)
+          .catch(() => false)
+      : false;
+
+    if (this.patientNotificationsService?.createNotification && patientId && !patientIsDeceased) {
       await this.patientNotificationsService
         .createNotification(
           patientId,
@@ -11005,7 +11042,7 @@ Object.assign(PostVisitService.prototype as any, {
         .catch((e: any) => { this.logger.warn(`Patient timeline record failed: ${e?.message}`); return undefined; });
     }
 
-    if (patientId && (this.notificationsService?.sendSms || this.emailService?.sendEmail)) {
+    if (patientId && !patientIsDeceased && (this.notificationsService?.sendSms || this.emailService?.sendEmail)) {
       const patientRows = await tenantDb.query(
         `
           SELECT id, first_name, last_name, phone, email

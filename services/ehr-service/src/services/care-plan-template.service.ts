@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class CarePlanTemplateService {
@@ -181,7 +182,8 @@ export class CarePlanTemplateService {
       values,
     );
 
-    return result[0];
+    const row = firstReturningRow(result);
+    return row;
   }
 
   async applyTemplate(templateId: string, patientId: string, customizations: any, tenantDb: DataSource, userId?: string) {

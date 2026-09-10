@@ -4,18 +4,42 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$DIR/.."
 
-# Load environment variables from .env if present
+# Parse a .env file as plain KEY=VALUE data and export each variable,
+# without letting the shell interpret the values (unlike `source`, which
+# executes the file and breaks on unquoted values containing shell
+# metacharacters such as '#', '$', backticks, or redirection operators).
+load_dotenv() {
+  local envfile="$1"
+  local line key value
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Strip leading/trailing whitespace
+    line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    # Skip blank lines and comments
+    case "$line" in
+      ''|'#'*) continue ;;
+    esac
+    # Allow an optional leading "export "
+    case "$line" in
+      export\ *) line="${line#export }" ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    # Strip matching surrounding quotes from the value, if present
+    case "$value" in
+      \"*\") value="${value#\"}"; value="${value%\"}" ;;
+      \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+    [ -n "$key" ] && export "$key=$value"
+  done < "$envfile"
+}
+
 if [ -f "$PROJECT_ROOT/.env" ]; then
-  set -a
-  source "$PROJECT_ROOT/.env"
-  set +a
+  load_dotenv "$PROJECT_ROOT/.env"
 elif [ -f ".env" ]; then
-    set -a
-    source ".env"
-    set +a
+  load_dotenv ".env"
 fi
 
-export API_BASE_URL="${REACT_APP_EHR_API_URL}"
+export API_BASE_URL="${REACT_APP_EHR_API_URL:-}"
 
 trim() {
   printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
@@ -59,7 +83,7 @@ resolve_url() {
 }
 
 if [ -z "$API_BASE_URL" ]; then
-  API_BASE_URL="$(resolve_url "${REACT_APP_EHR_API_URL}" "${REACT_APP_API_BASE_URL:-$SERVICE_BASE_URL}" "${REACT_APP_EHR_API_PATH:-/ehr-service/api}" || true)"
+  API_BASE_URL="$(resolve_url "${REACT_APP_EHR_API_URL:-}" "${REACT_APP_API_BASE_URL:-${SERVICE_BASE_URL:-}}" "${REACT_APP_EHR_API_PATH:-/ehr-service/api}" || true)"
 fi
 
 if [ -z "$API_BASE_URL" ]; then
@@ -70,9 +94,9 @@ fi
 
 export FHIR_BASE_URL="${API_BASE_URL}/fhir"
 # Derive service root URL (remove /api suffix if present)
-export EHR_SERVICE_URL="$(resolve_url "${SERVICE_EHR_URL}" "${SERVICE_BASE_URL}" "${SERVICE_EHR_PATH:-/ehr-service}" || printf '%s' "${API_BASE_URL%/api}")"
-export TENANT_SERVICE_URL="$(resolve_url "${SERVICE_TENANT_URL:-$REACT_APP_TENANT_API_URL}" "${REACT_APP_API_BASE_URL:-$SERVICE_BASE_URL}" "${REACT_APP_TENANT_API_PATH:-/tenant-service/api}" || true)"
-export CDSS_SERVICE_URL="$(resolve_url "${SERVICE_CDSS_URL:-$REACT_APP_CDSS_API_URL}" "${REACT_APP_API_BASE_URL:-$SERVICE_BASE_URL}" "${REACT_APP_CDSS_API_PATH:-/cdss-service}" || true)"
+export EHR_SERVICE_URL="$(resolve_url "${SERVICE_EHR_URL:-}" "${SERVICE_BASE_URL:-}" "${SERVICE_EHR_PATH:-/ehr-service}" || printf '%s' "${API_BASE_URL%/api}")"
+export TENANT_SERVICE_URL="$(resolve_url "${SERVICE_TENANT_URL:-${REACT_APP_TENANT_API_URL:-}}" "${REACT_APP_API_BASE_URL:-${SERVICE_BASE_URL:-}}" "${REACT_APP_TENANT_API_PATH:-/tenant-service/api}" || true)"
+export CDSS_SERVICE_URL="$(resolve_url "${SERVICE_CDSS_URL:-${REACT_APP_CDSS_API_URL:-}}" "${REACT_APP_API_BASE_URL:-${SERVICE_BASE_URL:-}}" "${REACT_APP_CDSS_API_PATH:-/cdss-service}" || true)"
 export ELASTICSEARCH_URL="${ELASTICSEARCH_URL:-}"
 export SNOWSTORM_URL="${SNOWSTORM_URL:-}"
 export WHISPER_SERVICE_URL="${WHISPER_SERVICE_URL:-}"

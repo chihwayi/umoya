@@ -287,6 +287,8 @@ export class TerminologyImportService implements OnModuleDestroy {
         job.progress = 100;
         job.endTime = new Date();
         await this.saveJob(job);
+        await this.recordRelease(type, originalName, job.processedRows || 0).catch((e: any) =>
+            this.logger.warn(`Failed to record terminology_releases entry for ${type}: ${e?.message}`));
 
     } catch (err: any) {
         this.logger.error(`Error in job ${job.jobId}:`, err);
@@ -558,6 +560,40 @@ export class TerminologyImportService implements OnModuleDestroy {
     return results;
   }
 
+  /**
+   * TERM-10: record a real, permanent version-history entry every time a
+   * terminology import completes, instead of importing being a silent
+   * overwrite with no audit trail of what version was active when. Derives
+   * release_effective_time from the actual max effective_time now present
+   * in the loaded data (real release date, not guessed from the filename).
+   */
+  private async recordRelease(type: 'snomed' | 'icd10' | 'icd11', fileName: string, rowCount: number): Promise<void> {
+    const masterDb = await this.getMasterDb();
+    // Only snomed_concepts carries a real per-row effective_time; icd10_codes
+    // and icd11_codes have no such column, so those fall back to import date.
+    const effectiveTimeQuery = type === 'snomed' ? 'SELECT MAX(effective_time) AS t FROM snomed_concepts' : null;
+    if (!effectiveTimeQuery) {
+      await masterDb.query(
+        `INSERT INTO terminology_releases (terminology, release_effective_time, source_file, row_count) VALUES ($1, CURRENT_DATE, $2, $3)`,
+        [type, fileName, rowCount],
+      );
+      return;
+    }
+    const result = await masterDb.query(effectiveTimeQuery);
+    const effectiveTime = result?.[0]?.t || new Date();
+    await masterDb.query(
+      `INSERT INTO terminology_releases (terminology, release_effective_time, source_file, row_count) VALUES ($1, $2, $3, $4)`,
+      [type, effectiveTime, fileName, rowCount],
+    );
+  }
+
+  async getReleaseHistory(): Promise<any[]> {
+    const masterDb = await this.getMasterDb();
+    return masterDb.query(
+      'SELECT terminology, release_effective_time, imported_at, source_file, row_count FROM terminology_releases ORDER BY imported_at DESC',
+    );
+  }
+
   private async processFile(
       queryRunner: any, 
       filePath: string, 
@@ -760,27 +796,61 @@ export class TerminologyImportService implements OnModuleDestroy {
       };
     },
     icd10: (row: string[]) => {
-        // Handle fixed-width icd10cm_order files
-        // These files usually don't contain tabs, so split('\t') returns an array of length 1.
-        // Format: Sequence(5) Blank(1) Code(7) Blank(1) Header(1) Blank(1) ShortDesc(60) LongDesc(Variable)
-        // Code starts at index 6 (7 chars)
-        // Long Description starts at index 77
-        
-        if (row.length === 1 && row[0].length > 20) {
+        // ICD-10-CM is distributed in two real, differently-laid-out CMS
+        // formats and this processor must tell them apart, not assume one:
+        //
+        //   (a) icd10cm-order-*.txt (the "order file"): fixed-width,
+        //       "SSSSS CODE    B DESC..." — 5-digit sequence number, then a
+        //       7-char code field starting at index 6, a billable flag at
+        //       14, short description at 16, long description at 76.
+        //   (b) icd10cm-codes-*.txt (the "codes file"): just "CODE   DESC",
+        //       no sequence number, no billable flag — code then whitespace
+        //       then description, nothing else.
+        //
+        // Root cause of gap A-015 (icd10_codes 100% corrupted): this
+        // function used to apply format (a)'s fixed offsets
+        // (substring(6,13)/substring(77)) unconditionally to ANY
+        // single-field (no-tab) line, including format (b) lines, which
+        // have no sequence-number prefix — grabbing an arbitrary mid-word
+        // slice of the code/description instead (e.g. "D Fract", "Canna").
+        // The `row.length >= 2` "tab-separated" fallback never actually
+        // matched icd10cm-codes-*.txt either, since that file has no tabs.
+        if (row.length === 1 && row[0].length > 10) {
             const line = row[0];
-            const code = line.substring(6, 13).trim(); 
-            const desc = line.substring(77).trim(); 
-            
-            if (code && desc) {
-                 return {
-                    tableName: 'icd10_codes',
-                    columns: ['code', 'description', 'valid_for_coding', 'billable'],
-                    values: [code, desc, true, true]
-                 };
+            const isOrderFileFormat = /^\d{5}\s/.test(line);
+
+            if (isOrderFileFormat) {
+                const code = line.substring(6, 13).trim();
+                const desc = line.substring(76).trim();
+                const billableFlag = line.substring(14, 15).trim();
+                if (code && desc) {
+                    return {
+                        tableName: 'icd10_codes',
+                        columns: ['code', 'description', 'valid_for_coding', 'billable'],
+                        values: [code, desc, true, billableFlag === '1'],
+                    };
+                }
+                return null;
             }
+
+            // Codes-file format: "CODE<whitespace>Description"
+            const match = line.match(/^(\S+)\s+(.+)$/);
+            if (match) {
+                const [, code, desc] = match;
+                if (code && desc) {
+                    return {
+                        tableName: 'icd10_codes',
+                        columns: ['code', 'description', 'valid_for_coding', 'billable'],
+                        // Category-only codes (3 chars, e.g. "A00") are
+                        // headers, not directly billable in ICD-10-CM.
+                        values: [code, desc, true, code.length > 3],
+                    };
+                }
+            }
+            return null;
         }
-        
-        // Handle tab-separated files (icd10cm-codes-*.txt)
+
+        // True tab-delimited files, if ever supplied.
         if (row.length >= 2) {
              return {
                 tableName: 'icd10_codes',

@@ -1,9 +1,11 @@
 import './instrument';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, RequestMethod } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import * as bodyParser from 'body-parser';
 import compression from 'compression';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EhrModule } from './ehr.module';
 import { HipaaAuditInterceptor } from './interceptors/hipaa-audit.interceptor';
@@ -20,9 +22,13 @@ function parseBoolStrict(name: string, defaultValue: string): boolean {
   return raw === 'true';
 }
 
-function validateCriticalSecurityEnv(): void {
+function isDevLikeEnv(): boolean {
   const env = (process.env.NODE_ENV || process.env.ENVIRONMENT || 'development').toLowerCase();
-  const isDevLike = ['dev', 'development', 'local', 'test'].includes(env);
+  return ['dev', 'development', 'local', 'test'].includes(env);
+}
+
+function validateCriticalSecurityEnv(): void {
+  const isDevLike = isDevLikeEnv();
 
   const jwt = (process.env.JWT_SECRET || '').trim();
   const insecureJwtDefaults = new Set(['dev_secret_key_change_in_production', 'umoya-super-secret-key', 'ehr-super-secret-key']);
@@ -61,7 +67,27 @@ function validateCriticalSecurityEnv(): void {
 async function bootstrap() {
   validateCriticalSecurityEnv();
   const app = await NestFactory.create(EhrModule);
+  app.use(helmet({
+    // Swagger UI (served from this same app) needs inline scripts/styles;
+    // a strict default-src would break it, so CSP is left to a reverse-proxy
+    // / CDN layer in production rather than half-configured here.
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }));
   app.use(compression());
+
+  // Brute-force protection: tight limit on auth endpoints, looser general
+  // limit on everything else under /api. Keyed on IP; a reverse proxy in
+  // front of this service is expected to forward the real client IP.
+  app.use(
+    ['/api/auth/login', '/api/patient-portal/login'],
+    rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false }),
+  );
+  app.use(
+    '/api',
+    rateLimit({ windowMs: 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }),
+  );
+
   app.use(bodyParser.json({ limit: '10mb' }));
   app.use(bodyParser.text({ type: ['text/plain', 'application/hl7-v2'], limit: '10mb' }));
   app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
@@ -90,8 +116,15 @@ async function bootstrap() {
   // Enable global exception filter for detailed error logging
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Enable CORS from environment variables
+  // Enable CORS from environment variables. Falling back to "allow any
+  // origin" is only acceptable for local/dev convenience — in a real
+  // deployment an empty CORS_ORIGINS means misconfiguration, and silently
+  // opening the API to every origin would undermine the credentialed
+  // (cookie/Authorization-bearing) requests this app makes.
   const corsOrigins = envConfig.security.corsOrigins;
+  if (corsOrigins.length === 0 && !isDevLikeEnv()) {
+    throw new Error('CORS_ORIGINS must be set to an explicit allow-list in non-development environments.');
+  }
 
   app.enableCors({
     origin: corsOrigins.length > 0 ? corsOrigins : true,
@@ -101,7 +134,15 @@ async function bootstrap() {
     exposedHeaders: ['X-Request-ID'],
   });
 
-  app.setGlobalPrefix('api');
+  // B-012/MOAS-16: liveness/readiness must be reachable at the bare,
+  // unprefixed /health path — the conventional, stable location orchestrators
+  // and docker-compose healthchecks expect — not buried under /api.
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: 'health', method: RequestMethod.GET },
+      { path: 'health/ready', method: RequestMethod.GET },
+    ],
+  });
 
       // Swagger setup
       const config = new DocumentBuilder()
@@ -135,7 +176,7 @@ async function bootstrap() {
       }
 
       SwaggerModule.setup('api/docs', app, document);
-  
+
   const port = process.env.PORT || 3013;
   await app.listen(port);
   

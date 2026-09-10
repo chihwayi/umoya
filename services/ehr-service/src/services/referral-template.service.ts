@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class ReferralTemplateService {
@@ -121,7 +122,7 @@ export class ReferralTemplateService {
       values,
     );
 
-    return result[0];
+    return firstReturningRow(result);
   }
 
   async deleteTemplate(templateId: string, tenantDb: DataSource) {
@@ -132,7 +133,8 @@ export class ReferralTemplateService {
       [templateId],
     );
 
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Template not found');
     }
 

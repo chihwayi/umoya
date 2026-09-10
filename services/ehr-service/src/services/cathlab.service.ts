@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class CathLabService {
@@ -47,7 +48,7 @@ export class CathLabService {
        WHERE id=$2 RETURNING *`,
       [accessSite ?? null, id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async completeCase(db: any, id: string, body: any): Promise<any> {
@@ -61,7 +62,7 @@ export class CathLabService {
       [body.contrastVolumeMl, body.fluoroscopyTimeMins, body.timiFlowPre, body.timiFlowPost,
        JSON.stringify(body.complications ?? []), body.outcome, body.notes, id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async addLesion(db: any, caseId: string, body: any): Promise<any> {
@@ -114,7 +115,7 @@ export class CathLabService {
        WHERE id=$3 RETURNING *, d2b_mins, outcome_target_met`,
       [body.balloonAt, body.cathlabCaseId ?? null, activationId],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async getD2bMetrics(db: any): Promise<any[]> {

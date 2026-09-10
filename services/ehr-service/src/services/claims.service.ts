@@ -9,6 +9,8 @@ import { EdiSerializerService } from './edi-serializer.service';
 import { ClaimDenialPrediction } from '../entities/claim-denial-prediction.entity';
 import { FinancialClearanceAssessment } from '../entities/financial-clearance-assessment.entity';
 import { PriorAuthorizationDraft } from '../entities/prior-authorization-draft.entity';
+import { Optional } from '@nestjs/common';
+import { Icd10Service } from './icd10.service';
 
 export interface ClaimReadinessIssue {
   code: string;
@@ -23,7 +25,52 @@ export class ClaimsService {
     private readonly medicalAidApiService?: MedicalAidApiService,
     private readonly notificationCenterService?: NotificationCenterService,
     private readonly ediSerializer?: EdiSerializerService,
+    @Optional() private readonly icd10Service?: Icd10Service,
   ) {}
+
+  /**
+   * A-010/MOAS-11: auto-populate ICD-10 diagnosis codes from the patient's
+   * coded (SNOMED CT) active problems via the SNOMED->ICD-10 crosswalk,
+   * instead of requiring a human to have already typed an ICD-10 code onto
+   * the claim DTO. Any coded problem with no crosswalk entry is returned in
+   * `unmapped` for coder resolution — never silently dropped or defaulted.
+   */
+  private async autoMapDiagnosisCodes(
+    patientId: string | undefined,
+    existingCodes: string[],
+    tenantDb: DataSource,
+  ): Promise<{ diagnosisCodes: string[]; unmapped: Array<{ snomedCode: string; term: string | null }> }> {
+    if (!patientId || !this.icd10Service || (existingCodes && existingCodes.length > 0)) {
+      return { diagnosisCodes: existingCodes || [], unmapped: [] };
+    }
+
+    const problems = await tenantDb.query(
+      `SELECT snomed_concept_id, snomed_term FROM problems
+       WHERE patient_id = $1 AND status = 'active' AND snomed_concept_id IS NOT NULL`,
+      [patientId],
+    );
+
+    const mappedCodes: string[] = [];
+    const unmapped: Array<{ snomedCode: string; term: string | null }> = [];
+
+    for (const problem of problems || []) {
+      const snomedCode = String(problem.snomed_concept_id || '').trim();
+      if (!snomedCode) continue;
+      try {
+        const mappings = await this.icd10Service.getSnomedToIcd10Mappings(snomedCode, tenantDb);
+        if (mappings && mappings.length > 0) {
+          mappedCodes.push(mappings[0].icd10_code);
+        } else {
+          unmapped.push({ snomedCode, term: problem.snomed_term || null });
+        }
+      } catch (err: any) {
+        this.logger.warn(`SNOMED->ICD10 mapping lookup failed for concept "${snomedCode}": ${err.message}`);
+        unmapped.push({ snomedCode, term: problem.snomed_term || null });
+      }
+    }
+
+    return { diagnosisCodes: mappedCodes, unmapped };
+  }
 
   private clampLimit(value: any, fallback = 50, max = 200) {
     const parsed = Number.parseInt(String(value || fallback), 10);
@@ -977,8 +1024,15 @@ export class ClaimsService {
     // Don't persist the transient `lines` payload onto the claim row.
     const { lines: _lines, ...claimFields } = createClaimDto ?? {};
 
+    const { diagnosisCodes: autoMappedCodes, unmapped: unmappedDiagnosisConcepts } = await this.autoMapDiagnosisCodes(
+      claimFields.patientId,
+      claimFields.diagnosisCodes,
+      tenantDb,
+    );
+
     const claim: any = claimRepository.create({
       ...claimFields,
+      diagnosisCodes: autoMappedCodes,
       ...(claimAmount !== undefined ? { claimAmount } : {}),
       claimNumber,
       status: ClaimStatus.DRAFT,
@@ -992,7 +1046,10 @@ export class ClaimsService {
       );
     }
 
-    return savedClaim;
+    return {
+      ...savedClaim,
+      ...(unmappedDiagnosisConcepts.length > 0 ? { unmappedDiagnosisConcepts } : {}),
+    };
   }
 
   /**

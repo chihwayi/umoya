@@ -1,12 +1,16 @@
 import { Controller, Get, Post, Body, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { PaymentReconciliationService, BankStatementEntry } from '../services/payment-reconciliation.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
+// A-004/MOAS-20: bank statement import/matching/anomaly reporting — back-office finance.
 @ApiTags('Payment Reconciliation')
 @Controller('payment-reconciliation')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('accounts')
 @ApiBearerAuth()
 export class PaymentReconciliationController {
   constructor(private readonly paymentReconciliationService: PaymentReconciliationService) {}

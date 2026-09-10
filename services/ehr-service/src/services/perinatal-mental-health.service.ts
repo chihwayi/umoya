@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 function interpretEpds(totalScore: number, q10Score: number): { level: string; action: string } {
   if (q10Score >= 1) {
@@ -37,12 +38,25 @@ export class PerinatalMentalHealthService {
     return rows[0] ?? null;
   }
 
-  async submitEpds(db: any, _reviewedBy: string, body: any): Promise<any> {
+  async submitEpds(db: any, reviewedBy: string, body: any): Promise<any> {
+    // epds_responses.assessment_id is a required FK to pmh_assessments — no caller
+    // (mobile EpdsScreen included) ever created that parent record first, so every
+    // submission failed with a NOT NULL violation. Auto-create a minimal one when
+    // the caller doesn't already have an assessment in progress.
+    let assessmentId = body.assessmentId;
+    if (!assessmentId) {
+      const created = await this.createAssessment(db, reviewedBy, {
+        patientId: body.patientId,
+        timing: body.timing ?? 'postnatal_6w',
+      });
+      assessmentId = created?.id;
+    }
+
     const rows = await db.query(
       `INSERT INTO epds_responses (assessment_id, patient_id, q1_score, q2_score, q3_score, q4_score, q5_score, q6_score, q7_score, q8_score, q9_score, q10_score)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *, total_score, risk_level, self_harm_ideation`,
-      [body.assessmentId, body.patientId, body.q1, body.q2, body.q3, body.q4, body.q5, body.q6, body.q7, body.q8, body.q9, body.q10],
+      [assessmentId, body.patientId, body.q1, body.q2, body.q3, body.q4, body.q5, body.q6, body.q7, body.q8, body.q9, body.q10],
     );
     const result = rows[0];
     const interpretation = interpretEpds(result?.total_score ?? 0, body.q10);
@@ -97,7 +111,7 @@ export class PerinatalMentalHealthService {
       `UPDATE epds_responses SET reviewed_by=$1, reviewed_at=NOW() WHERE id=$2 RETURNING *`,
       [reviewedBy, id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async raiseSafeguardingFlag(db: any, flaggedBy: string, body: any): Promise<any> {

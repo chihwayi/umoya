@@ -75,7 +75,8 @@ export class HivController {
   @ApiOperation({ summary: 'Enroll patient in HIV care' })
   @ApiResponse({ status: 201, description: 'Patient enrolled successfully' })
   async enrollInCare(@Body() body: any, @Request() req: RequestWithTenant) {
-    return this.hivService.enrollInCare(body, req.tenantDb);
+    const createdBy = (req as any).user?.id || (req as any).user?.sub || body.createdBy;
+    return this.hivService.enrollInCare({ ...body, createdBy }, req.tenantDb);
   }
 
   @Get('enrollments')

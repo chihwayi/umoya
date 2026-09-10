@@ -279,12 +279,13 @@ export class ModelMonitoringService {
       if (modelName === 'deterioration') {
         return await ds.query(`
           SELECT dp.deterioration_score / 100.0 AS predicted,
-                 CASE WHEN a.icu_transfer_at IS NOT NULL THEN 1 ELSE 0 END AS actual,
+                 CASE WHEN ia.id IS NOT NULL THEN 1 ELSE 0 END AS actual,
                  EXTRACT(YEAR FROM AGE(p.date_of_birth))::int AS age,
                  p.gender
           FROM deterioration_predictions dp
           JOIN patients p ON p.id = dp.patient_id
           LEFT JOIN admissions a ON a.id = dp.admission_id
+          LEFT JOIN icu_admissions ia ON ia.admission_id = a.id AND ia.admission_at > dp.prediction_time
           WHERE DATE_TRUNC('month', dp.prediction_time) = DATE_TRUNC('month', $1::date)
           LIMIT 5000
         `, [yearMonth]).catch((e: any) => { this.logger.warn(`deterioration_predictions outcomes query failed: ${e?.message}`); return []; });
@@ -305,6 +306,31 @@ export class ModelMonitoringService {
           WHERE DATE_TRUNC('month', rp.prediction_date::date) = DATE_TRUNC('month', $1::date)
           LIMIT 5000
         `, [yearMonth]).catch((e: any) => { this.logger.warn(`readmission_predictions outcomes query failed: ${e?.message}`); return []; });
+      }
+      if (modelName === 'sepsis') {
+        return await ds.query(`
+          SELECT (ss.qsofa_score::float / 3.0) AS predicted,
+                 CASE WHEN ss.severe_sepsis OR ss.septic_shock THEN 1 ELSE 0 END AS actual,
+                 EXTRACT(YEAR FROM AGE(p.date_of_birth))::int AS age,
+                 p.gender
+          FROM sepsis_screenings ss
+          JOIN patients p ON p.id = ss.patient_id
+          WHERE DATE_TRUNC('month', ss.screening_datetime) = DATE_TRUNC('month', $1::date)
+          LIMIT 5000
+        `, [yearMonth]).catch((e: any) => { this.logger.warn(`sepsis_screenings outcomes query failed: ${e?.message}`); return []; });
+      }
+      if (modelName === 'no_show') {
+        return await ds.query(`
+          SELECT COALESCE(sap.no_show_probability, 0.3) AS predicted,
+                 CASE WHEN a.status = 'no_show' THEN 1 ELSE 0 END AS actual,
+                 EXTRACT(YEAR FROM AGE(p.date_of_birth))::int AS age,
+                 p.gender
+          FROM appointments a
+          JOIN patients p ON p.id = a.patient_id
+          LEFT JOIN scheduling_ai_predictions sap ON sap.appointment_id = a.id
+          WHERE DATE_TRUNC('month', a.appointment_date) = DATE_TRUNC('month', $1::date)
+          LIMIT 5000
+        `, [yearMonth]).catch((e: any) => { this.logger.warn(`appointments no-show outcomes query failed: ${e?.message}`); return []; });
       }
     } catch (e) {}
     return [];

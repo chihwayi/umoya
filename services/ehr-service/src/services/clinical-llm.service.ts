@@ -279,12 +279,16 @@ export class ClinicalLlmService {
   }
 
   private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error(`LLM timeout after ${ms}ms`)), ms),
-      ),
-    ]);
+    // B-011/MOAS-17: when `promise` wins the race, the timeout's setTimeout
+    // handle was never cleared — it stayed live in the event loop until it
+    // fired on its own, which is exactly the open-handle leak Jest flags
+    // (--detectOpenHandles) and, in a long-running process, an unbounded
+    // number of dangling timers under sustained LLM traffic.
+    let timeoutHandle: NodeJS.Timeout;
+    const timeout = new Promise<T>((_, reject) => {
+      timeoutHandle = setTimeout(() => reject(new Error(`LLM timeout after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutHandle));
   }
 
   private async auditLog(

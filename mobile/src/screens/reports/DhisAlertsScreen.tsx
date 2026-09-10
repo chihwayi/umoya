@@ -3,6 +3,7 @@ import {
   View, Text, FlatList, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { C, FONT, RADIUS } from '../../design/tokens';
 import { Icon } from '../../components/ui/Icon';
 import { PeriodSelector, Period } from '../../components/reports/PeriodSelector';
@@ -17,18 +18,49 @@ interface OutlierAlert {
   severity: 'high' | 'medium' | 'low';
 }
 
+interface ApiOutlier {
+  name: string;
+  dhis2: number | null;
+  local: number | null;
+  deviation_pct: number;
+  severity: 'ok' | 'warning' | 'critical';
+}
+
+interface ApiOutlierReport {
+  period: string;
+  outliers: ApiOutlier[];
+}
+
+const mapSeverity = (s: ApiOutlier['severity']): OutlierAlert['severity'] =>
+  s === 'critical' ? 'high' : s === 'warning' ? 'medium' : 'low';
+
 export default function DhisAlertsScreen() {
+  const tenant = useAuthStore(st => st.tenant);
   const [period, setPeriod] = useState<Period>('month');
   const [alerts, setAlerts] = useState<OutlierAlert[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!tenant?.slug) return;
     setLoading(true);
-    api.get(`/dhis2/validation/alerts?period=${period}`)
-      .then((d: any) => setAlerts(d.data ?? d ?? []))
-      .catch(() => {})
+    api.get<ApiOutlierReport>(`/tenants/${tenant.slug}/dhis2-validation/outliers?period=${period}`)
+      .then((res: any) => {
+        const report: ApiOutlierReport = res.data ?? res;
+        const mapped = (report.outliers ?? [])
+          .filter(o => o.severity !== 'ok')
+          .map(o => ({
+            data_element: o.name,
+            value: o.local ?? 0,
+            expected: o.dhis2 ?? 0,
+            deviation: o.deviation_pct,
+            period: report.period,
+            severity: mapSeverity(o.severity),
+          }));
+        setAlerts(mapped);
+      })
+      .catch(() => setAlerts([]))
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [period, tenant?.slug]);
 
   const sevColor = (sev: string) =>
     sev === 'high' ? C.coral : sev === 'medium' ? C.amber : C.blue;

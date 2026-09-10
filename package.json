@@ -19,6 +19,8 @@
     "smoke:tele-post": "node scripts/smoke-telemedicine-postvisit.mjs",
     "audit:tenant-provisioning": "node scripts/audit-tenant-provisioning.mjs",
     "audit:controller-guards": "node scripts/audit-controller-guards.mjs",
+    "audit:role-authorization-matrix": "node scripts/audit-role-authorization-matrix.mjs",
+    "audit:security-baseline": "node scripts/audit-security-baseline.mjs",
     "audit:migration-sequence": "node scripts/audit-migration-sequence.mjs",
     "audit:tenant-fk-drift": "node scripts/audit-tenant-fk-drift.mjs",
     "audit:ai-surface-execution-wiring": "node scripts/audit-ai-surface-execution-wiring.mjs",
@@ -99,8 +101,5 @@
     "*.{json,md}": [
       "prettier --write"
     ]
-  },
-  "dependencies": {
-    "express": "^5.1.0"
   }
 }

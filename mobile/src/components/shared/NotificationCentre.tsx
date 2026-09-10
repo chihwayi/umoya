@@ -95,13 +95,29 @@ export const NotificationCentre: React.FC<Props> = ({ visible, onClose }) => {
       console.warn('Failed to mark notification read on server', err);
     });
   };
+  const markOneRead = (id: string) => {
+    setNotifs(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+    StaffNotificationsService.markRead(id).catch((err) => {
+      console.warn('Failed to mark notification read on server', err);
+    });
+  };
   const markAllRead = () => {
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
     StaffNotificationsService.markAllRead().catch((err) => {
       console.warn('Failed to mark all notifications read on server', err);
     });
   };
-  const clearAll = () => setNotifs([]);
+  // Clearing the list must persist server-side (read-all), otherwise the
+  // exact same notifications reappear on the next fetch (app reload, or
+  // simply reopening this panel) since the server never learned they were
+  // seen — this was the root cause of notifications "coming back" after
+  // login/reload.
+  const clearAll = () => {
+    setNotifs([]);
+    StaffNotificationsService.markAllRead().catch((err) => {
+      console.warn('Failed to mark all notifications read on server', err);
+    });
+  };
 
   const unread = notifs.filter(n => !n.read).length;
   const categories: NotifCategory[] = ['critical', 'message', 'system'];
@@ -173,6 +189,7 @@ export const NotificationCentre: React.FC<Props> = ({ visible, onClose }) => {
                       key={n.id}
                       style={[styles.notifCard, !n.read && styles.notifCardUnread, { borderLeftColor: categoryColor(n.category) }]}
                       activeOpacity={0.85}
+                      onPress={() => !n.read && markOneRead(n.id)}
                     >
                       <View style={[styles.notifIconBox, { backgroundColor: categoryColor(n.category) + '20' }]}>
                         <Icon name={n.icon as any} size={15} color={categoryColor(n.category)} />

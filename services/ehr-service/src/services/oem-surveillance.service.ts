@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class OemSurveillanceService {
@@ -80,7 +81,7 @@ export class OemSurveillanceService {
       `UPDATE oem_surveillance_schedule SET completed_date=CURRENT_DATE WHERE id=$1 RETURNING *`,
       [id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async createRtwPlan(db: any, clinicianId: string, body: any): Promise<any> {
@@ -107,7 +108,7 @@ export class OemSurveillanceService {
       `UPDATE oem_rtw_plans SET employer_signed=TRUE, employer_signed_at=NOW() WHERE id=$1 RETURNING *`,
       [id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async updateRtwStatus(db: any, id: string, status: string): Promise<any> {
@@ -115,6 +116,6 @@ export class OemSurveillanceService {
       `UPDATE oem_rtw_plans SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
       [status, id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 }

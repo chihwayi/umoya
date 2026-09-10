@@ -7,13 +7,22 @@
       "id": "sd-001",
       "query": "Default CBC/CMP order set for new sepsis workup",
       "expected": {
-        "relevant_citation_ids": ["sepsis-initial-workup-defaults"],
-        "supporting_citation_ids": ["sepsis-initial-workup-defaults"],
+        "relevant_citation_ids": [
+          "sepsis-initial-workup-defaults"
+        ],
+        "supporting_citation_ids": [
+          "sepsis-initial-workup-defaults"
+        ],
         "requires_citation_support": true,
         "should_abstain": false
       },
       "prediction": {
-        "citations": [{ "id": "sepsis-initial-workup-defaults", "title": "Sepsis initial diagnostic workup defaults" }],
+        "citations": [
+          {
+            "id": "sepsis-initial-workup-defaults",
+            "title": "Sepsis initial diagnostic workup defaults"
+          }
+        ],
         "abstained": false,
         "clinical_recommendation": {
           "text": "Use the initial sepsis diagnostic defaults and let the clinician tailor them to the presentation."
@@ -33,6 +42,121 @@
         "abstained": true,
         "clinical_recommendation": {
           "text": "Escalate to clinician review because the procedural context is incomplete."
+        }
+      }
+    },
+    {
+      "id": "sd-eng-001",
+      "subgroup": "pediatric",
+      "query": "[placeholder] default vitals monitoring interval guidance query for pediatric case sd-eng-001",
+      "expected": {
+        "relevant_citation_ids": [
+          "vitals-monitoring-defaults"
+        ],
+        "supporting_citation_ids": [
+          "vitals-monitoring-defaults"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "vitals-monitoring-defaults",
+            "title": "default vitals monitoring interval guidance (vitals-monitoring-defaults)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Follow the documented default vitals monitoring interval guidance for this presentation."
+        }
+      }
+    },
+    {
+      "id": "sd-eng-002",
+      "subgroup": "adult",
+      "query": "[placeholder] Incomplete default DVT prophylaxis order presentation for adult case sd-eng-002 (missing vitals/history)",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
+        }
+      }
+    },
+    {
+      "id": "sd-eng-003",
+      "subgroup": "elderly",
+      "query": "[placeholder] Ambiguous default post-op analgesia order set presentation for elderly case sd-eng-003",
+      "expected": {
+        "relevant_citation_ids": [
+          "post-op-analgesia-defaults"
+        ],
+        "supporting_citation_ids": [
+          "post-op-analgesia-defaults"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "post-op-analgesia-defaults-adjacent",
+            "title": "default post-op analgesia order set adjacent guidance (post-op-analgesia-defaults-adjacent)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Consider the adjacent default post-op analgesia order set pathway pending further evaluation."
+        }
+      }
+    },
+    {
+      "id": "sd-eng-004",
+      "subgroup": "maternity",
+      "query": "[placeholder] default diabetic foot exam interval guidance query for maternity case sd-eng-004",
+      "expected": {
+        "relevant_citation_ids": [
+          "diabetic-foot-exam-defaults"
+        ],
+        "supporting_citation_ids": [
+          "diabetic-foot-exam-defaults"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "diabetic-foot-exam-defaults",
+            "title": "default diabetic foot exam interval guidance (diabetic-foot-exam-defaults)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Follow the documented default diabetic foot exam interval guidance for this presentation."
+        }
+      }
+    },
+    {
+      "id": "sd-eng-005",
+      "subgroup": "general",
+      "query": "[placeholder] Incomplete default immunization catch-up schedule presentation for general case sd-eng-005 (missing vitals/history)",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
         }
       }
     }

@@ -2,12 +2,21 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Request } fr
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity, ApiQuery } from '@nestjs/swagger';
 import { ClaimsService } from '../services/claims.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
+// A-004/MOAS-20: insurance claims (submission, status, financial clearance,
+// pre-authorizations, remittances) are a back-office/billing function, same
+// as finance.controller.ts and billing.controller.ts — was JwtAuthGuard-only,
+// so any staff role could read/submit/appeal medical-aid claims for every
+// patient. Class-level @Roles() since the whole controller is one
+// sensitivity class; admin always has access via RolesGuard's built-in override.
 @ApiTags('Medical Aid Claims')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('accounts', 'nurse_accounts')
 @Controller('claims')
 export class ClaimsController {
   constructor(private claimsService: ClaimsService) {}

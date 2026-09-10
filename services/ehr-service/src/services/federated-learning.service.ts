@@ -136,6 +136,10 @@ export class FederatedLearningService {
         auc: data.auc,
         brier: data.brier,
         feature_importances: data.feature_importances,
+        // Real per-tenant fitted model, previously discarded here — /fl/aggregate
+        // needs this to build an actual global model rather than only averaging
+        // scalar metrics (see aggregateRound's comment for the full gap).
+        minioPath: data.minio_path,
       },
       sampleCount: data.sample_count,
       gradientNorm: data.gradient_norm,
@@ -253,17 +257,35 @@ export class FederatedLearningService {
 
   // ── Outcome fetching (training data) ──────────────────────────────────────
 
+  /**
+   * Fetches ALL matching outcome rows once (ASC by time, capped at 5000) and
+   * splits them deterministically 85/15 by position — train gets the first
+   * 85%, holdout the last 15%, with zero row overlap between the two calls.
+   * Previously train and holdout ran two separate queries that both fell
+   * back to the same LIMIT when the underlying table had fewer rows than
+   * the limit (e.g. holdout's `ORDER BY ... DESC LIMIT 500` returned the
+   * exact same rows as training's `ORDER BY ... ASC LIMIT 5000` whenever
+   * total rows <= 500) — silent train/holdout data leakage that would make
+   * every reported holdout AUC meaningless. Live-reproduced during MOAS
+   * follow-up FL verification: a 160-row synthetic dataset produced an
+   * identical 160-row "holdout" set.
+   */
   private async fetchTrainingOutcomes(ds: any, modelType: string, holdout = false): Promise<any[]> {
-    // holdout = last 10% of data for evaluation; training = first 90%
-    const limit = holdout ? 500 : 5000;
-    const orderDir = holdout ? 'DESC' : 'ASC';
+    const allRows = await this.fetchAllOutcomeRows(ds, modelType);
+    const splitAt = Math.ceil(allRows.length * 0.85);
+    return holdout ? allRows.slice(splitAt) : allRows.slice(0, splitAt);
+  }
+
+  private async fetchAllOutcomeRows(ds: any, modelType: string): Promise<any[]> {
+    const limit = 5000;
+    const orderDir = 'ASC';
 
     try {
       if (modelType === 'deterioration') {
         return await ds.query(`
           SELECT
             dp.deterioration_score / 100.0 AS predicted,
-            CASE WHEN a.icu_transfer_at IS NOT NULL THEN 1 ELSE 0 END AS actual,
+            CASE WHEN ia.id IS NOT NULL THEN 1 ELSE 0 END AS actual,
             (dp.feature_contributions->>'respiratory_rate')::float AS respiratory_rate,
             (dp.feature_contributions->>'spo2')::float AS spo2,
             (dp.feature_contributions->>'systolic_bp')::float AS systolic_bp,
@@ -274,10 +296,31 @@ export class FederatedLearningService {
           FROM deterioration_predictions dp
           JOIN patients p ON p.id = dp.patient_id
           LEFT JOIN admissions a ON a.id = dp.admission_id
+          LEFT JOIN icu_admissions ia ON ia.admission_id = a.id AND ia.admission_at > dp.prediction_time
           WHERE dp.prediction_time > NOW() - INTERVAL '6 months'
           ORDER BY dp.prediction_time ${orderDir}
           LIMIT ${limit}
         `).catch((e: any) => { this.logger.warn(`deterioration_predictions training outcomes query failed: ${e?.message}`); return []; });
+      }
+
+      if (modelType === 'sepsis') {
+        return await ds.query(`
+          SELECT
+            (ss.qsofa_score::float / 3.0) AS predicted,
+            CASE WHEN ss.severe_sepsis OR ss.septic_shock THEN 1 ELSE 0 END AS actual,
+            ss.respiratory_rate::float AS respiratory_rate,
+            ss.heart_rate::float AS heart_rate,
+            ss.temperature::float AS temperature,
+            ss.systolic_bp::float AS systolic_bp,
+            ss.wbc_count::float AS wbc,
+            ss.lactate::float AS lactate,
+            COALESCE(EXTRACT(YEAR FROM AGE(p.date_of_birth))::int, 45) AS age
+          FROM sepsis_screenings ss
+          JOIN patients p ON p.id = ss.patient_id
+          WHERE ss.screening_datetime > NOW() - INTERVAL '6 months'
+          ORDER BY ss.screening_datetime ${orderDir}
+          LIMIT ${limit}
+        `).catch((e: any) => { this.logger.warn(`sepsis_screenings training outcomes query failed: ${e?.message}`); return []; });
       }
 
       if (modelType === 'readmission') {

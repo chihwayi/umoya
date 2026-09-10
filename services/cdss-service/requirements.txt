@@ -47,3 +47,10 @@ boto3==1.34.0
 pillow==10.1.0
 pydicom==2.4.3
 pytesseract>=0.3.10
+
+# Test runtime (B-013/MOAS-18): declared and pinned so the committed
+# tests/ suite is collectible/runnable anywhere requirements.txt is
+# installed, not only inside a pre-built image that happened to have these
+# added out-of-band.
+pytest==8.3.4
+pytest-asyncio==0.24.0

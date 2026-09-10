@@ -36,7 +36,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    messageData.sender_id = req.user.userId;
+    messageData.sender_id = req.user.id;
     return this.messagingService.sendMessage(messageData, tenantDb);
   }
 
@@ -48,7 +48,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    return this.messagingService.getInbox(req.user.userId, filters, tenantDb);
+    return this.messagingService.getInbox(req.user.id, filters, tenantDb);
   }
 
   // Get Sent Messages
@@ -59,7 +59,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    return this.messagingService.getSentMessages(req.user.userId, filters, tenantDb);
+    return this.messagingService.getSentMessages(req.user.id, filters, tenantDb);
   }
 
   // Get Unread Count
@@ -69,7 +69,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    const count = await this.messagingService.getUnreadCount(req.user.userId, tenantDb);
+    const count = await this.messagingService.getUnreadCount(req.user.id, tenantDb);
     return { count };
   }
 
@@ -81,7 +81,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    return this.messagingService.searchMessages(req.user.userId, query, tenantDb);
+    return this.messagingService.searchMessages(req.user.id, query, tenantDb);
   }
 
   // Get Message Threads
@@ -98,7 +98,7 @@ export class ProviderMessagingController {
        FROM message_threads t
        WHERE t.participants @> $2::jsonb AND t.is_archived = false
        ORDER BY t.last_message_at DESC NULLS LAST`,
-      [req.user.userId, JSON.stringify([req.user.userId])]
+      [req.user.id, JSON.stringify([req.user.id])]
     );
     return threads;
   }
@@ -156,7 +156,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    replyData.sender_id = req.user.userId;
+    replyData.sender_id = req.user.id;
     return this.messagingService.replyToMessage(messageId, replyData, tenantDb);
   }
 
@@ -169,7 +169,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    forwardData.sender_id = req.user.userId;
+    forwardData.sender_id = req.user.id;
     return this.messagingService.forwardMessage(messageId, forwardData, tenantDb);
   }
 
@@ -181,7 +181,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    await this.messagingService.markAsRead(messageId, req.user.userId, tenantDb);
+    await this.messagingService.markAsRead(messageId, req.user.id, tenantDb);
     return { message: 'Message marked as read' };
   }
 
@@ -193,7 +193,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    await this.messagingService.markAsUnread(messageId, req.user.userId, tenantDb);
+    await this.messagingService.markAsUnread(messageId, req.user.id, tenantDb);
     return { message: 'Message marked as unread' };
   }
 
@@ -205,7 +205,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    await this.messagingService.archiveMessage(messageId, req.user.userId, tenantDb);
+    await this.messagingService.archiveMessage(messageId, req.user.id, tenantDb);
     return { message: 'Message archived successfully' };
   }
 
@@ -217,7 +217,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    await this.messagingService.deleteMessage(messageId, req.user.userId, tenantDb);
+    await this.messagingService.deleteMessage(messageId, req.user.id, tenantDb);
     return { message: 'Message deleted successfully' };
   }
 
@@ -281,7 +281,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    taskData.assigned_by = req.user.userId;
+    taskData.assigned_by = req.user.id;
     return this.messagingService.createTaskFromMessage(messageId, taskData, tenantDb);
   }
 
@@ -349,7 +349,7 @@ export class ProviderMessagingController {
     @Request() req: any,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantSlug);
-    templateData.created_by = req.user.userId;
+    templateData.created_by = req.user.id;
     return this.templateService.createTemplate(templateData, tenantDb);
   }
 

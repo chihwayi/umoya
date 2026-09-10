@@ -102,7 +102,12 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({
                 )}
               </View>
 
-              <Text style={[styles.label, isFocused && { color: accent, fontFamily: FONT.uiBd }]}>
+              <Text
+                style={[styles.label, isFocused && { color: accent, fontFamily: FONT.uiBd }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+              >
                 {tab.label}
               </Text>
             </TouchableOpacity>

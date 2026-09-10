@@ -116,6 +116,7 @@ import { TaxManagementController } from './controllers/tax-management.controller
 import { PaymentReconciliationController } from './controllers/payment-reconciliation.controller';
 import { CardiologyController } from './controllers/cardiology.controller';
 import { TerminologyController } from './controllers/terminology.controller';
+import { FhirTerminologyController } from './controllers/fhir-terminology.controller';
 import { Icd10Controller } from './controllers/icd10.controller';
 import { MetricsController } from './controllers/metrics.controller';
 import { MedicationHistoryController } from './controllers/medication-history.controller';
@@ -259,6 +260,7 @@ import { AiOrderSuggestionsController } from './controllers/ai-order-suggestions
 import { TelemedicineWebhookController } from './controllers/telemedicine-webhook.controller';
 import { RadiologyReviewController } from './controllers/radiology-review.controller';
 import { CdssHealthController } from './controllers/cdss-health.controller';
+import { HealthController } from './controllers/health.controller';
 import { EducationPersonalizationController } from './controllers/education-personalization.controller';
 import { ProactiveRiskController } from './controllers/proactive-risk.controller';
 import { ProactiveAiController } from './controllers/proactive-ai.controller';
@@ -466,6 +468,7 @@ import { InvoiceTemplateService } from './services/invoice-template.service';
 import { CardiologyService } from './services/cardiology.service';
 import { TerminologyService } from './services/terminology.service';
 import { TerminologyImportService } from './services/terminology-import.service';
+import { EclService } from './services/ecl.service';
 import { Icd10Service } from './services/icd10.service';
 import { CdssHookService } from './services/cdss-hook.service';
 import { SpecialtyAutomationService } from './services/specialty-automation.service';
@@ -680,7 +683,13 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
 @Module({
   imports: [
     ConfigModule.forRoot(),
-    ScheduleModule.forRoot(),
+    // B-011: cron jobs registered via @nestjs/schedule create real Node
+    // timer handles that keep the process (and Jest workers compiling this
+    // module) alive. There's no reason for any of the 20+ @Cron services to
+    // actually fire during a test run, so scheduling is skipped entirely in
+    // test (the installed @nestjs/schedule version has no runtime
+    // disable-scheduling option, so this must be an import-time condition).
+    ...(process.env.NODE_ENV === 'test' ? [] : [ScheduleModule.forRoot()]),
     PassportModule,
     MulterModule.register({
       dest: './uploads',
@@ -805,6 +814,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TaxManagementController,
     PaymentReconciliationController,
     TerminologyController,
+    FhirTerminologyController,
     Icd10Controller,
     MetricsController,
     MedicationHistoryController,
@@ -924,6 +934,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     TelemedicineWebhookController,
     RadiologyReviewController,
     CdssHealthController,
+    HealthController,
     EducationPersonalizationController,
     ProactiveRiskController,
     ProactiveAiController,
@@ -1063,6 +1074,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     InvoiceTemplateService,
     TerminologyService,
     TerminologyImportService,
+    EclService,
     Icd10Service,
     CdssHookService,
     SpecialtyAutomationService,
@@ -1371,6 +1383,8 @@ export class EhrModule {
       .exclude(
         { path: 'tenants/active', method: RequestMethod.ALL },
         { path: 'terminology/import/(.*)', method: RequestMethod.ALL },
+        { path: 'health', method: RequestMethod.ALL },
+        { path: 'health/ready', method: RequestMethod.ALL },
       )
       .forRoutes('*');
   }

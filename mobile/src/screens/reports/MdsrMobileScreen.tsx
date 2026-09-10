@@ -3,36 +3,45 @@ import {
   View, Text, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { C, FONT, RADIUS } from '../../design/tokens';
-import { PeriodSelector, Period } from '../../components/reports/PeriodSelector';
 
 interface MdsrCase {
   id: string;
-  cause_of_death: string;
-  gestational_age?: number;
+  death_cause_primary?: string;
   review_status?: string;
   preventable?: boolean;
 }
 
-interface MdsrData {
-  total_deaths: number;
-  reviewed: number;
+interface MdsrSummary {
+  total_maternal_deaths: number;
+  reviews_completed: number;
   preventable: number;
-  deaths: MdsrCase[];
 }
 
+// Backend (mdsr/summary) only supports a calendar-year period, not the usual
+// week/quarter granularity — always shows the current year.
 export default function MdsrMobileScreen() {
-  const [period, setPeriod] = useState<Period>('month');
-  const [data, setData] = useState<MdsrData | null>(null);
+  const tenant = useAuthStore(st => st.tenant);
+  const [summary, setSummary] = useState<MdsrSummary | null>(null);
+  const [deaths, setDeaths] = useState<MdsrCase[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!tenant?.slug) { setLoading(false); return; }
     setLoading(true);
-    api.get(`/mdsr/dashboard?period=${period}`)
-      .then((d: any) => setData(d.data ?? d))
+    const year = new Date().getFullYear();
+    Promise.all([
+      api.get(`/tenants/${tenant.slug}/mdsr/summary?year=${year}`),
+      api.get(`/tenants/${tenant.slug}/mdsr/deaths?year=${year}`),
+    ])
+      .then(([summaryRes, deathsRes]: any[]) => {
+        setSummary(summaryRes.data ?? summaryRes);
+        setDeaths((deathsRes.data ?? deathsRes) ?? []);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [tenant?.slug]);
 
   if (loading) {
     return (
@@ -42,36 +51,31 @@ export default function MdsrMobileScreen() {
     );
   }
 
-  const deaths = data?.deaths ?? [];
-
   return (
     <ScrollView style={s.container} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-      <PeriodSelector value={period} onChange={setPeriod} />
+      <Text style={s.yearLabel}>{new Date().getFullYear()}</Text>
 
       <View style={s.statRow}>
-        <StatChip label="Deaths"      value={data?.total_deaths ?? 0} color={C.coral}  />
-        <StatChip label="Reviewed"    value={data?.reviewed ?? 0}     color={C.green}  />
-        <StatChip label="Preventable" value={data?.preventable ?? 0}  color={C.amber}  />
+        <StatChip label="Deaths"      value={summary?.total_maternal_deaths ?? 0} color={C.coral}  />
+        <StatChip label="Reviewed"    value={summary?.reviews_completed ?? 0}     color={C.green}  />
+        <StatChip label="Preventable" value={summary?.preventable ?? 0}           color={C.amber}  />
       </View>
 
       {deaths.length === 0 ? (
-        <Text style={s.empty}>No maternal deaths recorded this period</Text>
+        <Text style={s.empty}>No maternal deaths recorded this year</Text>
       ) : (
         deaths.slice(0, 15).map((d, i) => (
           <View key={d.id ?? i} style={s.card}>
             <View style={s.cardHeader}>
-              <Text style={s.caseLabel}>Case #{d.id ?? i + 1}</Text>
+              <Text style={s.caseLabel}>Case #{d.id ? d.id.slice(0, 8) : i + 1}</Text>
               {d.preventable && (
                 <View style={s.prevBadge}>
                   <Text style={s.prevText}>Preventable</Text>
                 </View>
               )}
             </View>
-            <Text style={s.cause}>{d.cause_of_death ?? 'Cause not recorded'}</Text>
-            <Text style={s.meta}>
-              {d.gestational_age ? `GA ${d.gestational_age}w  ·  ` : ''}
-              {d.review_status ?? 'Pending review'}
-            </Text>
+            <Text style={s.cause}>{d.death_cause_primary ?? 'Cause not recorded'}</Text>
+            <Text style={s.meta}>{d.review_status ?? 'Pending review'}</Text>
           </View>
         ))
       )}
@@ -89,6 +93,7 @@ const StatChip: React.FC<{ label: string; value: number; color: string }> = ({ l
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg },
+  yearLabel: { fontFamily: FONT.uiSb, fontSize: 13, color: C.textMuted, marginBottom: 14 },
   empty: { fontFamily: FONT.ui, fontSize: 14, color: C.textSecondary, textAlign: 'center', marginTop: 40 },
   statRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
   chip: { flex: 1, backgroundColor: C.surface, borderRadius: RADIUS.md, padding: 12, borderTopWidth: 3, alignItems: 'center' },

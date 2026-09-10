@@ -3,12 +3,17 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { ReportExportService, ReportDefinition } from '../services/report-export.service';
 import { MonthlyReportBundleService } from '../services/monthly-report-bundle.service';
 
+// A-004/MOAS-20: bulk tenant-wide report export (PDF/XLSX/CSV/monthly
+// bundle) — admin-level, same reasoning as module-reports.controller.ts.
 @Controller('tenants/:tenantId/exports')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class ReportExportController {
   constructor(
     private readonly exportSvc: ReportExportService,

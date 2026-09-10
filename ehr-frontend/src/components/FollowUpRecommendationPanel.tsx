@@ -15,7 +15,7 @@ interface Recommendation {
 }
 
 interface Props {
-  patientId: number;
+  patientId: string;
   encounterId?: number;
   encounterType: 'consultation' | 'telemedicine' | 'discharge';
   riskBand: 'low' | 'moderate' | 'high' | 'critical';

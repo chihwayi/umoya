@@ -15,6 +15,19 @@ export class BackupService {
 
   constructor(private readonly tenantService: TenantService) {}
 
+  // pg_dump/pg_restore read connection details from PG* libpq env vars, not
+  // this app's own DB_HOST/DB_USERNAME/DB_PASSWORD names — without this
+  // mapping they silently try to connect to localhost and fail.
+  private pgEnv(): NodeJS.ProcessEnv {
+    return {
+      ...process.env,
+      PGHOST: process.env.DB_HOST,
+      PGPORT: process.env.DB_PORT,
+      PGUSER: process.env.DB_USERNAME,
+      PGPASSWORD: process.env.DB_PASSWORD,
+    };
+  }
+
   @Cron('0 2 * * *')
   async runNightlyBackups(): Promise<void> {
     const tenants = await this.tenantService.getAllActiveTenants();
@@ -42,9 +55,7 @@ export class BackupService {
     const jobId: string = jobRows[0].id;
 
     try {
-      await this.execCommand(
-        `pg_dump --format=custom --no-password -d ${dbName} -f ${dumpFile}`,
-      );
+      await this.execFile('pg_dump', ['--format=custom', '-d', dbName, '-f', dumpFile], this.pgEnv());
 
       if (this.ENCRYPTION_KEY && this.ENCRYPTION_KEY.length === 64) {
         const key = Buffer.from(this.ENCRYPTION_KEY, 'hex');
@@ -72,10 +83,9 @@ export class BackupService {
 
       let storageLocation = finalFile;
       if (this.S3_BUCKET) {
-        await this.execCommand(
-          `aws s3 cp ${finalFile} s3://${this.S3_BUCKET}/${tenantId}/${path.basename(finalFile)} --sse AES256`,
-        );
-        storageLocation = `s3://${this.S3_BUCKET}/${tenantId}/${path.basename(finalFile)}`;
+        const s3Target = `s3://${this.S3_BUCKET}/${tenantId}/${path.basename(finalFile)}`;
+        await this.execFile('aws', ['s3', 'cp', finalFile, s3Target, '--sse', 'AES256']);
+        storageLocation = s3Target;
       }
 
       const verifyOk = await this.verifyDump(fs.existsSync(dumpFile) ? dumpFile : finalFile);
@@ -121,7 +131,7 @@ export class BackupService {
     let localPath = filePath as string;
     if (localPath.startsWith('s3://')) {
       localPath = path.join(this.BACKUP_DIR, 'verify_temp.enc');
-      await this.execCommand(`aws s3 cp ${filePath} ${localPath}`);
+      await this.execFile('aws', ['s3', 'cp', filePath, localPath]);
     }
 
     if (!fs.existsSync(localPath)) {
@@ -149,7 +159,7 @@ export class BackupService {
   private async verifyDump(dumpFile: string): Promise<boolean> {
     if (!fs.existsSync(dumpFile)) return false;
     try {
-      await this.execCommand(`pg_restore --list ${dumpFile} > /dev/null 2>&1`);
+      await this.execFile('pg_restore', ['--list', dumpFile]);
       return true;
     } catch {
       return false;
@@ -166,9 +176,12 @@ export class BackupService {
     });
   }
 
-  private execCommand(cmd: string): Promise<void> {
+  // execFile (not exec) — arguments are passed as an array, never
+  // interpolated into a shell string, so tenant/file names can't be used
+  // for shell injection regardless of their content.
+  private execFile(cmd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<void> {
     return new Promise((resolve, reject) => {
-      child_process.exec(cmd, (err) => (err ? reject(err) : resolve()));
+      child_process.execFile(cmd, args, { env: env ?? process.env }, (err) => (err ? reject(err) : resolve()));
     });
   }
 }

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 // S276 — Staff Duty Rostering. Ward-level shift roster + on-call status + shift
 // handover notes, with double-booking conflict detection. Deliberately scoped to
@@ -86,8 +87,9 @@ export class StaffDutyRosteringService {
        WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [shiftId, tenantId, status],
     );
-    if (!rows[0]) throw new NotFoundException('Shift not found');
-    return rows[0];
+    const shift = firstReturningRow(rows);
+    if (!shift) throw new NotFoundException('Shift not found');
+    return shift;
   }
 
   async rescheduleShift(db: any, tenantId: string, shiftId: string, body: any): Promise<any> {
@@ -114,7 +116,7 @@ export class StaffDutyRosteringService {
        WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [shiftId, tenantId, body.ward ?? shift.ward, shiftDate, startTime, endTime],
     );
-    return rows[0];
+    return firstReturningRow(rows);
   }
 
   async addHandoverNote(db: any, tenantId: string, fromUserId: string, body: any): Promise<any> {

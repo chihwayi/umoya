@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 // LV shortening fraction normal range in children: 28–44%
 const LV_SF_NORMAL_MIN = 28;
@@ -100,6 +101,6 @@ export class PaediatricCardiologyService {
       `UPDATE paed_cardiac_followup SET completed=TRUE, completed_date=CURRENT_DATE WHERE id=$1 RETURNING *`,
       [id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 }

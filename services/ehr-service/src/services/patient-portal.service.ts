@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { AppointmentSimple } from '../entities/appointment-simple.entity';
@@ -10,6 +11,7 @@ import { Bill } from '../entities/billing.entity';
 import { Patient } from '../entities/patient.entity';
 import { Vitals } from '../entities/vitals.entity';
 import { FinanceService } from './finance.service';
+import { ImagingService } from './imaging.service';
 
 @Injectable()
 export class PatientPortalService {
@@ -19,6 +21,7 @@ export class PatientPortalService {
     private tenantService: TenantService,
     private readonly cdssService: CdssService,
     private readonly financeService: FinanceService,
+    private readonly imagingService: ImagingService,
   ) {}
 
   private async getPatientRepository(tenantId: string): Promise<Repository<Patient>> {
@@ -226,42 +229,17 @@ export class PatientPortalService {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
     }
 
-    this.logger.log(`[getPatientRecords] Querying medical records for patientId: ${patientId}, tenantId: ${tenantId}`);
-    
+    this.logger.debug(`[getPatientRecords] Querying medical records for patientId: ${patientId}, tenantId: ${tenantId}`);
+
     // Verify patient exists
     const patientCheck = await connection.query(
-      `SELECT id, first_name, last_name, patient_number FROM patients WHERE id = $1`,
+      `SELECT id FROM patients WHERE id = $1`,
       [patientId]
     );
-    
+
     if (!patientCheck || patientCheck.length === 0) {
       this.logger.warn(`[getPatientRecords] Patient not found: ${patientId}`);
       return [];
-    }
-    
-    this.logger.log(`[getPatientRecords] Patient found: ${patientCheck[0].first_name} ${patientCheck[0].last_name} (${patientCheck[0].patient_number})`);
-    
-    // Debug: Check which database we're connected to
-    const dbName = await connection.query(`SELECT current_database() as db_name`);
-    this.logger.log(`[getPatientRecords] Connected to database: ${JSON.stringify(dbName)}`);
-    
-    // Debug: Check record count directly
-    const directCount = await connection.query(
-      `SELECT COUNT(*) as count FROM medical_records WHERE patient_id = $1`,
-      [patientId]
-    );
-    this.logger.log(`[getPatientRecords] Direct count query result: ${JSON.stringify(directCount)}`);
-    
-    // Debug: Get all records for this patient without joins
-    const directRecords = await connection.query(
-      `SELECT id, patient_id, visit_date, chief_complaint FROM medical_records WHERE patient_id = $1`,
-      [patientId]
-    );
-    this.logger.log(`[getPatientRecords] Direct records query result: ${JSON.stringify(directRecords)}`);
-    
-    // If direct query finds records but main query doesn't, there's a join issue
-    if (directRecords && directRecords.length > 0) {
-      this.logger.warn(`[getPatientRecords] Direct query found ${directRecords.length} records but main query may fail due to JOIN`);
     }
 
     // Use raw SQL query - EXACT same pattern as getPatientAppointments which works
@@ -303,10 +281,9 @@ export class PatientPortalService {
     
     query += ` ORDER BY mr.visit_date DESC`;
     
-    this.logger.log(`[getPatientRecords] Executing query with patientId: ${patientId}`);
     const rawRecords = await connection.query(query, params);
-    
-    this.logger.log(`[getPatientRecords] Found ${rawRecords.length} medical records for patient ${patientId}`);
+
+    this.logger.debug(`[getPatientRecords] Found ${rawRecords.length} medical records for patient ${patientId}`);
 
     return rawRecords.map((record: any) => ({
       id: record.id,
@@ -359,6 +336,95 @@ export class PatientPortalService {
       results: order.results || [],
       interpretation: order.interpretation,
     }));
+  }
+
+  // Imaging — only studies with a finalized (signed) report are shown; a
+  // preliminary/draft radiology read shouldn't reach the patient before a
+  // radiologist has signed off, same principle as lab results only showing
+  // 'completed' orders above. Additionally, a report flagged is_critical must
+  // have been acknowledged by the ordering physician first — a patient should
+  // never be the one to discover a critical finding in an app before their
+  // doctor has seen it and had the chance to call them.
+  async getPatientImagingStudies(patientId: string, tenantId: string): Promise<any[]> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    return connection.query(
+      `SELECT
+         s.id, s.study_date, s.study_time, s.study_status,
+         st.study_name, st.body_part,
+         m.modality_name, m.modality_code,
+         r.id as report_id, r.report_status, r.impression, r.signed_at
+       FROM imaging_studies s
+       INNER JOIN imaging_study_types st ON st.id = s.study_type_id
+       INNER JOIN imaging_modalities m ON m.id = st.modality_id
+       INNER JOIN imaging_reports r ON r.imaging_study_id = s.id
+       WHERE s.patient_id = $1
+         AND r.report_status = 'final'
+         AND (
+           r.is_critical IS NOT TRUE
+           OR EXISTS (
+             SELECT 1 FROM imaging_report_acknowledgements a WHERE a.imaging_report_id = r.id
+           )
+         )
+       ORDER BY s.study_date DESC, s.study_time DESC`,
+      [patientId],
+    );
+  }
+
+  private async verifyImagingStudyOwnership(
+    connection: DataSource,
+    patientId: string,
+    studyId: string,
+  ): Promise<void> {
+    const rows = await connection.query(
+      `SELECT patient_id FROM imaging_studies WHERE id = $1`,
+      [studyId],
+    );
+    if (!rows.length || rows[0].patient_id !== patientId) {
+      throw new ForbiddenException('You do not have access to this imaging study');
+    }
+  }
+
+  private async verifyImagingReportReleased(connection: DataSource, report: any): Promise<void> {
+    if (!report || report.report_status !== 'final') {
+      throw new NotFoundException('No finalized report available for this study');
+    }
+    if (report.is_critical) {
+      const ack = await connection.query(
+        `SELECT 1 FROM imaging_report_acknowledgements WHERE imaging_report_id = $1 LIMIT 1`,
+        [report.id],
+      );
+      if (!ack.length) {
+        throw new ForbiddenException('This report is pending physician review before it can be released to you');
+      }
+    }
+  }
+
+  async getPatientImagingReport(patientId: string, tenantId: string, studyId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+    await this.verifyImagingStudyOwnership(connection, patientId, studyId);
+
+    const report = await this.imagingService.getReportByStudyId(connection, studyId);
+    await this.verifyImagingReportReleased(connection, report);
+    return report;
+  }
+
+  async getPatientImagingImages(patientId: string, tenantId: string, studyId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+    await this.verifyImagingStudyOwnership(connection, patientId, studyId);
+
+    const report = await this.imagingService.getReportByStudyId(connection, studyId);
+    await this.verifyImagingReportReleased(connection, report);
+    return this.imagingService.getStudyImages(connection, studyId);
   }
 
   // Prescriptions
@@ -1936,7 +2002,7 @@ export class PatientPortalService {
     const query = `UPDATE medication_reminders SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
 
     const result = await connection.query(query, params);
-    return result[0];
+    return firstReturningRow(result);
   }
 
   async deleteMedicationReminder(patientId: string, tenantId: string, reminderId: string): Promise<void> {

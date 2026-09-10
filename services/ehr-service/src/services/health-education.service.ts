@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 
 interface CreateCourseDto {
   title: string;
@@ -90,8 +91,9 @@ export class HealthEducationService {
        WHERE id=$1 RETURNING *`,
       [courseId],
     );
-    if (!rows[0]) throw new NotFoundException('Course not found');
-    return rows[0];
+    const result = firstReturningRow(rows);
+    if (!result) throw new NotFoundException('Course not found');
+    return result;
   }
 
   async unpublishCourse(courseId: string, tenantDb: DataSource) {
@@ -99,8 +101,9 @@ export class HealthEducationService {
       `UPDATE education_courses SET published=false, updated_at=NOW() WHERE id=$1 RETURNING *`,
       [courseId],
     );
-    if (!rows[0]) throw new NotFoundException('Course not found');
-    return rows[0];
+    const result = firstReturningRow(rows);
+    if (!result) throw new NotFoundException('Course not found');
+    return result;
   }
 
   async addModule(courseId: string, title: string, tenantDb: DataSource) {

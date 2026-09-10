@@ -150,6 +150,20 @@ export class Patient {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  // A-005/MOAS-08: deceased/VIP/confidentiality state (FLOW-030, §13, §51).
+  // No blanket record lock is implied by deceased_at — that needs a
+  // clinical-governance decision on how amendments/corrections should still
+  // work for a deceased patient's record. deceased_at is used to suppress
+  // outbound patient communications (reminders, post-visit follow-up, etc.).
+  @Column({ name: 'deceased_at', type: 'timestamptz', nullable: true })
+  deceasedAt?: Date | null;
+
+  @Column({ name: 'vip_flag', default: false })
+  vipFlag: boolean;
+
+  @Column({ name: 'confidentiality_tier', default: 'standard' })
+  confidentialityTier: 'standard' | 'restricted' | 'confidential';
+
   @Column({ name: 'portal_password_hash', nullable: true })
   portalPasswordHash?: string;
 

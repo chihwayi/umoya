@@ -1,11 +1,14 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { CdssService } from './cdss.service';
+import { IcuAiService } from './icu-ai.service';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class IcuService {
   constructor(
     @Optional() private readonly _dataSource?: any,
     @Optional() private readonly cdssService?: CdssService,
+    @Optional() private readonly icuAiService?: IcuAiService,
   ) {}
 
   async ventProtocol(body: any): Promise<any> {
@@ -57,10 +60,13 @@ export class IcuService {
   }
 
   async admitPatient(db: any, admittedBy: string, body: any): Promise<any> {
+    // icu_admission_date is a legacy NOT NULL column (no default) left behind by an
+    // earlier schema version alongside the newer admission_at (which does default to
+    // NOW()) — populate both so admissions don't fail the constraint.
     const rows = await db.query(
       `INSERT INTO icu_admissions (patient_id, encounter_id, icu_type, bed_code, admission_diagnosis,
-         ventilator_required, isolation_required, isolation_type, admitted_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+         ventilator_required, isolation_required, isolation_type, admitted_by, icu_admission_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING *`,
       [body.patientId, body.encounterId ?? null, body.icuType ?? 'general', body.bedCode,
        body.diagnosis ?? null, body.ventilatorRequired ?? false, body.isolationRequired ?? false,
        body.isolationType ?? null, admittedBy],
@@ -169,11 +175,11 @@ export class IcuService {
   }
 
   async stopInfusion(db: any, infusionId: string): Promise<any> {
-    const rows = await db.query(
+    const result = await db.query(
       `UPDATE icu_infusions SET stopped_at=NOW() WHERE id=$1 RETURNING *`,
       [infusionId],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(result) ?? null;
   }
 
   async getActiveInfusions(db: any, admissionId: string): Promise<any[]> {
@@ -215,6 +221,16 @@ export class IcuService {
   }
 
   async recordScore(db: any, scoredBy: string, admissionId: string, body: any): Promise<any> {
+    // Find the most recent prior score before we insert the new one, so we can
+    // detect deterioration against it — this was previously never done anywhere
+    // in the system, so the SOFA delta-alert feature (icu_sofa_delta_alerts /
+    // GET icu/ai/sofa-alerts/active) was silently unreachable: nothing ever
+    // called IcuAiService.createSofaAlert.
+    const priorRows = await db.query(
+      `SELECT sofa_total FROM icu_scores WHERE admission_id = $1 ORDER BY scored_at DESC LIMIT 1`,
+      [admissionId],
+    );
+
     const rows = await db.query(
       `INSERT INTO icu_scores (admission_id, sofa_resp, sofa_coag, sofa_liver, sofa_cardio,
          sofa_cns, sofa_renal, apache2_score, scored_by)
@@ -223,7 +239,24 @@ export class IcuService {
        body.sofaCardio ?? null, body.sofaCns ?? null, body.sofaRenal ?? null,
        body.apache2Score ?? null, scoredBy],
     );
-    return rows[0] ?? null;
+    const newScore = rows[0] ?? null;
+
+    if (newScore && priorRows.length > 0 && priorRows[0].sofa_total !== null && this.icuAiService) {
+      const admissionRows = await db.query(
+        `SELECT patient_id FROM icu_admissions WHERE id = $1`,
+        [admissionId],
+      );
+      if (admissionRows.length > 0) {
+        await this.icuAiService.createSofaAlert(db, {
+          admissionId,
+          patientId: admissionRows[0].patient_id,
+          scoreNow: newScore.sofa_total,
+          score24hAgo: priorRows[0].sofa_total,
+        }).catch(() => undefined);
+      }
+    }
+
+    return newScore;
   }
 
   async getScores(db: any, admissionId: string): Promise<any[]> {

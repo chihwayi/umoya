@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 // S275 — Clinical Staff Credentialing & Privileging. Tracks medical staff license
 // expiry, malpractice/indemnity cover, CPD/CME compliance, and facility-granted
@@ -68,8 +69,9 @@ export class ClinicalStaffCredentialingService {
       `UPDATE clinical_staff_credentials SET ${fields.join(', ')} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING *`,
       params,
     );
-    if (!rows[0]) throw new NotFoundException('Credential record not found');
-    return rows[0];
+    const credential = firstReturningRow(rows);
+    if (!credential) throw new NotFoundException('Credential record not found');
+    return credential;
   }
 
   async listCredentials(db: any, tenantId: string, filters: any = {}): Promise<any> {

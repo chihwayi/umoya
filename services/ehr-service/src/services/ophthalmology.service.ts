@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS, PaymentStatus } from '../constants/payment-status';
 import { TerminologyService } from './terminology.service';
+import { firstReturningRow } from '../utils/returning-row';
 
 interface EncounterFilters {
   patientId?: string;
@@ -309,12 +310,13 @@ export class OphthalmologyService {
       values,
     );
 
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Ophthalmology encounter ${encounterId} not found`);
     }
 
     this.logger.log(`Updated ophthalmology encounter ${encounterId}`);
-    return result[0];
+    return row;
   }
 
   async getEncounterDetail(tenantDb: DataSource, encounterId: string) {
@@ -635,12 +637,13 @@ export class OphthalmologyService {
       values,
     );
 
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Ophthalmology follow-up ${followUpId} not found`);
     }
 
     this.logger.log(`Updated follow-up ${followUpId}`);
-    return result[0];
+    return row;
   }
 
   async listFollowUps(tenantDb: DataSource, patientId: string) {

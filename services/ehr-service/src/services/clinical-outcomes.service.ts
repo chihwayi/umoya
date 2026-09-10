@@ -6,6 +6,7 @@ import {
   ClinicalOutcomeQueryDto,
 } from '../dto/analytics.dto';
 import { ClinicalOutcome } from '../entities/clinical-outcome.entity';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class ClinicalOutcomesService {
@@ -262,11 +263,12 @@ export class ClinicalOutcomesService {
     const query = `UPDATE clinical_outcomes SET ${updates.join(', ')} WHERE id = $${finalParamIndex} RETURNING *`;
     const result = await tenantDb.query(query, params);
 
-    if (!result || result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Clinical outcome ${id} not found`);
     }
 
-    return result[0];
+    return row;
   }
 
   /**
@@ -277,7 +279,8 @@ export class ClinicalOutcomesService {
 
     const result = await tenantDb.query(`DELETE FROM clinical_outcomes WHERE id = $1 RETURNING *`, [id]);
 
-    if (!result || result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Clinical outcome ${id} not found`);
     }
 

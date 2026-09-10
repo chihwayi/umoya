@@ -11,6 +11,7 @@ import PatientDashboard from './pages/PatientDashboard';
 import AppointmentsPage from './pages/AppointmentsPage';
 import MedicalRecordsPage from './pages/MedicalRecordsPage';
 import LabResultsPage from './pages/LabResultsPage';
+import ImagingResultsPage from './pages/ImagingResultsPage';
 import PrescriptionsPage from './pages/PrescriptionsPage';
 import MedicationRemindersPage from './pages/MedicationRemindersPage';
 import MedicationAdherencePage from './pages/MedicationAdherencePage';
@@ -154,6 +155,14 @@ function App() {
               element={
                 <ProtectedRoute requireLinked>
                   <LabResultsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/:tenantSlug/imaging-results"
+              element={
+                <ProtectedRoute requireLinked>
+                  <ImagingResultsPage />
                 </ProtectedRoute>
               }
             />

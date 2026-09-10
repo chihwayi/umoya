@@ -3,8 +3,9 @@ import {
   View, Text, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { C, FONT, RADIUS } from '../../design/tokens';
-import { PeriodSelector, Period } from '../../components/reports/PeriodSelector';
+import { PeriodSelector, Period, periodToDateRange } from '../../components/reports/PeriodSelector';
 
 interface CascadeStep {
   label: string;
@@ -13,17 +14,20 @@ interface CascadeStep {
 }
 
 export default function CascadeDetailScreen() {
+  const tenant = useAuthStore(st => st.tenant);
   const [period, setPeriod] = useState<Period>('month');
   const [steps, setSteps] = useState<CascadeStep[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!tenant?.slug) { setLoading(false); return; }
     setLoading(true);
-    api.get(`/cascade-analytics/cascade?period=${period}`)
-      .then((d: any) => setSteps((d.data ?? d)?.steps ?? []))
+    const { startDate, endDate } = periodToDateRange(period);
+    api.get(`/tenants/${tenant.slug}/cascades/hiv?startDate=${startDate}&endDate=${endDate}`)
+      .then((d: any) => setSteps((d.data ?? d)?.funnelSteps ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [period, tenant?.slug]);
 
   const max = steps[0]?.value || 1;
 

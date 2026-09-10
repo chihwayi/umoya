@@ -301,6 +301,23 @@ export class TerminologyPostgresService {
   }
 
   /**
+   * TERM-10: real, if approximate, version-awareness. The RF2 Snapshot
+   * format we load only carries one row per concept (its state as of the
+   * loaded release), not full change history — so this can only tell you
+   * "this concept's current definition became effective on X", not the
+   * complete history of every prior revision (that would need the RF2
+   * Full-format files, a materially larger dataset, not loaded here). Still
+   * a real, useful signal: if the concept's effective_time is AFTER the
+   * asOfDate being checked, that concept (in its current form) did not
+   * exist yet at that date, which is exactly the kind of retrospective
+   * coding-validity question this ticket asked for.
+   */
+  async getConceptEffectiveTime(tenantDb: DataSource, conceptId: string): Promise<Date | null> {
+    const result = await tenantDb.query('SELECT effective_time FROM snomed_concepts WHERE concept_id = $1', [conceptId]);
+    return result?.[0]?.effective_time || null;
+  }
+
+  /**
    * Extract semantic tag from FSN (Fully Specified Name)
    * Example: "Diabetes mellitus (disorder)" -> "disorder"
    */
@@ -439,6 +456,98 @@ export class TerminologyPostgresService {
       }));
     } catch (error: any) {
       this.logger.error(`Failed to get parents for concept ${conceptId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * TERM-09: stated (author-time, pre-classification) parent relationships,
+   * as distinct from the classified/inferred hierarchy getParents() returns.
+   * SNOMED CT's concept model distinguishes what a terminology author
+   * directly asserted (stated) from what the description logic classifier
+   * additionally derived (inferred) — clinical hierarchy navigation should
+   * keep using the inferred view (getParents/getChildren/getAncestors,
+   * unchanged), but authoring/QA/governance tooling needs to see the stated
+   * view too, which this codebase previously had no way to distinguish
+   * (both were flattened into one snomed_relationships table).
+   *
+   * The legacy RF2 sct2_StatedRelationship file (snomed_stated_relationships
+   * table) is loaded but, for a current release, has ZERO active "Is a" rows
+   * — SNOMED International migrated concept authoring to OWL axioms
+   * (der2_sRefset_OWLExpressionSnapshot / snomed_owl_axioms table) around
+   * 2018-2019, and virtually all modern content is defined that way now,
+   * not via legacy stated relationships. So this method reads
+   * snomed_owl_axioms first (parsing the common `SubClassOf(:concept
+   * :parent)` primitive-subsumption pattern — covers ~1/3 of axioms;
+   * existential-restriction/role-group axioms aren't simple parent
+   * assertions and are intentionally not parsed here, no OWL reasoner is
+   * implemented), falling back to the legacy table for any concept that
+   * still only has a stated-relationship-form definition.
+   */
+  async getStatedParents(
+    tenantDb: DataSource,
+    conceptId: string,
+  ): Promise<SnomedConcept[]> {
+    if (!conceptId) {
+      throw new BadRequestException('Concept ID is required');
+    }
+
+    try {
+      const owlQuery = `
+        SELECT DISTINCT
+          c.concept_id,
+          d.term,
+          c.active
+        FROM snomed_owl_axioms a
+        JOIN snomed_concepts c ON c.concept_id = a.stated_parent_id
+        JOIN snomed_descriptions d ON d.concept_id = c.concept_id
+        WHERE a.concept_id = $1
+          AND a.active = true
+          AND a.stated_parent_id IS NOT NULL
+          AND c.active = true
+          AND d.active = true
+          AND d.type_id = '900000000000003001'  -- FSN only
+          AND d.language_code = 'en'
+        ORDER BY d.term
+        LIMIT 100
+      `;
+      const owlResults = await tenantDb.query(owlQuery, [conceptId]);
+      if (owlResults.length > 0) {
+        return owlResults.map((row: any) => ({
+          conceptId: row.concept_id,
+          term: row.term,
+          active: row.active,
+          semanticTag: this.extractSemanticTag(row.term),
+        }));
+      }
+
+      const legacyQuery = `
+        SELECT DISTINCT
+          c.concept_id,
+          d.term,
+          c.active
+        FROM snomed_stated_relationships r
+        JOIN snomed_concepts c ON c.concept_id = r.destination_id
+        JOIN snomed_descriptions d ON d.concept_id = c.concept_id
+        WHERE r.source_id = $1
+          AND r.type_id = '116680003'  -- "Is a" relationship
+          AND r.active = true
+          AND c.active = true
+          AND d.active = true
+          AND d.type_id = '900000000000003001'  -- FSN only
+          AND d.language_code = 'en'
+        ORDER BY d.term
+        LIMIT 100
+      `;
+      const legacyResults = await tenantDb.query(legacyQuery, [conceptId]);
+      return legacyResults.map((row: any) => ({
+        conceptId: row.concept_id,
+        term: row.term,
+        active: row.active,
+        semanticTag: this.extractSemanticTag(row.term),
+      }));
+    } catch (error: any) {
+      this.logger.error(`Failed to get stated parents for concept ${conceptId}: ${error.message}`);
       throw error;
     }
   }

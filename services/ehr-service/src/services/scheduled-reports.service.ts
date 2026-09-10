@@ -9,6 +9,7 @@ import { ScheduledReport } from '../entities/scheduled-report.entity';
 import { ReportExecution, ExecutionType, ExecutionStatus } from '../entities/report-execution.entity';
 import { ReportBuilderService } from './report-builder.service';
 import { EmailService } from './email.service';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class ScheduledReportsService {
@@ -139,11 +140,12 @@ export class ScheduledReportsService {
     const query = `UPDATE scheduled_reports SET ${updates.join(', ')} WHERE id = $${finalParamIndex} RETURNING *`;
     const result = await tenantDb.query(query, params);
 
-    if (!result || result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Scheduled report ${id} not found`);
     }
 
-    return result[0];
+    return row;
   }
 
   /**
@@ -207,7 +209,8 @@ export class ScheduledReportsService {
 
     const result = await tenantDb.query(`DELETE FROM scheduled_reports WHERE id = $1 RETURNING *`, [id]);
 
-    if (!result || result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Scheduled report ${id} not found`);
     }
 
@@ -337,17 +340,18 @@ export class ScheduledReportsService {
 
     // First verify the schedule exists
     const schedule = await this.getSchedule(tenantDb, scheduleId);
-    
+
     const result = await tenantDb.query(
       `UPDATE scheduled_reports SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *`,
       [scheduleId],
     );
 
-    if (!result || result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Scheduled report ${scheduleId} not found`);
     }
 
-    return result[0];
+    return row;
   }
 
   /**
@@ -364,7 +368,7 @@ export class ScheduledReportsService {
       [nextRun, scheduleId],
     );
 
-    return result[0];
+    return firstReturningRow(result);
   }
 
   /**

@@ -1,6 +1,7 @@
 import './src/i18n';
 import React, { useEffect } from 'react';
-import { View, StyleSheet, StatusBar, Text } from 'react-native';
+import { View, StyleSheet, StatusBar, Text, LogBox } from 'react-native';
+LogBox.ignoreAllLogs(true);
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

@@ -81,8 +81,10 @@ export const MessagesService = {
   unreadCount: () =>
     api.get<{ count: number }>('/messages/unread-count').then(r => r.data.count),
 
+  // The backend's message row requires `message_text` (NOT NULL) — the DTO's
+  // `body` field is the caller-facing name, mapped here at the boundary.
   send: (dto: SendMessageDto) =>
-    api.post<ApiMessage>('/messages', dto).then(r => r.data),
+    api.post<ApiMessage>('/messages', { ...dto, message_text: dto.body }).then(r => r.data),
 
   markRead: (id: string) =>
     api.put<void>(`/messages/${id}/read`, {}).then(r => r.data),

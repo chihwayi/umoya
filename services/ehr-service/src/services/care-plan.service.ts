@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class CarePlanService {
@@ -132,7 +133,8 @@ export class CarePlanService {
       values,
     );
 
-    return result[0];
+    const row = firstReturningRow(result);
+    return row;
   }
 
   async getCarePlans(patientId: string, filters: any, tenantDb: DataSource) {
@@ -194,7 +196,8 @@ export class CarePlanService {
     this.ensureTenantDb(tenantDb);
 
     const result = await tenantDb.query(`DELETE FROM care_plans WHERE id = $1 RETURNING *`, [planId]);
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Care plan not found');
     }
 
@@ -209,11 +212,12 @@ export class CarePlanService {
       [planId],
     );
 
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Care plan not found');
     }
 
-    return result[0];
+    return row;
   }
 
   async activateCarePlan(planId: string, tenantDb: DataSource) {
@@ -323,7 +327,8 @@ export class CarePlanService {
       values,
     );
 
-    return result[0];
+    const row = firstReturningRow(result);
+    return row;
   }
 
   async getGoals(planId: string, tenantDb: DataSource) {
@@ -339,7 +344,8 @@ export class CarePlanService {
     this.ensureTenantDb(tenantDb);
 
     const result = await tenantDb.query(`DELETE FROM care_plan_goals WHERE id = $1 RETURNING *`, [goalId]);
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Goal not found');
     }
 
@@ -458,7 +464,8 @@ export class CarePlanService {
       values,
     );
 
-    return result[0];
+    const row = firstReturningRow(result);
+    return row;
   }
 
   async getInterventions(planId: string, tenantDb: DataSource) {
@@ -477,7 +484,8 @@ export class CarePlanService {
       `DELETE FROM care_plan_interventions WHERE id = $1 RETURNING *`,
       [interventionId],
     );
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Intervention not found');
     }
 

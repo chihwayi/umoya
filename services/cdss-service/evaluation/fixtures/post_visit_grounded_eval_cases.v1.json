@@ -7,13 +7,22 @@
       "id": "pv-001",
       "query": "When should I return after discharge for uncontrolled blood sugars?",
       "expected": {
-        "relevant_citation_ids": ["diabetes-follow-up-window"],
-        "supporting_citation_ids": ["diabetes-follow-up-window"],
+        "relevant_citation_ids": [
+          "diabetes-follow-up-window"
+        ],
+        "supporting_citation_ids": [
+          "diabetes-follow-up-window"
+        ],
         "requires_citation_support": true,
         "should_abstain": false
       },
       "prediction": {
-        "citations": [{ "id": "diabetes-follow-up-window", "title": "Diabetes follow-up timing guidance" }],
+        "citations": [
+          {
+            "id": "diabetes-follow-up-window",
+            "title": "Diabetes follow-up timing guidance"
+          }
+        ],
         "abstained": false,
         "clinical_recommendation": {
           "text": "Return within the documented follow-up window and seek urgent review if red-flag symptoms develop."
@@ -33,6 +42,121 @@
         "abstained": true,
         "clinical_recommendation": {
           "text": "Escalate to a clinician because medication changes require review of the discharge plan."
+        }
+      }
+    },
+    {
+      "id": "pv-eng-001",
+      "subgroup": "pediatric",
+      "query": "[placeholder] wound care after discharge guidance query for pediatric case pv-eng-001",
+      "expected": {
+        "relevant_citation_ids": [
+          "wound-care-follow-up"
+        ],
+        "supporting_citation_ids": [
+          "wound-care-follow-up"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "wound-care-follow-up",
+            "title": "wound care after discharge guidance (wound-care-follow-up)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Follow the documented wound care after discharge guidance for this presentation."
+        }
+      }
+    },
+    {
+      "id": "pv-eng-002",
+      "subgroup": "adult",
+      "query": "[placeholder] Incomplete fever after surgery presentation for adult case pv-eng-002 (missing vitals/history)",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
+        }
+      }
+    },
+    {
+      "id": "pv-eng-003",
+      "subgroup": "elderly",
+      "query": "[placeholder] Ambiguous medication interaction question presentation for elderly case pv-eng-003",
+      "expected": {
+        "relevant_citation_ids": [
+          "post-visit-med-interaction-guidance"
+        ],
+        "supporting_citation_ids": [
+          "post-visit-med-interaction-guidance"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "post-visit-med-interaction-guidance-adjacent",
+            "title": "medication interaction question adjacent guidance (post-visit-med-interaction-guidance-adjacent)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Consider the adjacent medication interaction question pathway pending further evaluation."
+        }
+      }
+    },
+    {
+      "id": "pv-eng-004",
+      "subgroup": "maternity",
+      "query": "[placeholder] follow-up lab timing guidance query for maternity case pv-eng-004",
+      "expected": {
+        "relevant_citation_ids": [
+          "post-visit-lab-follow-up-window"
+        ],
+        "supporting_citation_ids": [
+          "post-visit-lab-follow-up-window"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "post-visit-lab-follow-up-window",
+            "title": "follow-up lab timing guidance (post-visit-lab-follow-up-window)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Follow the documented follow-up lab timing guidance for this presentation."
+        }
+      }
+    },
+    {
+      "id": "pv-eng-005",
+      "subgroup": "general",
+      "query": "[placeholder] Incomplete activity restriction duration presentation for general case pv-eng-005 (missing vitals/history)",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
         }
       }
     }

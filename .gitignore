@@ -157,3 +157,6 @@ test-results/
 feedback
 amazon
 ci-errors.txt
+
+# Database backups contain real patient PHI — never committed.
+/backups/

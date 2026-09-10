@@ -2,12 +2,18 @@ import { Controller, Get, Post, Body, Param, Query, UseGuards, Request } from '@
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { ReportsService } from '../services/reports.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
+// A-004/MOAS-20: this controller mixes clinical reports (legitimately
+// readable by any clinical staff role) with one financial report — only the
+// latter gets a role restriction; the rest are intentionally left open to
+// any authenticated staff member, same as before.
 @ApiTags('Reports & Analytics')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('reports')
 export class ReportsController {
   constructor(private reportsService: ReportsService) {}
@@ -22,6 +28,7 @@ export class ReportsController {
   @Get('financial')
   @ApiOperation({ summary: 'Generate financial reports' })
   @ApiResponse({ status: 200, description: 'Financial report generated' })
+  @Roles('accounts', 'nurse_accounts')
   async getFinancialReport(@Query() query: any, @Request() req: RequestWithTenant) {
     return this.reportsService.getFinancialReport(query, req.tenantDb);
   }

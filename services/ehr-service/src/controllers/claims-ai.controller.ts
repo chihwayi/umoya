@@ -1,13 +1,17 @@
 import { Controller, Post, Patch, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { ClaimsAiService, ClaimPayload } from '../services/claims-ai.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
+// A-004/MOAS-20: same claims/billing domain as claims.controller.ts.
 @ApiTags('Claims AI')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('accounts', 'nurse_accounts')
 @Controller('claims')
 export class ClaimsAiController {
   constructor(private readonly claimsAiService: ClaimsAiService) {}

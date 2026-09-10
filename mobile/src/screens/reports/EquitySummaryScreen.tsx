@@ -3,35 +3,30 @@ import {
   View, Text, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { C, FONT, RADIUS } from '../../design/tokens';
-import { PeriodSelector, Period } from '../../components/reports/PeriodSelector';
 
-interface DistrictRow {
-  district: string;
-  coverage_pct: number;
-  female_pct?: number;
-  male_pct?: number;
-}
-
-interface EquityData {
-  gender_gap_pct: number;
-  rural_coverage_pct: number;
-  urban_coverage_pct: number;
-  by_district: DistrictRow[];
+interface EquityGroup {
+  kpi: string;
+  dimension: string;
+  values: { label: string; rate: number }[];
+  equity_ratio: number | null;
 }
 
 export default function EquitySummaryScreen() {
-  const [period, setPeriod] = useState<Period>('month');
-  const [data, setData] = useState<EquityData | null>(null);
+  const tenant = useAuthStore(st => st.tenant);
+  const [groups, setGroups] = useState<EquityGroup[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!tenant?.slug) { setLoading(false); return; }
     setLoading(true);
-    api.get(`/equity-analytics/dashboard?period=${period}`)
-      .then((d: any) => setData(d.data ?? d))
+    const period = new Date().toISOString().slice(0, 7).replace('-', '');
+    api.get(`/tenants/${tenant.slug}/equity/summary?period=${period}`)
+      .then((d: any) => setGroups((d.data ?? d) ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [tenant?.slug]);
 
   if (loading) {
     return (
@@ -41,53 +36,55 @@ export default function EquitySummaryScreen() {
     );
   }
 
-  const districts = data?.by_district ?? [];
-
   return (
     <ScrollView style={s.container} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-      <PeriodSelector value={period} onChange={setPeriod} />
+      <Text style={s.monthLabel}>{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</Text>
 
-      <View style={s.cards}>
-        <MetricCard label="Gender Gap" value={data?.gender_gap_pct != null ? `${data.gender_gap_pct.toFixed(1)}%` : '—'} color={C.blue} />
-        <MetricCard label="Rural" value={data?.rural_coverage_pct != null ? `${data.rural_coverage_pct.toFixed(0)}%` : '—'} color={C.amber} />
-        <MetricCard label="Urban" value={data?.urban_coverage_pct != null ? `${data.urban_coverage_pct.toFixed(0)}%` : '—'} color={C.teal} />
-      </View>
-
-      {districts.length > 0 && (
-        <>
-          <Text style={s.sectionTitle}>Coverage by District</Text>
-          {districts.map((d, i) => (
-            <View key={i} style={s.row}>
-              <Text style={s.district}>{d.district}</Text>
-              <View style={s.barWrap}>
-                <View style={[s.barFill, { width: `${Math.min(d.coverage_pct ?? 0, 100)}%` as any }]} />
-              </View>
-              <Text style={s.pct}>{d.coverage_pct != null ? `${d.coverage_pct.toFixed(0)}%` : '—'}</Text>
+      {groups.length === 0 ? (
+        <Text style={s.empty}>
+          No equity KPI data computed for this period yet. Data populates when a KPI is viewed
+          via the disaggregate breakdown at least once.
+        </Text>
+      ) : (
+        groups.map((g, i) => (
+          <View key={i} style={s.groupCard}>
+            <View style={s.groupHeader}>
+              <Text style={s.kpiName}>{g.kpi.replace(/_/g, ' ')}</Text>
+              <Text style={s.dimension}>by {g.dimension.replace(/_/g, ' ')}</Text>
             </View>
-          ))}
-        </>
+            {g.equity_ratio != null && (
+              <Text style={[s.ratio, { color: g.equity_ratio >= 0.8 ? C.green : C.coral }]}>
+                Equity ratio: {g.equity_ratio.toFixed(2)}
+              </Text>
+            )}
+            {g.values.map((v, vi) => (
+              <View key={vi} style={s.row}>
+                <Text style={s.district}>{v.label}</Text>
+                <View style={s.barWrap}>
+                  <View style={[s.barFill, { width: `${Math.min(v.rate * 100, 100)}%` as any }]} />
+                </View>
+                <Text style={s.pct}>{(v.rate * 100).toFixed(0)}%</Text>
+              </View>
+            ))}
+          </View>
+        ))
       )}
     </ScrollView>
   );
 }
 
-const MetricCard: React.FC<{ label: string; value: string; color: string }> = ({ label, value, color }) => (
-  <View style={[s.card, { borderTopColor: color }]}>
-    <Text style={[s.cardValue, { color }]}>{value}</Text>
-    <Text style={s.cardLabel}>{label}</Text>
-  </View>
-);
-
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg },
-  cards: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  card: { flex: 1, backgroundColor: C.surface, borderRadius: RADIUS.md, padding: 12, borderTopWidth: 3, alignItems: 'center' },
-  cardValue: { fontFamily: FONT.uiBd, fontSize: 20 },
-  cardLabel: { fontFamily: FONT.uiMd, fontSize: 11, color: C.textSecondary, marginTop: 2, textAlign: 'center' },
-  sectionTitle: { fontFamily: FONT.uiSb, fontSize: 14, color: C.textSecondary, marginBottom: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  district: { fontFamily: FONT.ui, fontSize: 13, color: C.text, width: 90 },
+  monthLabel: { fontFamily: FONT.uiSb, fontSize: 13, color: C.textMuted, marginBottom: 14 },
+  empty: { fontFamily: FONT.ui, fontSize: 13, color: C.textSecondary, textAlign: 'center', marginTop: 40, lineHeight: 19 },
+  groupCard: { backgroundColor: C.surface, borderRadius: RADIUS.md, padding: 14, marginBottom: 14 },
+  groupHeader: { marginBottom: 6 },
+  kpiName: { fontFamily: FONT.uiSb, fontSize: 14, color: C.text, textTransform: 'capitalize' },
+  dimension: { fontFamily: FONT.ui, fontSize: 11, color: C.textMuted, textTransform: 'capitalize' },
+  ratio: { fontFamily: FONT.uiMd, fontSize: 12, marginBottom: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  district: { fontFamily: FONT.ui, fontSize: 12, color: C.text, width: 90 },
   barWrap: { flex: 1, height: 10, backgroundColor: C.surface2, borderRadius: RADIUS.pill, overflow: 'hidden', marginHorizontal: 10 },
   barFill: { height: '100%', backgroundColor: C.teal, borderRadius: RADIUS.pill },
   pct: { fontFamily: FONT.uiSb, fontSize: 12, color: C.text, width: 38, textAlign: 'right' },

@@ -3,32 +3,34 @@ import {
   View, Text, FlatList, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { api } from '../../services/api';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { C, FONT, RADIUS } from '../../design/tokens';
 import { Icon } from '../../components/ui/Icon';
 
-interface ModelSummary {
-  model_name: string;
-  task_type: string;
-  version?: string;
-  drift_detected: boolean;
-  last_calibration_at: string | null;
-  fairness_score: number | null;
-  status: string;
+interface ModelCard {
+  modelName: string;
+  modelFamily: string;
+  currentVersion: string | null;
+  deploymentStage: string;
+  lastReviewedAt: string | null;
+  governanceSummary?: { driftDetected?: boolean; fairnessScore?: number };
 }
 
 export default function AiGovernanceMobileScreen() {
-  const [models, setModels] = useState<ModelSummary[]>([]);
+  const tenant = useAuthStore(st => st.tenant);
+  const [models, setModels] = useState<ModelCard[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/model-registry/summary')
-      .then((d: any) => setModels(d.data ?? d ?? []))
+    if (!tenant?.slug) { setLoading(false); return; }
+    api.get(`/model-registry/cards?subdomain=${tenant.slug}`)
+      .then((d: any) => setModels((d.data ?? d) ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [tenant?.slug]);
 
-  const driftCount = models.filter(m => m.drift_detected).length;
-  const activeCount = models.filter(m => m.status === 'active').length;
+  const driftCount = models.filter(m => m.governanceSummary?.driftDetected).length;
+  const productionCount = models.filter(m => m.deploymentStage === 'production').length;
 
   if (loading) {
     return (
@@ -41,7 +43,7 @@ export default function AiGovernanceMobileScreen() {
   return (
     <View style={s.container}>
       <View style={s.summaryRow}>
-        <SummaryChip label="Active Models" value={activeCount} color={C.green}  />
+        <SummaryChip label="In Production" value={productionCount} color={C.green}  />
         <SummaryChip label="Drift Detected" value={driftCount} color={C.coral}  />
         <SummaryChip label="Total Models"   value={models.length} color={C.blue} />
       </View>
@@ -54,37 +56,40 @@ export default function AiGovernanceMobileScreen() {
       ) : (
         <FlatList
           data={models}
-          keyExtractor={(_, i) => String(i)}
+          keyExtractor={(item, i) => item.modelName ?? String(i)}
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
-          renderItem={({ item }) => (
-            <View style={[s.card, item.drift_detected && s.cardDrift]}>
-              <View style={s.cardTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.modelName} numberOfLines={1}>{item.model_name}</Text>
-                  <Text style={s.taskType}>{item.task_type}{item.version ? ` v${item.version}` : ''}</Text>
+          renderItem={({ item }) => {
+            const drift = item.governanceSummary?.driftDetected ?? false;
+            return (
+              <View style={[s.card, drift && s.cardDrift]}>
+                <View style={s.cardTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.modelName} numberOfLines={1}>{item.modelName}</Text>
+                    <Text style={s.taskType}>{item.modelFamily}{item.currentVersion ? ` v${item.currentVersion}` : ''}</Text>
+                  </View>
+                  <View style={s.statusCol}>
+                    {drift
+                      ? <Icon name="alert" size={16} color={C.coral} />
+                      : <Icon name="check" size={16} color={C.green} />
+                    }
+                    <Text style={[s.statusText, { color: item.deploymentStage === 'production' ? C.green : C.textMuted }]}>
+                      {item.deploymentStage?.toUpperCase()}
+                    </Text>
+                  </View>
                 </View>
-                <View style={s.statusCol}>
-                  {item.drift_detected
-                    ? <Icon name="alert" size={16} color={C.coral} />
-                    : <Icon name="check-circle" size={16} color={C.green} />
-                  }
-                  <Text style={[s.statusText, { color: item.status === 'active' ? C.green : C.textMuted }]}>
-                    {item.status?.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-              <View style={s.metaRow}>
-                <Text style={s.meta}>
-                  Fairness: {item.fairness_score != null ? item.fairness_score.toFixed(2) : '—'}
-                </Text>
-                {item.last_calibration_at && (
+                <View style={s.metaRow}>
                   <Text style={s.meta}>
-                    Calibrated: {new Date(item.last_calibration_at).toLocaleDateString()}
+                    Fairness: {item.governanceSummary?.fairnessScore != null ? item.governanceSummary.fairnessScore.toFixed(2) : '—'}
                   </Text>
-                )}
+                  {item.lastReviewedAt && (
+                    <Text style={s.meta}>
+                      Reviewed: {new Date(item.lastReviewedAt).toLocaleDateString()}
+                    </Text>
+                  )}
+                </View>
               </View>
-            </View>
-          )}
+            );
+          }}
         />
       )}
     </View>

@@ -7,13 +7,22 @@
       "id": "rad-001",
       "query": "CT head order for suspected stroke within thrombolysis window",
       "expected": {
-        "relevant_citation_ids": ["stroke-ct-head-appropriateness"],
-        "supporting_citation_ids": ["stroke-ct-head-appropriateness"],
+        "relevant_citation_ids": [
+          "stroke-ct-head-appropriateness"
+        ],
+        "supporting_citation_ids": [
+          "stroke-ct-head-appropriateness"
+        ],
         "requires_citation_support": true,
         "should_abstain": false
       },
       "prediction": {
-        "citations": [{ "id": "stroke-ct-head-appropriateness", "title": "Stroke CT head appropriateness" }],
+        "citations": [
+          {
+            "id": "stroke-ct-head-appropriateness",
+            "title": "Stroke CT head appropriateness"
+          }
+        ],
         "abstained": false,
         "clinical_recommendation": {
           "text": "Proceed with urgent non-contrast CT head and prioritize rapid interpretation."
@@ -33,6 +42,121 @@
         "abstained": true,
         "clinical_recommendation": {
           "text": "Request radiologist review because the imaging characteristics are not available."
+        }
+      }
+    },
+    {
+      "id": "rad-eng-001",
+      "subgroup": "pediatric",
+      "query": "[placeholder] chest X-ray for suspected pneumonia guidance query for pediatric case rad-eng-001",
+      "expected": {
+        "relevant_citation_ids": [
+          "cap-cxr-appropriateness"
+        ],
+        "supporting_citation_ids": [
+          "cap-cxr-appropriateness"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "cap-cxr-appropriateness",
+            "title": "chest X-ray for suspected pneumonia guidance (cap-cxr-appropriateness)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Follow the documented chest X-ray for suspected pneumonia guidance for this presentation."
+        }
+      }
+    },
+    {
+      "id": "rad-eng-002",
+      "subgroup": "adult",
+      "query": "[placeholder] Incomplete abdominal CT for suspected appendicitis presentation for adult case rad-eng-002 (missing vitals/history)",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
+        }
+      }
+    },
+    {
+      "id": "rad-eng-003",
+      "subgroup": "elderly",
+      "query": "[placeholder] Ambiguous MRI spine for red-flag back pain presentation for elderly case rad-eng-003",
+      "expected": {
+        "relevant_citation_ids": [
+          "back-pain-mri-red-flags"
+        ],
+        "supporting_citation_ids": [
+          "back-pain-mri-red-flags"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "back-pain-mri-red-flags-adjacent",
+            "title": "MRI spine for red-flag back pain adjacent guidance (back-pain-mri-red-flags-adjacent)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Consider the adjacent MRI spine for red-flag back pain pathway pending further evaluation."
+        }
+      }
+    },
+    {
+      "id": "rad-eng-004",
+      "subgroup": "maternity",
+      "query": "[placeholder] ultrasound for suspected DVT guidance query for maternity case rad-eng-004",
+      "expected": {
+        "relevant_citation_ids": [
+          "dvt-ultrasound-appropriateness"
+        ],
+        "supporting_citation_ids": [
+          "dvt-ultrasound-appropriateness"
+        ],
+        "requires_citation_support": true,
+        "should_abstain": false
+      },
+      "prediction": {
+        "citations": [
+          {
+            "id": "dvt-ultrasound-appropriateness",
+            "title": "ultrasound for suspected DVT guidance (dvt-ultrasound-appropriateness)"
+          }
+        ],
+        "abstained": false,
+        "clinical_recommendation": {
+          "text": "Follow the documented ultrasound for suspected DVT guidance for this presentation."
+        }
+      }
+    },
+    {
+      "id": "rad-eng-005",
+      "subgroup": "general",
+      "query": "[placeholder] Incomplete mammogram follow-up interval presentation for general case rad-eng-005 (missing vitals/history)",
+      "expected": {
+        "relevant_citation_ids": [],
+        "requires_citation_support": false,
+        "should_abstain": true
+      },
+      "prediction": {
+        "citations": [],
+        "abstained": true,
+        "clinical_recommendation": {
+          "text": "Escalate to clinician review because the available information is incomplete."
         }
       }
     }

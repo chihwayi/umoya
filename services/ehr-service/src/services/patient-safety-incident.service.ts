@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 // S274 — Patient Safety Incident Reporting & RCA. General-purpose incident register
 // + root-cause-analysis workflow, distinct from the module-specific near-miss tracking
@@ -98,8 +99,9 @@ export class PatientSafetyIncidentService {
        WHERE id = $1 AND tenant_id = $2 RETURNING *`,
       [incidentId, tenantId, status],
     );
-    if (!rows[0]) throw new NotFoundException('Incident not found');
-    return rows[0];
+    const incident = firstReturningRow(rows);
+    if (!incident) throw new NotFoundException('Incident not found');
+    return incident;
   }
 
   async startRca(db: any, tenantId: string, incidentId: string, body: any): Promise<any> {
@@ -145,8 +147,9 @@ export class PatientSafetyIncidentService {
       `UPDATE incident_root_cause_analyses SET ${fields.join(', ')} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING *`,
       params,
     );
-    if (!rows[0]) throw new NotFoundException('RCA not found');
-    return rows[0];
+    const rca = firstReturningRow(rows);
+    if (!rca) throw new NotFoundException('RCA not found');
+    return rca;
   }
 
   async addCorrectiveAction(db: any, tenantId: string, incidentId: string, body: any): Promise<any> {
@@ -188,8 +191,9 @@ export class PatientSafetyIncidentService {
       `UPDATE incident_corrective_actions SET ${fields.join(', ')} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING *`,
       params,
     );
-    if (!rows[0]) throw new NotFoundException('Corrective action not found');
-    return rows[0];
+    const action = firstReturningRow(rows);
+    if (!action) throw new NotFoundException('Corrective action not found');
+    return action;
   }
 
   async closeIncident(db: any, tenantId: string, incidentId: string): Promise<any> {

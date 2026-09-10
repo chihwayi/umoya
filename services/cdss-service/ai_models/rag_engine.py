@@ -265,7 +265,7 @@ class RAGEngine:
             filt_str = "nofilter" if not filters else json.dumps(filters, sort_keys=True)
             base = f"{safe_query}|{filt_str}|n{n_results}"
             tenant_key = self._normalize_tenant_key(tenant_id)
-            cache_key = f"rag:query:{tenant_key}:{hashlib.md5(base.encode()).hexdigest()}"
+            cache_key = f"rag:query:{tenant_key}:{hashlib.md5(base.encode(), usedforsecurity=False).hexdigest()}"
             if self.redis_client:
                 try:
                     cached_results = self.redis_client.get(cache_key)
@@ -469,7 +469,7 @@ class RAGEngine:
         try:
             embedding = self.embedding_model.encode([text]).tolist()
             # Use stable hash (MD5) instead of Python's hash() which is randomized per process
-            text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+            text_hash = hashlib.md5(text.encode('utf-8'), usedforsecurity=False).hexdigest()
             doc_id = f"{source}_{page}_{text_hash}"
             
             self.collection.add(

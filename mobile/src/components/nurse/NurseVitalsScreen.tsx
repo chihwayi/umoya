@@ -396,14 +396,6 @@ export const NurseVitalsScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Bluetooth import (future) */}
-        <TouchableOpacity style={styles.bluetoothBtn} activeOpacity={0.8}
-          onPress={() => {}}>
-          <Icon name="trending" size={14} color={C.blue} />
-          <Text style={styles.bluetoothBtnText}>Import from Device</Text>
-          <Badge color={C.blue} size="xs">S115</Badge>
-        </TouchableOpacity>
-
         {/* Vitals grid */}
         <View>
           <SectionHeader>{filledCount > 0 ? `${filledCount} of ${VITAL_FIELDS.length} entered` : 'Enter Vitals'}</SectionHeader>

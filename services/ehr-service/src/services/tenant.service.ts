@@ -127,6 +127,7 @@ import { PostVisitCompanionThread } from '../entities/post-visit-companion-threa
 import { PostVisitCompanionMessage } from '../entities/post-visit-companion-message.entity';
 import { PostVisitEscalationEvent } from '../entities/post-visit-escalation-event.entity';
 import { PostVisitCompanionAcknowledgement } from '../entities/post-visit-companion-acknowledgement.entity';
+import { PatientMessage } from '../entities/patient-message.entity';
 import { SymptomCheckerSession } from '../entities/symptom-checker-session.entity';
 import { AdherenceChatLog } from '../entities/adherence-chat-log.entity';
 import { PatientAiSession } from '../entities/patient-ai-session.entity';
@@ -390,6 +391,8 @@ import { NcidRegistration } from '../entities/ncid-registration.entity';
 import { NcidDuplicateFlag } from '../entities/ncid-duplicate-flag.entity';
 import { NcidProgrammeLinkage } from '../entities/ncid-programme-linkage.entity';
 import { Dhis2ProgrammeSubscription } from '../entities/dhis2-programme-subscription.entity';
+import { MohccReportSubmission } from '../entities/mohcc-report-submission.entity';
+import { OpenMrsMigrationLog } from '../entities/openmrs-migration-log.entity';
 
 export interface TenantDhis2Config {
   tenantId: string;
@@ -503,6 +506,69 @@ export class TenantService {
       };
     } catch (error) {
       this.logger.warn(`Failed to load tenant security policy for ${tenantIdentifier}: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  }
+
+  /**
+   * B-012/MOAS-16: readiness-probe dependency check. The master `tenants`
+   * registry DB is this service's one hard, always-required dependency —
+   * every request needs it to resolve a tenant connection — so a failure
+   * here is the truthful signal that this instance is not ready to serve
+   * traffic, unlike liveness (which only proves the process is running).
+   */
+  async pingMasterDb(): Promise<boolean> {
+    try {
+      await this.masterDb.query('SELECT 1');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * A-B003/MOAS-15: real per-tenant clinic/organization metadata (from the
+   * master `tenants` table) for the FHIR Location/Organization resources,
+   * which previously returned a hardcoded "Umoya Clinic"/"Umoya Solutions"
+   * placeholder for every tenant regardless of which clinic was actually
+   * asking.
+   */
+  async getTenantMetadata(tenantIdentifier: string): Promise<{
+    id: string;
+    subdomain: string;
+    clinicName: string;
+    address: string | null;
+    city: string | null;
+    country: string | null;
+    contactEmail: string | null;
+    contactPhone: string | null;
+  } | null> {
+    try {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantIdentifier);
+      const tenantFilter = isUUID ? 'id = $1' : 'subdomain = $1';
+      const rows = await this.masterDb.query(
+        `
+          SELECT id, subdomain, "clinicName", address, city, country, "contactEmail", "contactPhone"
+          FROM tenants
+          WHERE ${tenantFilter}
+          LIMIT 1
+        `,
+        [tenantIdentifier],
+      );
+      const row = rows?.[0];
+      if (!row) return null;
+      return {
+        id: row.id,
+        subdomain: row.subdomain,
+        clinicName: row.clinicName,
+        address: row.address || null,
+        city: row.city || null,
+        country: row.country || null,
+        contactEmail: row.contactEmail || null,
+        contactPhone: row.contactPhone || null,
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to load tenant metadata for ${tenantIdentifier}: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }
@@ -735,6 +801,7 @@ export class TenantService {
         PostVisitActionExecution,
         PostVisitCompanionThread,
         PostVisitCompanionMessage,
+        PatientMessage,
         PostVisitEscalationEvent,
         PostVisitCompanionAcknowledgement,
         SymptomCheckerSession,
@@ -999,12 +1066,36 @@ export class TenantService {
         NcidDuplicateFlag,
         NcidProgrammeLinkage,
         Dhis2ProgrammeSubscription,
+        MohccReportSubmission,
+        OpenMrsMigrationLog,
       ],
       logging: false,
     });
 
     await dataSource.initialize();
+    patchQueryToFlattenReturning(dataSource);
     return dataSource;
   }
 
+}
+
+/**
+ * TypeORM's raw DataSource.query() returns rows directly for SELECT and
+ * INSERT ... RETURNING, but returns a [rows, affectedRowCount] tuple for
+ * UPDATE/DELETE ... RETURNING. The overwhelming majority of this codebase's
+ * services assume the former shape everywhere, which silently broke every
+ * UPDATE/DELETE ... RETURNING call site (data/CDSS alerts read as undefined,
+ * or NotFound guards that never trip). Rather than patch every call site
+ * individually, normalize at the single choke point where every tenant
+ * DataSource is created: always hand callers flat rows, regardless of
+ * statement type.
+ */
+function patchQueryToFlattenReturning(dataSource: DataSource): void {
+  const originalQuery = dataSource.query.bind(dataSource);
+  dataSource.query = (async (...args: Parameters<typeof originalQuery>) => {
+    const result = await originalQuery(...args);
+    return Array.isArray(result) && Array.isArray(result[0]) && (typeof result[1] === 'number' || result[1] === undefined)
+      ? result[0]
+      : result;
+  }) as typeof dataSource.query;
 }

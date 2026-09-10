@@ -126,7 +126,7 @@ export class CdssHookService {
 
   async handlePrescriptionCreated(payload: PrescriptionHookPayload) {
     try {
-      const { tenantDb, prescription } = payload;
+      const { tenantDb, prescription, tenantId } = payload;
       const patientId = prescription.patient_id ?? prescription.patientId;
       const { age, gender } = await this.getPatientContext(tenantDb, patientId);
 
@@ -156,7 +156,7 @@ export class CdssHookService {
       );
 
       const [interactions, highRisk, duplicates] = await Promise.all([
-        this.cdssService.checkDrugInteractions(medNamesForInteractions, patientId).catch((error) => {
+        this.cdssService.checkDrugInteractions(medNamesForInteractions, patientId, tenantDb, tenantId).catch((error) => {
           this.logger.warn(`CDSS interaction hook failed: ${error?.message || error}`);
           return null;
         }),
@@ -168,6 +168,9 @@ export class CdssHookService {
             })),
             age,
             gender,
+            undefined,
+            undefined,
+            tenantId,
           )
           .catch((error) => {
             this.logger.warn(`CDSS high-risk hook failed: ${error?.message || error}`);
@@ -179,6 +182,8 @@ export class CdssHookService {
               name: entry.name,
               conceptId: entry.conceptId,
             })),
+            undefined,
+            tenantId,
           )
           .catch((error) => {
             this.logger.warn(`CDSS duplicate therapy hook failed: ${error?.message || error}`);

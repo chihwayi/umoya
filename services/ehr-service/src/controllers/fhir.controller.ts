@@ -876,7 +876,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.searchLocations(query, tenantDb);
+    return this.fhirService.searchLocations(query, tenantDb, tenantId);
   }
 
   @Get('Location/:id')
@@ -893,7 +893,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.getLocation(id, tenantDb);
+    return this.fhirService.getLocation(id, tenantDb, tenantId);
   }
 
   @Get('Organization')
@@ -910,7 +910,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.searchOrganizations(query, tenantDb);
+    return this.fhirService.searchOrganizations(query, tenantDb, tenantId);
   }
 
   @Get('Organization/:id')
@@ -927,7 +927,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.getOrganization(id, tenantDb);
+    return this.fhirService.getOrganization(id, tenantDb, tenantId);
   }
 
   @Get('Practitioner')
@@ -996,6 +996,40 @@ export class FhirController {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
     return this.fhirService.getPractitionerRole(id, tenantDb);
+  }
+
+  @Get('ImagingStudy')
+  @ApiOperation({ summary: 'Search FHIR imaging studies' })
+  @ApiResponse({ status: 200, description: 'FHIR imaging study bundle' })
+  async searchImagingStudies(
+    @Query() query: any,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.searchImagingStudies(query, tenantDb, tenantId);
+  }
+
+  @Get('ImagingStudy/:id')
+  @ApiOperation({ summary: 'Get FHIR imaging study by ID' })
+  @ApiResponse({ status: 200, description: 'FHIR imaging study resource' })
+  async getImagingStudy(
+    @Param('id') id: string,
+    @Headers('x-tenant-id') tenantId: string
+  ) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required in X-Tenant-ID header');
+    }
+    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
+    if (!tenantDb) {
+      throw new Error(`Invalid tenant: ${tenantId}`);
+    }
+    return this.fhirService.getImagingStudy(id, tenantDb, tenantId);
   }
 
   @Get('CarePlan')

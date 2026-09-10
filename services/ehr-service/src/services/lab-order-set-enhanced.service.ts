@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class LabOrderSetEnhancedService {
@@ -143,12 +144,13 @@ export class LabOrderSetEnhancedService {
       [id],
     );
 
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Order set with ID ${id} not found`);
     }
 
     this.logger.log(`Deleted order set: ${id}`);
-    return result[0];
+    return row;
   }
 
   async addTestToOrderSet(

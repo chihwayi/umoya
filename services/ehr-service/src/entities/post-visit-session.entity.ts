@@ -75,6 +75,9 @@ export class PostVisitSession {
   @Column({ name: 'recording_storage_key', type: 'varchar', length: 500, nullable: true })
   recordingStorageKey: string | null;
 
+  @Column({ name: 'ambient_session_id', type: 'varchar', length: 100, nullable: true })
+  ambientSessionId: string | null;
+
   @Column({ name: 'recording_bucket', type: 'varchar', length: 120, nullable: true, default: 'post-visit-recordings' })
   recordingBucket: string | null;
 

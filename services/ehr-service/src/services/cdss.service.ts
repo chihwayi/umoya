@@ -644,7 +644,7 @@ export class CdssService {
    * Check drug interactions using Python CDSS service
    * Falls back to basic checking if CDSS service unavailable
    */
-  async checkDrugInteractions(drugIds: string[], patientId?: string, tenantDb?: DataSource) {
+  async checkDrugInteractions(drugIds: string[], patientId?: string, tenantDb?: DataSource, tenantId?: string) {
     try {
       // Fetch drug data from database to send to CDSS service
       let drugsData: any[] = [];
@@ -678,6 +678,7 @@ export class CdssService {
         drugs_data: drugsData.length > 0 ? drugsData : undefined,
         },
         15000,
+        tenantId,
       );
 
       return {
@@ -694,30 +695,103 @@ export class CdssService {
     }
   }
 
+  /**
+   * Resolve a free-text medication name to its catalogued ingredient
+   * identity (genericName/drugClass from the `drugs` table, which is the
+   * closest thing this system has to an RxNorm/ATC ingredient key) so that
+   * brand names (e.g. "Coumadin") are checked for interactions under the
+   * same ingredient key as their generic ("warfarin"), instead of two
+   * unrelated strings that a naive name match would never connect.
+   */
+  private resolveMedicationIdentity(
+    name: string,
+    catalog: Array<{ genericName: string; brandNames: string[] | null; drugClass: string | null }>,
+  ): { inputName: string; genericName: string; drugClass: string | null; resolved: boolean } {
+    const normalized = (name || '').toLowerCase().trim();
+    for (const drug of catalog) {
+      const generic = (drug.genericName || '').toLowerCase().trim();
+      if (generic && (normalized === generic || normalized.includes(generic) || generic.includes(normalized))) {
+        return { inputName: name, genericName: drug.genericName, drugClass: drug.drugClass, resolved: true };
+      }
+      const brandHit = (drug.brandNames || []).some((b) => {
+        const brand = (b || '').toLowerCase().trim();
+        return brand && (normalized === brand || normalized.includes(brand) || brand.includes(normalized));
+      });
+      if (brandHit) {
+        return { inputName: name, genericName: drug.genericName, drugClass: drug.drugClass, resolved: true };
+      }
+    }
+    // Unresolved (uncoded legacy/free-text name): fall back to the raw name
+    // as its own key, but flag it so callers know this pair was NOT checked
+    // against a verified ingredient identity — never silently treat it as
+    // "checked and clear".
+    return { inputName: name, genericName: normalized, drugClass: null, resolved: false };
+  }
+
   async checkDrugInteractionsAdvanced(params: {
     patientId: string;
     newDrug: string;
     currentMedications: string[];
     allergies: string[];
-  }): Promise<{ interactions: Array<{ severity: string; severity_score: number; interactingDrug: string; clinical_significance: string; [key: string]: any }> }> {
+    tenantDb?: DataSource;
+    tenantId?: string;
+  }): Promise<{
+    interactions: Array<{ severity: string; clinical_significance: number; interactingDrug: string; [key: string]: any }>;
+    uncodedMedications: string[];
+    reviewRequired: boolean;
+  }> {
+    const allNames = [params.newDrug, ...(params.currentMedications || [])].filter(Boolean);
+
+    let catalog: Array<{ genericName: string; brandNames: string[] | null; drugClass: string | null }> = [];
+    if (params.tenantDb) {
+      try {
+        const { Drug } = await import('../entities/drug.entity');
+        catalog = await params.tenantDb.getRepository(Drug).find({ where: { isActive: true } }) as any;
+      } catch (err: any) {
+        this.logger.warn(`Failed to load drug catalog for interaction resolution: ${err.message}`);
+      }
+    }
+
+    const resolved = allNames.map((name) => this.resolveMedicationIdentity(name, catalog));
+    const uncodedMedications = resolved.filter((r) => !r.resolved).map((r) => r.inputName);
+
+    if (allNames.length < 2) {
+      return { interactions: [], uncodedMedications, reviewRequired: uncodedMedications.length > 0 };
+    }
+
     try {
+      const drugsData = resolved.map((r, idx) => ({
+        id: `med-${idx}`,
+        name: r.inputName,
+        genericName: r.genericName,
+        drugClass: r.drugClass,
+      }));
+
       const responseData = await this.postWithPolicy<any>(
         'drug_interactions_advanced',
         '/drugs/interactions/advanced',
         {
+          drug_ids: drugsData.map((d) => d.id),
           patient_id: params.patientId,
-          new_drug: params.newDrug,
-          current_medications: params.currentMedications,
-          allergies: params.allergies,
+          drugs_data: drugsData,
         },
         15000,
+        params.tenantId,
       );
-      return {
-        interactions: responseData.interactions || [],
-      };
+
+      const newDrugKey = resolved[0].genericName;
+      const interactions = (responseData.interactions || []).map((i: any) => ({
+        ...i,
+        interactingDrug: (i.drug1 || '').toLowerCase().includes(newDrugKey) ? i.drug2 : i.drug1,
+      }));
+
+      return { interactions, uncodedMedications, reviewRequired: uncodedMedications.length > 0 };
     } catch (error: any) {
       this.logger.warn(`checkDrugInteractionsAdvanced failed: ${error.message}`);
-      return { interactions: [] };
+      // Uncoded/unreachable is a "we could not verify" state, not "verified
+      // clear" — always surface reviewRequired here rather than returning a
+      // silently-empty, falsely-reassuring interaction list.
+      return { interactions: [], uncodedMedications, reviewRequired: true };
     }
   }
 
@@ -1197,7 +1271,7 @@ export class CdssService {
    * Get clinical guidelines from Python CDSS service
    * Now integrates WHO Smart Guidelines if available
    */
-  async getGuidelines(condition: string, patientData?: any, tenantId?: string, tenantDb?: DataSource) {
+  async getGuidelines(condition: string, patientData?: any, tenantId?: string, tenantDb?: DataSource, diagnosisCode?: string) {
     // Governed CDSS knowledge layer is the primary source.
     try {
       const responseData = await this.postWithPolicy<any>(
@@ -1205,6 +1279,7 @@ export class CdssService {
         '/guidelines/check',
         {
         condition,
+        diagnosis_code: diagnosisCode || null,
         patient_age: patientData?.age,
         patient_gender: patientData?.gender,
         comorbidities: patientData?.comorbidities || patientData?.conditions || [],
@@ -2588,7 +2663,7 @@ export class CdssService {
   /**
    * Detect duplicate therapy
    */
-  async detectDuplicateTherapy(medications: any[], prescriptions?: any[]) {
+  async detectDuplicateTherapy(medications: any[], prescriptions?: any[], tenantId?: string) {
     try {
       const responseData = await this.postWithPolicy<any>(
         'medication_duplicates',
@@ -2598,6 +2673,7 @@ export class CdssService {
         prescriptions: prescriptions || []
         },
         15000,
+        tenantId,
       );
       return responseData;
     } catch (error: any) {
@@ -2697,7 +2773,8 @@ export class CdssService {
     patientAge?: number,
     patientGender?: string,
     diagnoses?: string[],
-    renalFunction?: number
+    renalFunction?: number,
+    tenantId?: string,
   ) {
     try {
       const responseData = await this.postWithPolicy<any>(
@@ -2711,6 +2788,7 @@ export class CdssService {
         renal_function: renalFunction
         },
         15000,
+        tenantId,
       );
       return responseData;
     } catch (error: any) {
@@ -4300,28 +4378,34 @@ export class CdssService {
     };
   }
 
+  // A-007/MOAS-02 follow-up: this used to do its own naive substring match
+  // against free-text patient.allergies (missing the structured allergies
+  // table entirely, and only special-casing penicillin/sulfa by hand) —
+  // a second, weaker allergy-check code path living right next to the
+  // better getAllergyWarnings(), reachable via POST /cdss/allergy-check.
+  // Delegating to getAllergyWarnings keeps this endpoint's response shape
+  // for existing callers while giving it the same structured-allergy +
+  // shared cross-reactivity-dataset logic as every other allergy check.
   async allergyCheck(patientId: string, medication: string, tenantDb: DataSource) {
     const patientRepository = tenantDb.getRepository(Patient);
     const patient = await patientRepository.findOne({ where: { id: patientId } });
-    
+
     if (!patient) {
       throw new Error('Patient not found');
     }
 
-    const allergies = patient.allergies?.toLowerCase() || '';
-    const medicationLower = medication.toLowerCase();
-    
-    const hasAllergy = allergies.includes(medicationLower) || 
-                     allergies.includes('penicillin') && medicationLower.includes('penicillin') ||
-                     allergies.includes('sulfa') && medicationLower.includes('sulfa');
+    const { warnings } = await this.getAllergyWarnings(patientId, [medication], tenantDb);
+    const hasAllergy = warnings.length > 0;
+    const top = warnings[0];
 
     return {
       hasAllergy,
       medication,
       patientAllergies: patient.allergies,
-      recommendation: hasAllergy ? 
-        'CONTRAINDICATED - Patient has known allergy' : 
-        'Safe to prescribe - No known allergies'
+      warnings,
+      recommendation: hasAllergy
+        ? `CONTRAINDICATED - ${top.message}`
+        : 'No known direct or cross-reactive allergy match found for this medication.',
     };
   }
 
@@ -4331,8 +4415,9 @@ export class CdssService {
     tenantDb: DataSource,
   ): Promise<{ warnings: AllergyWarning[]; structuredAllergies: any[] }> {
     const structuredRows = await tenantDb.query(
-      `SELECT id, allergen, severity, reaction, allergy_type, status
-       FROM allergies WHERE patient_id = $1 AND status != 'inactive'`,
+      `SELECT id, allergen, severity, reaction, clinical_status, verification_status
+       FROM allergies
+       WHERE patient_id = $1 AND (clinical_status IS NULL OR clinical_status NOT IN ('resolved', 'inactive', 'entered-in-error'))`,
       [patientId],
     );
 

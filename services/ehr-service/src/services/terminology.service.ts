@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
 import { env } from '@umoya/config';
 import { TerminologyPostgresService } from './terminology-postgres.service';
+import { EclService } from './ecl.service';
 import { getMasterDbConfig } from '../utils/runtime-env';
 
 export interface RxNormConcept {
@@ -77,6 +78,7 @@ export class TerminologyService {
   
   // PostgreSQL-based SNOMED service (primary and only source)
   private postgresService: TerminologyPostgresService;
+  private readonly eclService = new EclService();
   private usePostgres: boolean = process.env.SNOMED_USE_POSTGRES !== 'false'; // Default to true
   private masterDb: DataSource | null = null;
 
@@ -177,6 +179,26 @@ export class TerminologyService {
     try {
       const masterDb = await this.getMasterDb();
       this.logger.debug(`Using PostgreSQL SNOMED search for: "${term}"`);
+
+      // TERM-11: `ecl` used to be accepted and silently ignored. Fetch a
+      // wider text-match candidate pool, evaluate the real ECL constraint,
+      // and intersect — rather than trying to push ECL semantics into the
+      // full-text SQL query itself.
+      if (ecl && ecl.trim()) {
+        const [textResults, eclMatches] = await Promise.all([
+          this.postgresService.searchConcepts(masterDb, term, Math.max(limit * 5, 200), 0, activeOnly),
+          this.eclService.evaluate(masterDb, ecl.trim(), 5000),
+        ]);
+        const eclSet = new Set(eclMatches);
+        const filtered = textResults.concepts.filter((c) => eclSet.has(c.conceptId));
+        return {
+          concepts: filtered.slice(offset, offset + limit),
+          total: filtered.length,
+          limit,
+          offset,
+        };
+      }
+
       return await this.postgresService.searchConcepts(masterDb, term, limit, offset, activeOnly);
     } catch (error: any) {
       this.logger.error(`PostgreSQL SNOMED search failed: ${error.message}`, error.stack);
@@ -189,7 +211,7 @@ export class TerminologyService {
    * @param tenantDb Tenant database connection (for caching, if needed)
    * @param conceptId SNOMED CT concept ID
    */
-  async validateConcept(tenantDb: DataSource, conceptId: string): Promise<SnomedConcept> {
+  async validateConcept(tenantDb: DataSource, conceptId: string, asOfDate?: string): Promise<SnomedConcept & { versionWarning?: string }> {
     if (!conceptId || !/^\d+$/.test(conceptId)) {
       throw new BadRequestException('Invalid SNOMED CT concept ID format');
     }
@@ -200,7 +222,20 @@ export class TerminologyService {
 
     try {
       const masterDb = await this.getMasterDb();
-      return await this.postgresService.validateConcept(masterDb, conceptId);
+      const concept: SnomedConcept & { versionWarning?: string } = await this.postgresService.validateConcept(masterDb, conceptId);
+
+      if (asOfDate) {
+        const requested = new Date(asOfDate);
+        if (Number.isNaN(requested.getTime())) {
+          throw new BadRequestException('asOfDate must be a valid date (YYYY-MM-DD)');
+        }
+        const effectiveTime = await this.postgresService.getConceptEffectiveTime(masterDb, conceptId);
+        if (effectiveTime && effectiveTime > requested) {
+          concept.versionWarning = `This concept's current definition became effective on ${effectiveTime.toISOString().slice(0, 10)}, after the requested asOfDate ${asOfDate} — it may not have existed in this form at that time (Snapshot-based check; full historical revisions are not loaded).`;
+        }
+      }
+
+      return concept;
     } catch (error: any) {
       this.logger.error(`PostgreSQL validateConcept failed: ${error.message}`, error.stack);
       if (error instanceof NotFoundException) {
@@ -224,13 +259,16 @@ export class TerminologyService {
 
     try {
       const masterDb = await this.getMasterDb();
-      const [children, parents] = await Promise.all([
+      const [children, parents, statedParents] = await Promise.all([
         this.postgresService.getChildren(masterDb, conceptId).catch((e: any) => { this.logger.warn(`SNOMED concept children hierarchy query failed: ${e?.message}`); return []; }),
         this.postgresService.getParents(masterDb, conceptId).catch((e: any) => { this.logger.warn(`SNOMED concept parents hierarchy query failed: ${e?.message}`); return []; }),
+        this.postgresService.getStatedParents(masterDb, conceptId).catch((e: any) => { this.logger.warn(`SNOMED concept stated-parents query failed: ${e?.message}`); return []; }),
       ]);
 
       return {
         concept,
+        // children/parents: the INFERRED (classified) hierarchy — what
+        // clinical navigation and CDSS reasoning should use.
         children: children.map((c: any) => ({
           conceptId: c.conceptId,
           term: c.term,
@@ -239,10 +277,19 @@ export class TerminologyService {
           conceptId: c.conceptId,
           term: c.term,
         })),
+        // statedParents (TERM-09): what a terminology author directly
+        // asserted, before the description-logic classifier derived the
+        // full inferred hierarchy above — for authoring/QA/governance
+        // tooling, not clinical navigation. May differ from `parents`.
+        statedParents: statedParents.map((c: any) => ({
+          conceptId: c.conceptId,
+          term: c.term,
+          characteristicType: 'stated',
+        })),
       };
     } catch (error: any) {
       this.logger.warn(`Failed to fetch concept details: ${error.message}`);
-      return { concept, children: [], parents: [] };
+      return { concept, children: [], parents: [], statedParents: [] };
     }
   }
 

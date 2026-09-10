@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 const K_LEVEL_DESCRIPTIONS: Record<number, string> = {
   0: 'K0 — No potential to ambulate or transfer. Prosthesis does not enhance quality of life.',
@@ -36,7 +37,7 @@ export class ProstheticsService {
       `UPDATE amputee_register SET k_level=$1, k_assessed_date=CURRENT_DATE WHERE patient_id=$2 RETURNING *`,
       [kLevel, patientId],
     );
-    const result = rows[0];
+    const result = firstReturningRow(rows);
     return { ...result, k_description: K_LEVEL_DESCRIPTIONS[kLevel] };
   }
 
@@ -61,7 +62,9 @@ export class ProstheticsService {
       `UPDATE prosthetic_prescriptions SET status=$1, delivery_date=COALESCE($2::date, delivery_date) WHERE id=$3 RETURNING *`,
       [body.status, body.deliveryDate ?? null, id],
     );
-    return rows[0] ?? null;
+    const result = firstReturningRow(rows);
+    if (!result) throw new Error('Prosthetic prescription not found');
+    return result;
   }
 
   async startRehabEpisode(db: any, therapistId: string, body: any): Promise<any> {

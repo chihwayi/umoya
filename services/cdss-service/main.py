@@ -1277,6 +1277,7 @@ async def request_id_and_envelope_middleware(request: Request, call_next):
             pass
         return resp
     except Exception as e:
+        logger.exception(f"Unhandled exception on {request.method} {request.url.path} (requestId={rid})")
         payload = {
             "code": "INTERNAL_ERROR",
             "message": "Unexpected server error",
@@ -1475,7 +1476,10 @@ class DrugInteractionResponse(BaseModel):
 
 
 class ClinicalGuidelineRequest(BaseModel):
-    condition: str = Field(..., description="Diagnosis or condition code")
+    condition: str = Field(..., description="Diagnosis or condition name (free text)")
+    diagnosis_code: Optional[str] = Field(
+        None, description="Coded diagnosis (SNOMED CT concept ID or ICD-10 code) — matched before falling back to free-text condition matching"
+    )
     patient_age: Optional[int] = None
     patient_gender: Optional[str] = None
     comorbidities: Optional[List[str]] = []
@@ -1640,11 +1644,13 @@ trend_analysis_engine = TrendAnalysisEngine()
 def _get_diagnostic_rag_engine():
     if not diagnostic_assistant:
         return None
-    try:
-        diagnostic_assistant.ensure_rag_engine_initialized()
-    except Exception:
-        return None
-    return diagnostic_assistant.rag_engine
+    ensure_fn = getattr(diagnostic_assistant, "ensure_rag_engine_initialized", None)
+    if callable(ensure_fn):
+        try:
+            ensure_fn()
+        except Exception:
+            pass
+    return getattr(diagnostic_assistant, "rag_engine", None)
 
 # Settings Provider (Master DB)
 settings_provider = None
@@ -3647,6 +3653,7 @@ async def check_clinical_guidelines(request: ClinicalGuidelineRequest):
     """
     result = knowledge_registry.check_guidelines(
         condition=request.condition,
+        diagnosis_code=request.diagnosis_code,
         patient_age=request.patient_age,
         patient_gender=request.patient_gender,
         comorbidities=request.comorbidities,
@@ -3842,7 +3849,7 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
                 cache_ttl = 600
             if diagnostic_assistant.rag_engine and diagnostic_assistant.rag_engine.redis_client:
                 cache_client = diagnostic_assistant.rag_engine.redis_client
-            cache_key = f"llm:analysis:{tenant_cache_key}:{hashlib.md5(prompt.encode()).hexdigest()}"
+            cache_key = f"llm:analysis:{tenant_cache_key}:{hashlib.md5(prompt.encode(), usedforsecurity=False).hexdigest()}"
             if cache_client:
                 try:
                     cached = cache_client.get(cache_key)
@@ -11024,9 +11031,23 @@ def fl_train_local(req: TrainLocalReq):
     X = _np.array([_extract_features(o, feature_names) for o in outcomes])
     y = _np.array([int(o.get("actual", 0)) for o in outcomes])
 
-    # Require at least 5 positives to train a meaningful classifier
-    if y.sum() < 5:
-        return {"error": "insufficient_positive_samples", "sample_count": len(outcomes), "positives": int(y.sum())}
+    # Require at least 5 of EACH class. GradientBoostingClassifier's subsample=0.8
+    # bootstraps a fraction of rows per boosting stage; when negatives are rare
+    # enough, a stage's bootstrap sample can end up single-class and sklearn
+    # raises an unhandled ValueError ("y contains 1 class after sample_weight
+    # trimmed classes with zero weights") — reproduced live during FL pipeline
+    # verification. Only checking the positive count (as before) let a
+    # 160-row batch with a same-day prediction_date/admission_date bug
+    # upstream (since fixed) reach pipeline.fit() with 0 negatives and crash.
+    positives = int(y.sum())
+    negatives = len(y) - positives
+    if positives < 5 or negatives < 5:
+        return {
+            "error": "insufficient_class_diversity",
+            "sample_count": len(outcomes),
+            "positives": positives,
+            "negatives": negatives,
+        }
 
     pipeline = _Pipeline([
         ("scaler", _Scaler()),
@@ -11133,17 +11154,34 @@ class ModelLoadReq(BaseModel):
 @app.post("/model/load")
 def model_load(req: ModelLoadReq):
     """
-    Load a promoted model from MinIO into the in-memory cache.
-    Called by ModelRegistryService after promotion.
+    Load a promoted model from MinIO into the in-memory cache, AND persist a
+    copy at the canonical models/<name>/production.pkl key so it survives a
+    cdss-service restart.
+
+    Previously this only updated the in-memory _LOADED_MODELS cache — startup's
+    load_production_models() only ever reads models/<name>/production.pkl, a
+    fixed key nothing wrote to, so a promotion that looked successful (in-memory,
+    for the life of that process) was silently lost on the next restart, with no
+    error surfaced anywhere. Found live while verifying the FL promotion path
+    end-to-end.
     """
     try:
         pipeline = _load_model_from_minio(req.minioPath)
         _LOADED_MODELS[req.modelName] = pipeline
-        logger.info(f"Model '{req.modelName}' loaded from {req.minioPath} — hash {_model_hash(pipeline)}")
+        production_key = f"models/{req.modelName}/production.pkl"
+        try:
+            buf = _io.BytesIO()
+            _joblib.dump(pipeline, buf)
+            buf.seek(0)
+            s3_client.put_object(Bucket=MINIO_BUCKET, Key=production_key, Body=buf.getvalue(), ContentType="application/octet-stream")
+        except Exception as e:
+            logger.warning(f"Model '{req.modelName}' loaded in-memory but failed to persist to {production_key} (will not survive restart): {e}")
+        logger.info(f"Model '{req.modelName}' loaded from {req.minioPath} — hash {_model_hash(pipeline)}, persisted at {production_key}")
         return {
             "status": "loaded",
             "modelName": req.modelName,
             "minioPath": req.minioPath,
+            "productionPath": production_key,
             "hash": _model_hash(pipeline),
         }
     except Exception as e:
@@ -11155,7 +11193,11 @@ def model_status():
     """Return which models are currently loaded in memory."""
     return {
         "loaded_models": {
-            name: {"hash": _model_hash(m), "type": type(m.named_steps.get("clf", m)).__name__}
+            # m may be a plain sklearn Pipeline (local training) or a
+            # _WeightedEnsembleModel (aggregated FL global model, which has
+            # no .named_steps) — found live via a real restart-durability
+            # test (TERM-13) that reloaded a promoted ensemble model.
+            name: {"hash": _model_hash(m), "type": type(getattr(m, "named_steps", {}).get("clf", m)).__name__}
             for name, m in _LOADED_MODELS.items()
         }
     }
@@ -11781,9 +11823,48 @@ class FLAggregateReq(BaseModel):
     modelType: str
     contributions: List[FLContribution]
 
+class _WeightedEnsembleModel:
+    """
+    Real global model for federated GBM aggregation. Gradient-boosted trees
+    have no parameter vector that can be element-wise averaged the way FedAvg
+    does for linear/NN weights, so the standard practical approach for
+    tree-ensemble FL is sample-count-weighted soft voting across each site's
+    already-fitted local pipeline — this class implements exactly that, and
+    is itself joblib-picklable (plain attributes, no closures) so it can be
+    the actual object stored at modelWeightsRef and loaded back by
+    /fl/evaluate and /model/load.
+    """
+    def __init__(self, pipelines: list, weights: list, feature_names: list):
+        self.pipelines = pipelines
+        self.weights = weights
+        self.feature_names = feature_names
+
+    def predict_proba(self, X):
+        total_w = sum(self.weights) or 1.0
+        acc = None
+        for pipeline, w in zip(self.pipelines, self.weights):
+            p = pipeline.predict_proba(X) * (w / total_w)
+            acc = p if acc is None else acc + p
+        return acc
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+
+
 @app.post("/fl/aggregate")
 def fl_aggregate(req: FLAggregateReq):
-    """Federated Averaging (FedAvg) aggregation of local model metrics."""
+    """
+    Federated aggregation of local model contributions. Combines each site's
+    scalar metrics via a sample-count-weighted average (as before), AND now
+    also builds a genuine global model: downloads each contributing tenant's
+    locally-fitted pipeline from MinIO (path carried in metrics.minioPath —
+    previously discarded upstream, so this endpoint always fabricated a
+    weights_ref string without ever writing anything to it, meaning
+    /fl/evaluate could never load a real model and every promoted "candidate"
+    silently had auc_roc/brier_score = null) and combines them into a
+    sample-count-weighted soft-voting ensemble, which is what actually gets
+    persisted at modelWeightsRef.
+    """
     if not req.contributions:
         return {"aggregatedMetrics": {}, "modelWeightsRef": None}
 
@@ -11806,12 +11887,36 @@ def fl_aggregate(req: FLAggregateReq):
 
     weights_ref = f"fl/{req.modelType}/round-{req.roundId}/global-weights.bin"
 
+    pipelines, weights = [], []
+    for c in req.contributions:
+        minio_path = c.metrics.get("minioPath")
+        if not minio_path or c.sampleCount <= 0:
+            continue
+        try:
+            pipelines.append(_load_model_from_minio(minio_path))
+            weights.append(c.sampleCount)
+        except Exception as e:
+            logger.warning(f"FL aggregate: could not load local model for tenant {c.tenant} from {minio_path}: {e}")
+
+    global_model_built = False
+    if pipelines:
+        feature_names = _MODEL_FEATURES.get(req.modelType, _MODEL_FEATURES["deterioration"])
+        ensemble = _WeightedEnsembleModel(pipelines, weights, feature_names)
+        # Use _save_model_to_minio's own returned key as weights_ref so
+        # /fl/evaluate's later load is guaranteed to hit the object we just
+        # wrote, rather than a hand-reconstructed (and easily divergent) path.
+        weights_ref = _save_model_to_minio(req.modelType, f"{req.roundId}-global", ensemble)
+        global_model_built = True
+    else:
+        logger.warning(f"FL aggregate round {req.roundId} ({req.modelType}): no loadable local models — modelWeightsRef will not point to a real model")
+
     return {
         "aggregatedMetrics": agg,
         "modelWeightsRef": weights_ref,
         "participantCount": len(req.contributions),
         "totalSamples": total_samples,
-        "algorithm": "FedAvg",
+        "algorithm": "FedAvg" if not global_model_built else "sample-weighted-soft-voting",
+        "globalModelBuilt": global_model_built,
     }
 
 # ── S82: PGx Drug-Gene Check ──────────────────────────────────────────────────

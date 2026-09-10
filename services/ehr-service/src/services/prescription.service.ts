@@ -106,8 +106,9 @@ export class PrescriptionService {
     tenantDb: DataSource,
     prescriberId: string,
     tenantId?: string,
-  ): Promise<Prescription & { cdssInsights?: any }> {
+  ): Promise<Prescription & { cdssInsights?: any; medicationSafetyReview?: { reviewRequired: boolean; uncodedMedications: string[] } }> {
     // Hard-stop contraindication check (Sprint 112 P0-4)
+    let medicationSafetyReview: { reviewRequired: boolean; uncodedMedications: string[] } | undefined;
     if (this.cdssService && createDto.patientId) {
       const currentMeds = await tenantDb.query(
         `SELECT medication_name FROM prescriptions WHERE patient_id = $1 AND status = 'active'`,
@@ -122,9 +123,17 @@ export class PrescriptionService {
         newDrug: createDto.medicationName,
         currentMedications: currentMeds.map((m: any) => m.medication_name),
         allergies: allergies.map((a: any) => a.allergen),
+        tenantDb,
+        tenantId,
       });
+      // NOTE: the CDSS analyzer only ever emits severity 'major'/'moderate'/
+      // 'minor' plus a 0-10 `clinical_significance` score — there is no
+      // 'contraindicated' severity and no `severity_score` field, so a check
+      // against those (as this previously read) can never match anything.
+      // `clinical_significance >= 9` currently isolates the single most
+      // dangerous seeded interaction (warfarin+aspirin, 9.5).
       const hardStop = interactions.interactions?.find(
-        (i: any) => i.severity === 'contraindicated' || (i.severity_score != null && i.severity_score >= 5),
+        (i: any) => i.severity === 'major' && i.clinical_significance >= 9,
       );
       if (hardStop) {
         if (this.hipaaAuditService) {
@@ -150,6 +159,17 @@ export class PrescriptionService {
           requiresOverride: true,
           overrideEndpoint: '/pharmacy/prescriptions/override-contraindication',
         });
+      }
+
+      // A-009/MOAS-10: a medication that could not be resolved to a
+      // catalogued ingredient identity was NOT actually checked for
+      // interactions — surface that explicitly rather than letting an empty
+      // `interactions` array read as "verified clear".
+      if (interactions.reviewRequired) {
+        medicationSafetyReview = {
+          reviewRequired: true,
+          uncodedMedications: interactions.uncodedMedications,
+        };
       }
     }
 
@@ -291,6 +311,7 @@ export class PrescriptionService {
     return {
       ...createdPrescription,
       cdssInsights,
+      medicationSafetyReview,
     };
   }
 

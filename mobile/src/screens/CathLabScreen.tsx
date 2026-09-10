@@ -3,6 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { api } from '../services/api';
 import { C, FONT, RADIUS, SHADOW } from '../design/tokens';
 import { Icon } from '../components/ui/Icon';
@@ -22,6 +23,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function CathLabScreen() {
+  const navigation = useNavigation<any>();
   const [cases, setCases]     = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,7 +54,11 @@ export default function CathLabScreen() {
         keyExtractor={c => c.id}
         contentContainerStyle={{ paddingBottom: 40 }}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.card}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('CathLabAi', { caseId: item.id })}
+          >
             <View style={styles.row}>
               <Text style={[styles.priority, { color: PRIORITY_COLOR[item.priority] ?? C.blue }]}>
                 {(item.priority ?? '').replace(/_/g, ' ').toUpperCase()}

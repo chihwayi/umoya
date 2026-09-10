@@ -316,11 +316,11 @@ export class PaymentReconciliationService {
         p.first_name,
         p.last_name,
         p.patient_number,
-        b.bill_number
+        b.invoice_number AS bill_number
       FROM financial_payments fp
       LEFT JOIN financial_transactions ft ON ft.id = fp.transaction_id
       LEFT JOIN patients p ON p.id = ft.patient_id
-      LEFT JOIN billing b ON b.id::text = ft.source_reference_id
+      LEFT JOIN billing b ON b.id = ft.source_reference_id
       WHERE fp.status = 'completed'
         AND COALESCE(fp.reconciliation_status, 'unmatched') != 'matched'
     `;

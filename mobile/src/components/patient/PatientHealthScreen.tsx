@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  FlatList, Animated, Modal, Pressable, ActivityIndicator,
+  FlatList, Animated, Modal, Pressable, ActivityIndicator, Linking,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -17,7 +17,7 @@ import { PatientProfileService, ApiPatientProfile, ApiCondition, ApiAllergy } fr
 import { CdssService } from "../../services/cdss";
 import { api } from "../../services/api";
 
-type SubTab = "profile" | "vitals" | "labs" | "services" | "documents" | "wellbeing";
+type SubTab = "profile" | "vitals" | "labs" | "imaging" | "services" | "documents" | "wellbeing";
 
 interface VitalEntry {
   label: string;
@@ -350,6 +350,7 @@ const SubTabBar: React.FC<{ active: SubTab; onChange: (t: SubTab) => void }> = (
     { key: "profile",   label: "Profile"   },
     { key: "vitals",    label: t("nav.vitals") },
     { key: "labs",      label: "Labs"      },
+    { key: "imaging",   label: "Imaging"   },
     { key: "services",  label: "Devices"   },
     { key: "documents", label: "Documents" },
     { key: "wellbeing", label: "Wellbeing" },
@@ -477,7 +478,7 @@ const ProfileTab: React.FC<{
     <Card style={styles.emergencyCard}>
       <View style={styles.emergencyRow}>
         <View style={styles.emergencyIcon}>
-          <Icon name="escalate" size={18} color={C.red} />
+          <Icon name="phone" size={18} color={C.teal} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.listRowTitle}>
@@ -487,9 +488,14 @@ const ProfileTab: React.FC<{
           </Text>
           <Text style={styles.listRowSub}>{profile?.emergencyContactPhone ?? "—"}</Text>
         </View>
-        <TouchableOpacity style={styles.callBtn}>
-          <Text style={styles.callBtnText}>Call</Text>
-        </TouchableOpacity>
+        {!!profile?.emergencyContactPhone && (
+          <TouchableOpacity
+            style={styles.callBtn}
+            onPress={() => Linking.openURL(`tel:${profile.emergencyContactPhone}`)}
+          >
+            <Text style={styles.callBtnText}>Call</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Card>
 
@@ -808,6 +814,104 @@ const DocumentsTab: React.FC<{ docs: MedDocument[]; loading: boolean }> = ({ doc
   </ScrollView>
 );
 
+interface ImagingStudy {
+  id: string;
+  study_name: string;
+  modality_code: string;
+  body_part?: string;
+  study_date: string;
+  impression?: string;
+}
+
+const ImagingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
+  const [studies, setStudies] = React.useState<ImagingStudy[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [detail, setDetail] = React.useState<{ report?: any; images?: any[] } | null>(null);
+  const [detailLoading, setDetailLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!patientId) { setLoading(false); return; }
+    api.get<ImagingStudy[]>('/patient-portal/imaging/studies')
+      .then(r => setStudies(r.data ?? []))
+      .catch(() => setStudies([]))
+      .finally(() => setLoading(false));
+  }, [patientId]);
+
+  const toggle = async (studyId: string) => {
+    if (expandedId === studyId) { setExpandedId(null); setDetail(null); return; }
+    setExpandedId(studyId);
+    setDetailLoading(true);
+    try {
+      const [reportRes, imagesRes] = await Promise.all([
+        api.get<any>(`/patient-portal/imaging/studies/${studyId}/report`),
+        api.get<any>(`/patient-portal/imaging/studies/${studyId}/images`),
+      ]);
+      setDetail({ report: reportRes.data, images: (imagesRes.data as any)?.images ?? [] });
+    } catch {
+      setDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {loading && studies.length === 0 && <SkeletonRows />}
+      {!loading && studies.length === 0 && <EmptyState message="No finalized imaging reports yet" />}
+      {studies.map(study => (
+        <TouchableOpacity
+          key={study.id}
+          testID={`patient-health-imaging-${study.id}`}
+          onPress={() => toggle(study.id)}
+          activeOpacity={0.85}
+        >
+          <Card style={styles.labCard}>
+            <View style={styles.labCardRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.labName}>{study.study_name} ({study.modality_code})</Text>
+                <Text style={styles.labRef}>
+                  {new Date(study.study_date).toLocaleDateString()}{study.body_part ? ` · ${study.body_part}` : ''}
+                </Text>
+              </View>
+            </View>
+            {study.impression && (
+              <View style={styles.labAiRow}>
+                <Icon name="sparkle" size={11} color={C.teal} />
+                <Text style={styles.labAiText} numberOfLines={2}>{study.impression}</Text>
+              </View>
+            )}
+            {expandedId === study.id && (
+              <View style={{ marginTop: 10, gap: 8 }}>
+                {detailLoading ? (
+                  <Text style={styles.labRef}>Loading report…</Text>
+                ) : detail?.report ? (
+                  <>
+                    {detail.report.findings && (
+                      <View>
+                        <Text style={styles.panelTitle}>Findings</Text>
+                        <Text style={styles.labRef}>{detail.report.findings}</Text>
+                      </View>
+                    )}
+                    {detail.report.recommendations && (
+                      <View>
+                        <Text style={styles.panelTitle}>Recommendations</Text>
+                        <Text style={styles.labRef}>{detail.report.recommendations}</Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <Text style={styles.labRef}>Report unavailable.</Text>
+                )}
+              </View>
+            )}
+          </Card>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+};
+
 const WellbeingTab: React.FC<{ patientId: string }> = ({ patientId }) => {
   const [assessment, setAssessment] = React.useState<SdohAssessment | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -1054,7 +1158,6 @@ export const PatientHealthScreen: React.FC = () => {
             <Text style={styles.headerTitle}>{t("nav.health")}</Text>
             <Text style={styles.headerSub}>Complete health overview</Text>
           </View>
-          <AiBadge text="S115" />
         </View>
         <SubTabBar active={tab} onChange={setTab} />
       </LinearGradient>
@@ -1063,6 +1166,7 @@ export const PatientHealthScreen: React.FC = () => {
         {tab === "profile"   && <ProfileTab conditions={conditions} allergies={allergies} profile={profile} userName={user?.name ?? ""} loading={loading} />}
         {tab === "vitals"    && <VitalsTab vitals={vitals} loading={loading} />}
         {tab === "labs"      && <LabsTab labs={labs} loading={loading} labInterpretations={labInterpretations} />}
+        {tab === "imaging"   && <ImagingTab patientId={user?.patientMrn ?? user?.id ?? ""} />}
         {tab === "services"  && <ServicesTab />}
         {tab === "documents" && <DocumentsTab docs={docs} loading={loading} />}
         {tab === "wellbeing" && <WellbeingTab patientId={user?.patientMrn ?? user?.id ?? ""} />}
@@ -1080,7 +1184,7 @@ const styles = StyleSheet.create({
   body:        { flex: 1 },
 
   tabBar:        { maxHeight: 44, borderBottomWidth: 1, borderBottomColor: C.border },
-  tabBarContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 6, flexDirection: 'row' },
+  tabBarContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 6, flexDirection: 'row', alignItems: 'center' },
   tab:           { paddingHorizontal: 14, paddingVertical: 5, borderRadius: RADIUS.pill, backgroundColor: 'transparent' },
   tabActive:     { backgroundColor: C.teal + '22' },
   tabText:       { fontFamily: FONT.uiBd, fontSize: 12, color: C.textMuted, letterSpacing: 0.2 },
@@ -1114,7 +1218,7 @@ const styles = StyleSheet.create({
 
   emergencyCard:    {},
   emergencyRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  emergencyIcon:    { width: 36, height: 36, borderRadius: 18, backgroundColor: C.red + '22', alignItems: 'center', justifyContent: 'center' },
+  emergencyIcon:    { width: 36, height: 36, borderRadius: 18, backgroundColor: C.teal + '22', alignItems: 'center', justifyContent: 'center' },
   callBtn:          { backgroundColor: C.green + '22', borderRadius: RADIUS.pill, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: C.green + '44' },
   callBtnText:      { fontFamily: FONT.uiBd, fontSize: 12, color: C.green },
 

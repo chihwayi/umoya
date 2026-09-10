@@ -44,20 +44,50 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Python Test Runner
+    # B-013/MOAS-18: this used to install bare `pytest` with no pinned
+    # version and none of the suite's real dependencies (numpy/boto3/PyJWT/
+    # etc), so any test file importing `main` (which imports the full
+    # dependency graph) failed collection outright. requirements.txt now
+    # declares pytest/pytest-asyncio itself (pinned in constraints.txt), so
+    # installing it the same way the service image does is what actually
+    # gets a working test runtime here.
+    - name: Install CDSS test runtime (pinned)
       if: matrix.service == 'ehr-service'
-      run: python -m pip install pytest
+      run: |
+        cd services/cdss-service
+        pip install --default-timeout=1000 -r requirements.txt -c constraints.txt
+
+    # B-009/MOAS-19: install bandit for the SCA/SAST no-regression gate below.
+    - name: Install SAST tooling
+      if: matrix.service == 'ehr-service'
+      run: pip install --default-timeout=1000 bandit
 
     - name: Run CDSS Offline Safety Gates
       if: matrix.service == 'ehr-service'
       run: |
-        PYTHONPATH=services/cdss-service python -m pytest -q \
-          services/cdss-service/tests/test_offline_clinical_eval_harness.py \
-          services/cdss-service/tests/test_ai_governance.py \
-          services/cdss-service/tests/test_outbound_guard.py \
-          services/cdss-service/tests/test_clinical_safety.py \
-          services/cdss-service/tests/test_diagnosis_discharge_safety_governor.py \
-          services/cdss-service/tests/test_diagnostic_assistant_grounding_status.py
+        cd services/cdss-service
+        python -m pytest -q \
+          tests/test_offline_clinical_eval_harness.py \
+          tests/test_ai_governance.py \
+          tests/test_outbound_guard.py \
+          tests/test_clinical_safety.py \
+          tests/test_diagnosis_discharge_safety_governor.py \
+          tests/test_diagnostic_assistant_grounding_status.py
+
+    # A-016 (closed): all 7 tests previously deselected here only failed in
+    # local dev containers that carry real provider secrets/flags (LLM_PROVIDER,
+    # ANTHROPIC_API_KEY, CDSS_ENABLE_AI, CDSS_REQUIRE_SERVICE_AUTH) which this
+    # CI job never sets — against CI's actual env they already passed. The one
+    # genuine bug found (_get_diagnostic_rag_engine() silently discarding a
+    # populated rag_engine on any exception from ensure_rag_engine_initialized,
+    # including AttributeError on a duck-typed test double) is fixed in main.py;
+    # the other was a test double (_DummyLLM.generate_json) with a stale
+    # signature missing **kwargs. See audit/TERMINOLOGY_SPRINTS.md addendum.
+    - name: CDSS full test suite (release gate)
+      if: matrix.service == 'ehr-service'
+      run: |
+        cd services/cdss-service
+        python -m pytest -q
 
     - name: CDSS AI release-gate suite (release gate)
       if: matrix.service == 'ehr-service'
@@ -97,9 +127,51 @@ jobs:
       working-directory: ${{ matrix.path }}
       run: npm test
 
+    # B-011/MOAS-17: `npm test` alone force-exits over a leaked timer/handle
+    # without failing the build — the leak (and any regression that
+    # reintroduces one) stays invisible in CI. Run with --detectOpenHandles
+    # and explicitly fail if Jest prints the open-handle warning banner,
+    # rather than relying on the exit code alone.
+    - name: Enforce clean Jest exit (no open handles)
+      if: matrix.service == 'ehr-service'
+      working-directory: ${{ matrix.path }}
+      run: |
+        set -o pipefail
+        npx jest --detectOpenHandles --ci 2>&1 | tee /tmp/jest-open-handles.log
+        if grep -q "Jest has detected the following.*open handle" /tmp/jest-open-handles.log; then
+          echo "::error::Jest detected an open handle after the suite completed — see log above."
+          exit 1
+        fi
+
     - name: Controller auth guard audit (release gate)
       if: matrix.service == 'ehr-service'
       run: npm run audit:controller-guards
+
+    # A-004/MOAS-20: publishes the persona-by-endpoint authorization matrix
+    # (which routes have an explicit @Roles() restriction vs. any-authenticated-
+    # role access) as a build artifact every run, and fails the build if any
+    # financial/billing/claims/admin/audit/tenant/payment/report-domain route
+    # has no role restriction at all — the exact shape of the A-004 finding
+    # (pharmacist could read GET /finance/transactions).
+    - name: Persona-by-endpoint authorization matrix (release gate)
+      if: matrix.service == 'ehr-service'
+      env:
+        MOAS20_STRICT: '1'
+      run: npm run audit:role-authorization-matrix
+
+    - name: Upload role authorization matrix
+      if: matrix.service == 'ehr-service'
+      uses: actions/upload-artifact@v4
+      with:
+        name: role-authorization-matrix
+        path: reports/role-authorization-matrix-*.json
+
+    # B-009/MOAS-19: SCA (npm audit) + SAST (bandit) no-regression gate — see
+    # audit/security/SECURITY_EXCEPTIONS.md for the full baseline and every
+    # accepted exception's owner/expiry/justification/compensating control.
+    - name: SCA/SAST security baseline (release gate)
+      if: matrix.service == 'ehr-service'
+      run: node scripts/audit-security-baseline.mjs
 
     - name: Migration sequence audit (release gate)
       if: matrix.service == 'ehr-service'
@@ -195,6 +267,21 @@ jobs:
     - name: Run Provisioning Smoke Test
       working-directory: services/tenant-service
       run: npm run test:smoke
+
+    # B-010/MOAS-21: backup/restore integrity harness — runs entirely against
+    # throw-away synthetic databases on this job's own postgres service
+    # container, never touching real tenant data. See
+    # scripts/regression-backup-restore-integrity.mjs.
+    - name: Install postgresql-client
+      run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+    - name: Backup/restore integrity harness (release gate)
+      env:
+        PG_HOST: localhost
+        PG_PORT: '5432'
+        PG_USER: postgres
+        PGPASSWORD: postgres
+      run: node scripts/regression-backup-restore-integrity.mjs
 
   mobile-quality-gates:
     name: Mobile Quality Gates

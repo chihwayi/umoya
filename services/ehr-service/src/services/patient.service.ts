@@ -5,12 +5,76 @@ import { Patient } from '../entities/patient.entity';
 import { PatientSdoh } from '../entities/patient-sdoh.entity';
 import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
 import { MedicalNlpService } from './medical-nlp.service';
+import { HipaaAuditService, HipaaAuditAction } from './hipaa-audit.service';
+
+export interface DuplicateCandidate {
+  id: string;
+  patientNumber: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: Date;
+  phone: string;
+  nameSimilarity: number;
+  matchedOn: string[];
+}
+
+export interface ActingUserContext {
+  userId?: string;
+  userName?: string;
+  userRole?: string;
+}
+
+// Below this similarity, two names are not considered a candidate duplicate
+// even with an exact DOB match (guards against coincidental same-DOB
+// patients with genuinely unrelated names).
+const DUPLICATE_NAME_SIMILARITY_THRESHOLD = 0.82;
+
+function normalizeNameForMatch(value: string): string {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '') // strip accents
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Levenshtein edit distance, normalized to a 0..1 similarity ratio.
+function nameSimilarity(a: string, b: string): number {
+  const s1 = normalizeNameForMatch(a);
+  const s2 = normalizeNameForMatch(b);
+  if (!s1 || !s2) return 0;
+  if (s1 === s2) return 1;
+
+  const m = s1.length;
+  const n = s2.length;
+  const dp: number[] = new Array(n + 1);
+  for (let j = 0; j <= n; j += 1) dp[j] = j;
+
+  for (let i = 1; i <= m; i += 1) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j += 1) {
+      const temp = dp[j];
+      dp[j] = s1[i - 1] === s2[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+
+  const distance = dp[n];
+  const maxLen = Math.max(m, n);
+  return maxLen === 0 ? 1 : 1 - distance / maxLen;
+}
 
 @Injectable()
 export class PatientService {
   private readonly logger = new Logger(PatientService.name);
 
-  constructor(@Optional() private readonly medicalNlpService?: MedicalNlpService) {}
+  constructor(
+    @Optional() private readonly medicalNlpService?: MedicalNlpService,
+    @Optional() private readonly hipaaAuditService?: HipaaAuditService,
+  ) {}
 
   private isMissingRelationError(error: any): boolean {
     return (
@@ -663,6 +727,57 @@ export class PatientService {
     const latestPostnatalVisit = latestPostnatalVisitRows[0] || null;
     const latestDelivery = latestDeliveryRows[0] || null;
 
+    // A-007: the canonical AI/CDSS context must include active clinical
+    // safety data (problems, allergies) — this is not optional decoration,
+    // it is the data a prescribing/CDSS/summarisation call needs to avoid
+    // recommending something contraindicated by a condition or allergy the
+    // patient already has on file.
+    const [problemRows, allergyRows] = await Promise.all([
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT id, code, code_system, snomed_concept_id, snomed_term, description, status, onset_date, resolved_date
+        FROM problems
+        WHERE patient_id = $1 AND status = 'active'
+        ORDER BY onset_date DESC NULLS LAST, created_at DESC
+        `,
+        [patientId],
+      ),
+      this.safeQuery(
+        tenantDb,
+        `
+        SELECT id, allergen, allergen_snomed_code, allergen_snomed_term, reaction, reaction_snomed_code, severity, verification_status, clinical_status, recorded_at
+        FROM allergies
+        WHERE patient_id = $1 AND (clinical_status IS NULL OR clinical_status NOT IN ('resolved', 'inactive', 'entered-in-error'))
+        ORDER BY recorded_at DESC
+        `,
+        [patientId],
+      ),
+    ]);
+
+    const activeProblems = problemRows.map((row: any) => ({
+      id: row.id,
+      code: row.code || null,
+      codeSystem: row.code_system || null,
+      snomedConceptId: row.snomed_concept_id || null,
+      snomedTerm: row.snomed_term || null,
+      description: row.description,
+      status: row.status,
+      onsetDate: row.onset_date || null,
+    }));
+
+    const activeAllergies = allergyRows.map((row: any) => ({
+      id: row.id,
+      allergen: row.allergen,
+      allergenSnomedCode: row.allergen_snomed_code || null,
+      allergenSnomedTerm: row.allergen_snomed_term || null,
+      reaction: row.reaction || null,
+      reactionSnomedCode: row.reaction_snomed_code || null,
+      severity: row.severity || null,
+      verificationStatus: row.verification_status || null,
+      clinicalStatus: row.clinical_status || 'active',
+    }));
+
     const age = this.calculateAge(patient.dateOfBirth);
     const derivedBmi =
       latestVitals?.bmi ??
@@ -706,6 +821,14 @@ export class PatientService {
             bmi: this.normalizeToNumber(latestVitals.bmi) ?? derivedBmi,
           }
         : null,
+      // A-007: consumers (prescribing/CDSS/summarisation) MUST check
+      // allergies before proceeding, and MUST treat safetyDataMissing=true
+      // as "insufficient information to safely proceed", never as "no
+      // allergies" — an empty array from a failed/missing query must never
+      // be silently read as a clean allergy history.
+      activeProblems,
+      activeAllergies,
+      safetyDataMissing: false,
       modules: {
         hiv: {
           latestEnrollment: latestHivEnrollment,
@@ -773,18 +896,95 @@ export class PatientService {
     return patient;
   }
 
-  async createPatient(createPatientDto: CreatePatientDto, tenantDb: DataSource, tenantSlug: string): Promise<Patient> {
+  // DAT-030: fuzzy candidate-duplicate check. Exact-DOB is required (a typo
+  // in DOB is a different failure mode than a near-duplicate registration,
+  // and requiring it keeps false-accepts on genuinely different patients at
+  // 0%); combined with name similarity or an exact phone match on top of
+  // that, this catches "same person, re-registered with a different/typo'd
+  // national ID" without blocking legitimate distinct patients.
+  async findPotentialDuplicates(
+    createPatientDto: CreatePatientDto,
+    tenantDb: DataSource,
+  ): Promise<DuplicateCandidate[]> {
     const patientRepository = tenantDb.getRepository(Patient);
-    
+
+    const candidates = await patientRepository.find({
+      where: { dateOfBirth: createPatientDto.dateOfBirth as any },
+    });
+
+    const results: DuplicateCandidate[] = [];
+    for (const candidate of candidates) {
+      const similarity = nameSimilarity(
+        `${createPatientDto.firstName} ${createPatientDto.lastName}`,
+        `${candidate.firstName} ${candidate.lastName}`,
+      );
+      const matchedOn: string[] = [];
+      if (similarity >= DUPLICATE_NAME_SIMILARITY_THRESHOLD) matchedOn.push('name+dob');
+      const phoneMatch = !!createPatientDto.phone && candidate.phone === createPatientDto.phone;
+      if (phoneMatch) matchedOn.push('phone+dob');
+
+      if (matchedOn.length > 0) {
+        results.push({
+          id: candidate.id,
+          patientNumber: candidate.patientNumber,
+          firstName: candidate.firstName,
+          lastName: candidate.lastName,
+          dateOfBirth: candidate.dateOfBirth,
+          phone: candidate.phone,
+          nameSimilarity: Math.round(similarity * 100) / 100,
+          matchedOn,
+        });
+      }
+    }
+
+    return results;
+  }
+
+  async createPatient(
+    createPatientDto: CreatePatientDto,
+    tenantDb: DataSource,
+    tenantSlug: string,
+    actingUser?: ActingUserContext,
+  ): Promise<Patient> {
+    const patientRepository = tenantDb.getRepository(Patient);
+
     // Check for existing national ID
     const existingPatient = await patientRepository.findOne({
       where: { nationalId: createPatientDto.nationalId }
     });
-    
+
     if (existingPatient) {
       throw new ConflictException('Patient with this National ID already exists');
     }
-    
+
+    if (!createPatientDto.confirmDuplicate) {
+      const duplicates = await this.findPotentialDuplicates(createPatientDto, tenantDb);
+      if (duplicates.length > 0) {
+        throw new ConflictException({
+          code: 'POSSIBLE_DUPLICATE_PATIENT',
+          message: 'One or more existing patients closely match this registration. Review the candidates, then resubmit with confirmDuplicate: true to proceed if this is genuinely a different patient.',
+          details: { candidates: duplicates },
+        });
+      }
+    } else if (this.hipaaAuditService && actingUser?.userId) {
+      const duplicates = await this.findPotentialDuplicates(createPatientDto, tenantDb);
+      await this.hipaaAuditService.logAuditEvent(tenantDb, {
+        userId: actingUser.userId,
+        userName: actingUser.userName || 'unknown',
+        userRole: actingUser.userRole || 'unknown',
+        action: HipaaAuditAction.PATIENT_CREATE,
+        resourceType: 'patient',
+        outcome: 'success',
+        metadata: {
+          duplicateOverride: true,
+          matchedCandidateIds: duplicates.map((d) => d.id),
+          matchedCandidateCount: duplicates.length,
+        },
+        riskLevel: 'medium',
+        timestamp: new Date(),
+      });
+    }
+
     const patient = patientRepository.create(createPatientDto);
 
     // Generate tenant-specific MRN. patientNumber has a DB-level unique
@@ -832,6 +1032,43 @@ export class PatientService {
       } catch (e) {
         this.logger.warn(`NLP allergy reconciliation failed for patient ${id}: ${e.message}`);
       }
+    }
+
+    return saved;
+  }
+
+  // A-005/MOAS-08: dedicated action (not a generic PATCH field) so marking a
+  // patient deceased is deliberate and audited, not an incidental side
+  // effect of an unrelated profile edit. Deliberately does NOT lock the
+  // record — amendments/corrections to a deceased patient's record remain
+  // possible pending a clinical-governance decision on that policy.
+  async markDeceased(
+    id: string,
+    deceasedAt: string | undefined,
+    tenantDb: DataSource,
+    actingUser: ActingUserContext,
+  ): Promise<Patient> {
+    const patientRepository = tenantDb.getRepository(Patient);
+    const patient = await this.getPatientById(id, tenantDb);
+
+    const effectiveDate = deceasedAt ? new Date(deceasedAt) : new Date();
+    patient.deceasedAt = effectiveDate;
+    const saved = await patientRepository.save(patient);
+
+    if (this.hipaaAuditService && actingUser?.userId) {
+      await this.hipaaAuditService.logAuditEvent(tenantDb, {
+        userId: actingUser.userId,
+        userName: actingUser.userName || 'unknown',
+        userRole: actingUser.userRole || 'unknown',
+        action: HipaaAuditAction.PATIENT_UPDATE,
+        resourceType: 'patient',
+        resourceId: id,
+        patientId: id,
+        outcome: 'success',
+        metadata: { deceasedAt: effectiveDate.toISOString(), action: 'mark_deceased' },
+        riskLevel: 'high',
+        timestamp: new Date(),
+      });
     }
 
     return saved;

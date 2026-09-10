@@ -10,6 +10,7 @@ import { ReportTemplate } from '../entities/report-template.entity';
 import { ReportExecution, ExecutionType, ExecutionStatus } from '../entities/report-execution.entity';
 import { ReportExportService, ReportDefinition } from './report-export.service';
 import { FileStorageService } from './file-storage.service';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class ReportBuilderService {
@@ -168,11 +169,12 @@ export class ReportBuilderService {
       params,
     );
 
-    if (!result || result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Report template ${id} not found`);
     }
 
-    return result[0];
+    return row;
   }
 
   /**

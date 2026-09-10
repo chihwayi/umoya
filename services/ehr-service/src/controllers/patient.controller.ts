@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { PatientService } from '../services/patient.service';
 import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
@@ -150,7 +152,12 @@ export class PatientController {
   @ApiResponse({ status: 201, description: 'Patient created successfully' })
   async createPatient(@Body() createPatientDto: CreatePatientDto, @Request() req: RequestWithTenant) {
     const tenantSlug = req.headers['x-tenant-id'] as string;
-    return this.patientService.createPatient(createPatientDto, req.tenantDb, tenantSlug);
+    const actingUser = req.user as any;
+    return this.patientService.createPatient(createPatientDto, req.tenantDb, tenantSlug, {
+      userId: actingUser?.id || actingUser?.userId,
+      userName: actingUser?.email || actingUser?.name,
+      userRole: actingUser?.role,
+    });
   }
 
   @Put(':id')
@@ -162,6 +169,24 @@ export class PatientController {
     @Request() req: RequestWithTenant
   ) {
     return this.patientService.updatePatient(id, updatePatientDto, req.tenantDb);
+  }
+
+  @Post(':id/deceased')
+  @UseGuards(RolesGuard)
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Mark a patient deceased (suppresses outbound patient communications; does not lock the record)' })
+  @ApiResponse({ status: 200, description: 'Patient marked deceased' })
+  async markDeceased(
+    @Param('id') id: string,
+    @Body() body: { deceasedAt?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    const actingUser = req.user as any;
+    return this.patientService.markDeceased(id, body?.deceasedAt, req.tenantDb, {
+      userId: actingUser?.id || actingUser?.userId,
+      userName: actingUser?.email || actingUser?.name,
+      userRole: actingUser?.role,
+    });
   }
 
   @Delete(':id')

@@ -28,7 +28,9 @@ export class DialysisService {
       `UPDATE vascular_access SET status=$1, flow_ml_min=COALESCE($2, flow_ml_min) WHERE id=$3 RETURNING *`,
       [body.status, body.flowMlMin ?? null, id],
     );
-    return rows[0] ?? null;
+    // TypeORM's raw query() returns [rows, rowCount] for UPDATE/DELETE ... RETURNING
+    // (unlike INSERT ... RETURNING, which returns rows directly).
+    return (Array.isArray(rows[0]) ? rows[0][0] : rows[0]) ?? null;
   }
 
   async startHdSession(db: any, accessNeedledBy: string, body: any): Promise<any> {
@@ -50,12 +52,27 @@ export class DialysisService {
        WHERE id=$7 RETURNING *, kt_v_adequate, uf_volume_ml, duration_hours`,
       [body.postWeightKg, body.ktV ?? null, body.endTime, JSON.stringify(body.complications ?? []), body.postBpSystolic ?? null, body.postBpDiastolic ?? null, id],
     );
-    const result = rows[0];
+    // TypeORM's raw query() returns [rows, rowCount] for UPDATE ... RETURNING
+    // (unlike INSERT ... RETURNING, which returns rows directly) — unwrap it.
+    const result = Array.isArray(rows[0]) ? rows[0][0] : rows[0];
+    const alerts: string[] = [];
+    if (result?.kt_v_adequate === false) {
+      alerts.push(`⚠ Kt/V ${result.kt_v_measured} is BELOW 1.2 target. Review session length, blood flow, and access adequacy. Consider increasing dialysis frequency.`);
+    }
+    // KDOQI/NKF intradialytic hypotension: post-dialysis SBP < 90 mmHg, or a
+    // systolic drop of >= 20 mmHg from pre-session baseline.
+    const preSbp = result?.pre_bp_systolic;
+    const postSbp = result?.post_bp_systolic;
+    if (postSbp != null) {
+      if (postSbp < 90) {
+        alerts.push(`⚠ Intradialytic hypotension: post-session BP ${postSbp}/${result.post_bp_diastolic ?? '?'} is below 90 mmHg systolic. Assess patient, consider saline bolus and UF rate review.`);
+      } else if (preSbp != null && preSbp - postSbp >= 20) {
+        alerts.push(`⚠ Intradialytic hypotension: systolic BP dropped ${preSbp - postSbp} mmHg (${preSbp} → ${postSbp}) during session. Assess patient, consider saline bolus and UF rate review.`);
+      }
+    }
     return {
       ...result,
-      cdss_alert: result?.kt_v_adequate === false
-        ? `⚠ Kt/V ${result.kt_v_measured} is BELOW 1.2 target. Review session length, blood flow, and access adequacy. Consider increasing dialysis frequency.`
-        : null,
+      cdss_alert: alerts.length > 0 ? alerts.join(' ') : null,
     };
   }
 

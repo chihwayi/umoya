@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader, SectionHeader, AiBadge, AiPulse, Dot } from '../ui';
@@ -892,6 +893,7 @@ interface AiSheetPatient {
 
 export const NurseShiftScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const { t } = useTranslation();
   const { pendingCount: pendingSyncCount, isSyncing } = useOfflineSync();
   const [activeTab,  setActiveTab]  = useState<ShiftTab>('worklist');
@@ -1025,13 +1027,27 @@ export const NurseShiftScreen: React.FC = () => {
         subtitle={loading ? t('common.loading') : `${pendingCount} tasks remaining`}
         accent={C.purple}
         rightSlot={
-          pendingSyncCount > 0 ? (
-            <View style={mainStyles.syncBadge}>
-              <Text style={mainStyles.syncBadgeText}>
-                {isSyncing ? 'Syncing…' : `${pendingSyncCount} pending sync`}
-              </Text>
-            </View>
-          ) : null
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {pendingSyncCount > 0 && (
+              <View style={mainStyles.syncBadge}>
+                <Text style={mainStyles.syncBadgeText}>
+                  {isSyncing ? 'Syncing…' : `${pendingSyncCount} pending sync`}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => navigation.getParent()?.navigate('SpecialtyModules')}
+            >
+              <Icon name="briefcase" size={18} color={C.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => navigation.getParent()?.navigate('AccountSettings')}
+            >
+              <Icon name="settings" size={18} color={C.textSecondary} />
+            </TouchableOpacity>
+          </View>
         }
       />
 

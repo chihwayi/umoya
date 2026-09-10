@@ -139,9 +139,6 @@ const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ con
           <Text style={styles.threadName}>{convo.name}</Text>
           <Text style={styles.threadRole}>{convo.role}  ·  {convo.online ? 'Online' : 'Offline'}</Text>
         </View>
-        <TouchableOpacity style={styles.threadAction}>
-          <Icon name="escalate" size={16} color={C.textMuted} />
-        </TouchableOpacity>
       </View>
 
       {/* HIPAA banner */}
@@ -192,9 +189,6 @@ const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ con
 
       {/* Compose */}
       <View style={styles.compose}>
-        <TouchableOpacity style={styles.composeAction}>
-          <Icon name="escalate" size={18} color={C.textMuted} />
-        </TouchableOpacity>
         <TextInput
           style={styles.composeInput}
           placeholder="Secure message…"
@@ -203,9 +197,6 @@ const ThreadView: React.FC<{ convo: Conversation; onBack: () => void }> = ({ con
           onChangeText={setText}
           multiline
         />
-        <TouchableOpacity style={styles.composeAction}>
-          <Icon name="brain" size={18} color={C.textMuted} />
-        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.sendBtn, { opacity: text.trim() ? 1 : 0.4 }]}
           onPress={send}
@@ -317,7 +308,6 @@ export const DoctorMessagesScreen: React.FC = () => {
               <Text style={styles.hipaaHeaderText}>HIPAA Secure</Text>
             </View>
           </View>
-          <AiBadge text="S116" />
           <TouchableOpacity style={styles.notifBtn} onPress={() => setNotifVisible(true)}>
             <Icon name="escalate" size={20} color={C.blue} />
             {totalUnread > 0 && (

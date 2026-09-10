@@ -90,14 +90,32 @@ export class ReportsService {
     const records = await recordRepo.find();
     const prescriptions = await prescriptionRepo.find();
 
-    // Common diagnoses analysis
-    const diagnoses = records.flatMap((record) => record.diagnoses?.map((diagnosis) => diagnosis.description) ?? []);
-    const diagnosisCount = diagnoses.reduce<Record<string, number>>((acc, diagnosis) => {
-      if (diagnosis) {
-        acc[diagnosis] = (acc[diagnosis] || 0) + 1;
+    // Common diagnoses analysis — A-011/MOAS-12: group by coded concept
+    // (SNOMED `code` or `icd10Code`), not free-text description, so two
+    // encounters coded with the same concept but phrased differently (e.g.
+    // "HTN" vs "Hypertension") count as one diagnosis instead of fragmenting
+    // across the top-10. Text is used only as a display label. Diagnoses
+    // with no code at all cannot be safely aggregated this way, so they are
+    // reported separately rather than silently merged by description alone.
+    const diagnosisEntries = records.flatMap((record) => record.diagnoses ?? []);
+    const codedGroups: Record<string, { description: string; count: number }> = {};
+    const uncodedGroups: Record<string, number> = {};
+
+    for (const dx of diagnosisEntries) {
+      const code = dx?.code || dx?.icd10Code || null;
+      if (code) {
+        const key = String(code).trim().toUpperCase();
+        if (!key) continue;
+        if (!codedGroups[key]) {
+          codedGroups[key] = { description: dx.description || key, count: 0 };
+        }
+        codedGroups[key].count += 1;
+      } else if (dx?.description) {
+        const key = dx.description.trim();
+        if (!key) continue;
+        uncodedGroups[key] = (uncodedGroups[key] || 0) + 1;
       }
-      return acc;
-    }, {});
+    }
 
     return {
       period: { startDate: query.startDate, endDate: query.endDate },
@@ -107,8 +125,12 @@ export class ReportsService {
         totalPrescriptions: prescriptions.length,
         activePrescriptions: prescriptions.filter((p) => p.status === PrescriptionStatus.ACTIVE).length,
       },
-      topDiagnoses: Object.entries(diagnosisCount)
-        .sort(([,a], [,b]) => (b as number) - (a as number))
+      topDiagnoses: Object.entries(codedGroups)
+        .sort(([, a], [, b]) => b.count - a.count)
+        .slice(0, 10)
+        .map(([code, { description, count }]) => ({ code, diagnosis: description, count })),
+      uncodedDiagnoses: Object.entries(uncodedGroups)
+        .sort(([, a], [, b]) => b - a)
         .slice(0, 10)
         .map(([diagnosis, count]) => ({ diagnosis, count })),
       appointmentTrends: {

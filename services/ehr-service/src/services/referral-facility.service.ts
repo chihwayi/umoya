@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class ReferralFacilityService {
@@ -161,7 +162,7 @@ export class ReferralFacilityService {
       values,
     );
 
-    return result[0];
+    return firstReturningRow(result);
   }
 
   async deleteFacility(facilityId: string, tenantDb: DataSource) {
@@ -173,7 +174,8 @@ export class ReferralFacilityService {
       [facilityId],
     );
 
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Facility not found');
     }
 

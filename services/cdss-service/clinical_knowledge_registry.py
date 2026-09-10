@@ -84,6 +84,21 @@ class ClinicalKnowledgeRegistry:
                     for alias in aliases
                     if str(alias or "").strip()
                 ]
+                # MOAS-09/A-008: coded lookup keys, kept separate from free-
+                # text matching so a diagnosis coded with a synonym/
+                # abbreviation the text normalizer doesn't recognise still
+                # retrieves the correct guideline. Optional — entries without
+                # codes fall back to condition-text matching as before.
+                entry["_icd10_codes"] = {
+                    str(code).strip().upper()
+                    for code in (entry.get("icd10_codes") or [])
+                    if str(code or "").strip()
+                }
+                entry["_snomed_codes"] = {
+                    str(code).strip()
+                    for code in (entry.get("snomed_codes") or [])
+                    if str(code or "").strip()
+                }
                 if self.active_release:
                     entry["_release_id"] = self.active_release.get("release_id")
                     entry["_release_version"] = self.active_release.get("version")
@@ -159,13 +174,24 @@ class ClinicalKnowledgeRegistry:
         condition: str,
         specialty: Optional[str] = None,
         module: Optional[str] = None,
+        diagnosis_code: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
+        scoped_entries = [entry for entry in self.entries if self._entry_matches_scope(entry, specialty=specialty, module=module)]
+        entries = scoped_entries or self.entries
+
+        # MOAS-09/A-008: try the coded lookup first — deterministic and
+        # immune to free-text spelling/phrasing/synonym variance, which is
+        # exactly what a coded diagnosis is for.
+        if diagnosis_code:
+            code_upper = str(diagnosis_code).strip().upper()
+            code_raw = str(diagnosis_code).strip()
+            for entry in entries:
+                if code_upper in entry.get("_icd10_codes", set()) or code_raw in entry.get("_snomed_codes", set()):
+                    return entry
+
         normalized = self.normalize_condition(condition)
         if not normalized:
             return None
-
-        scoped_entries = [entry for entry in self.entries if self._entry_matches_scope(entry, specialty=specialty, module=module)]
-        entries = scoped_entries or self.entries
 
         for entry in entries:
             if entry.get("_normalized_condition") == normalized:
@@ -192,8 +218,9 @@ class ClinicalKnowledgeRegistry:
         medications: Optional[List[str]] = None,
         specialty: Optional[str] = None,
         module: Optional[str] = None,
+        diagnosis_code: Optional[str] = None,
     ) -> Dict[str, Any]:
-        entry = self._find_entry(condition, specialty=specialty, module=module)
+        entry = self._find_entry(condition, specialty=specialty, module=module, diagnosis_code=diagnosis_code)
         if entry:
             freshness = self._freshness(entry)
             contraindications: List[Dict[str, Any]] = []

@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
 import { AlertDeliveryService } from './alert-delivery.service';
 import { TenantService } from './tenant.service';
+import { firstReturningRow } from '../utils/returning-row';
 
 // Step types with no real backend action to perform: the target config
 // (arbitrary entityType/role, or a generic task/order shape) doesn't map
@@ -163,7 +164,7 @@ export class ClinicalWorkflowService {
       values,
     );
 
-    return result[0];
+    return firstReturningRow(result);
   }
 
   async deleteWorkflow(workflowId: string, tenantDb: DataSource) {
@@ -334,7 +335,7 @@ export class ClinicalWorkflowService {
       values,
     );
 
-    return result[0];
+    return firstReturningRow(result);
   }
 
   async deleteWorkflowStep(stepId: string, tenantDb: DataSource) {

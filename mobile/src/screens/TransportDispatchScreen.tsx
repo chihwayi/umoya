@@ -41,6 +41,7 @@ export default function TransportDispatchScreen() {
         horizontal
         keyExtractor={v => v.id}
         style={{ marginBottom: 16, maxHeight: 60 }}
+        contentContainerStyle={{ alignItems: 'center' }}
         renderItem={({ item }) => (
           <View style={[s.vehicleChip, { borderColor: VEHICLE_STATUS_COLOR[item.status] }]}>
             <Truck size={12} color={VEHICLE_STATUS_COLOR[item.status]} />

@@ -3125,12 +3125,12 @@ export class DatabaseProvisioningService {
       {
         id: 'followup_recommendations',
         label: 'Sprint 185 — AI Follow-up Scheduler & Care Continuity',
-        version: '2026.05.28.1',
-        description: 'AI-recommended follow-up scheduling with overdue sweep',
+        version: '2026.09.09.1',
+        description: 'AI-recommended follow-up scheduling with overdue sweep (B-002: patient_id/accepted_by/dismissed_by migrated from INTEGER to UUID — this table always required patients.id/users.id, which are UUID everywhere else in this schema; the original INTEGER columns could never hold a valid reference and every insert was silently storing a meaningless value)',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS followup_recommendations (
             id                          SERIAL PRIMARY KEY,
-            patient_id                  INTEGER     NOT NULL,
+            patient_id                  UUID        NOT NULL,
             encounter_id                INTEGER,
             encounter_type              TEXT        NOT NULL DEFAULT 'consultation',
             recommended_days            INTEGER     NOT NULL,
@@ -3140,9 +3140,9 @@ export class DatabaseProvisioningService {
             ai_source                   TEXT        NOT NULL DEFAULT 'rule',
             clinician_override_days     INTEGER,
             clinician_override_modality TEXT,
-            accepted_by                 INTEGER,
+            accepted_by                 UUID,
             accepted_at                 TIMESTAMPTZ,
-            dismissed_by                INTEGER,
+            dismissed_by                UUID,
             dismissed_at                TIMESTAMPTZ,
             appointment_booked          BOOLEAN     NOT NULL DEFAULT FALSE,
             appointment_due_by          TIMESTAMPTZ,
@@ -3150,6 +3150,25 @@ export class DatabaseProvisioningService {
             created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
           )`,
+          // Pre-existing installs created this table with INTEGER patient_id/accepted_by/
+          // dismissed_by columns (fixed 2026-09-09, see description above). Those columns
+          // could never have held a real, valid patients.id/users.id (both UUID), so any
+          // existing rows are already known-invalid data, not real follow-up history worth
+          // preserving — safe to discard rather than attempt a lossy integer->UUID cast.
+          `DO $$
+           BEGIN
+             IF EXISTS (
+               SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'followup_recommendations'
+                 AND column_name = 'patient_id'
+                 AND data_type = 'integer'
+             ) THEN
+               TRUNCATE TABLE followup_recommendations;
+               ALTER TABLE followup_recommendations ALTER COLUMN patient_id TYPE UUID USING NULL;
+               ALTER TABLE followup_recommendations ALTER COLUMN accepted_by TYPE UUID USING NULL;
+               ALTER TABLE followup_recommendations ALTER COLUMN dismissed_by TYPE UUID USING NULL;
+             END IF;
+           END $$`,
           `CREATE INDEX IF NOT EXISTS idx_followup_patient ON followup_recommendations(patient_id)`,
           `CREATE INDEX IF NOT EXISTS idx_followup_due ON followup_recommendations(appointment_due_by) WHERE appointment_booked = FALSE AND dismissed_at IS NULL`,
           `CREATE INDEX IF NOT EXISTS idx_followup_encounter ON followup_recommendations(encounter_id)`,
@@ -9957,7 +9976,13 @@ export class DatabaseProvisioningService {
       `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_sender" ON "patient_messages" ("sender_type", "sender_id")`,
       `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_recipient" ON "patient_messages" ("recipient_type", "recipient_id")`,
       `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_read" ON "patient_messages" ("patient_id", "read")`,
-      `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_created_at" ON "patient_messages" ("created_at")`
+      `CREATE INDEX IF NOT EXISTS "IDX_patient_messages_created_at" ON "patient_messages" ("created_at")`,
+      // Entity (patient-message.entity.ts) declares attachments/parent_message_id/deleted_at,
+      // but the original CREATE TABLE above never included them — every patient-portal
+      // message read/send failed against the real table until these are added.
+      `ALTER TABLE patient_messages ADD COLUMN IF NOT EXISTS attachments JSONB`,
+      `ALTER TABLE patient_messages ADD COLUMN IF NOT EXISTS parent_message_id UUID`,
+      `ALTER TABLE patient_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE`
     ];
   }
 
@@ -15666,6 +15691,11 @@ export class DatabaseProvisioningService {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       created_by UUID REFERENCES users(id)
     )`);
+    // pharmacy.service.ts's updateAlert() writes resolved_by/updated_at/notes,
+    // which the original CREATE TABLE above never included.
+    statements.push(`ALTER TABLE pharmacy_alerts ADD COLUMN IF NOT EXISTS resolved_by UUID REFERENCES users(id)`);
+    statements.push(`ALTER TABLE pharmacy_alerts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
+    statements.push(`ALTER TABLE pharmacy_alerts ADD COLUMN IF NOT EXISTS notes TEXT`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_alert_type ON pharmacy_alerts(alert_type)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_inventory_id ON pharmacy_alerts(inventory_id)`);
     statements.push(`CREATE INDEX IF NOT EXISTS idx_pharmacy_alerts_severity ON pharmacy_alerts(severity)`);

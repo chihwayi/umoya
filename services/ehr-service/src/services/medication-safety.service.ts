@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { PatientService } from './patient.service';
+import { DRUG_CLASS_MEMBERS } from '../config/allergy-cross-reactivity';
 
 interface MedicationInput {
   name?: string;
@@ -27,6 +28,14 @@ export interface MedicationHepaticDoseAlert {
   rationale: string;
 }
 
+export interface MedicationAllergyAlert {
+  medication: string;
+  allergen: string;
+  severity: 'severe' | 'moderate' | 'mild' | 'unknown';
+  rationale: string;
+  matchType: 'direct' | 'cross-reactive';
+}
+
 export interface MedicationSafetyAssessment {
   pregnancy: {
     isPregnant: boolean;
@@ -41,6 +50,14 @@ export interface MedicationSafetyAssessment {
     suspectedImpairment: boolean;
     rationale: string | null;
     alerts: MedicationHepaticDoseAlert[];
+  };
+  allergy: {
+    // A-007/MOAS-02: this MUST come from the canonical patient context's
+    // activeAllergies, never be silently empty because the context failed
+    // to load. Callers must treat abstained=true as "insufficient
+    // information to safely proceed" — never as "no allergies".
+    abstained: boolean;
+    alerts: MedicationAllergyAlert[];
   };
 }
 
@@ -272,6 +289,71 @@ export class MedicationSafetyService {
     return { suspectedImpairment, rationale, alerts };
   }
 
+  private deriveAllergyAlerts(
+    activeAllergies: Array<{ allergen: string; severity?: string | null }> | undefined,
+    medications: MedicationInput[],
+  ): MedicationAllergyAlert[] {
+    if (!activeAllergies || activeAllergies.length === 0) return [];
+
+    const alerts: MedicationAllergyAlert[] = [];
+    for (const med of medications) {
+      const medName = this.normalizeMedicationName(med);
+      if (!medName) continue;
+
+      for (const allergy of activeAllergies) {
+        const allergen = String(allergy?.allergen || '').toLowerCase().trim();
+        if (!allergen) continue;
+
+        const severity = (allergy.severity as MedicationAllergyAlert['severity']) || 'unknown';
+
+        // Direct match: allergen name appears in the medication name or vice versa.
+        if (medName.includes(allergen) || allergen.includes(medName)) {
+          alerts.push({
+            medication: medName,
+            allergen,
+            severity,
+            rationale: `Patient has a recorded ${severity} allergy to "${allergen}", which directly matches the prescribed medication "${medName}".`,
+            matchType: 'direct',
+          });
+          continue;
+        }
+
+        // Cross-reactive class match, using the shared drug-class dataset
+        // (config/allergy-cross-reactivity.ts) that cdss.service.ts's own
+        // allergy checks already draw from — one source of truth for
+        // cross-reactivity data instead of a second, divergent copy here.
+        const crossReactiveGroup = DRUG_CLASS_MEMBERS[allergen];
+        if (crossReactiveGroup?.some((drug) => medName.includes(drug))) {
+          alerts.push({
+            medication: medName,
+            allergen,
+            severity,
+            rationale: `Patient has a recorded ${severity} allergy to "${allergen}"; "${medName}" is in the same cross-reactive drug class and may trigger the same reaction.`,
+            matchType: 'cross-reactive',
+          });
+          continue;
+        }
+
+        // Also check the reverse direction: allergen recorded as a specific
+        // drug (e.g. "amoxicillin") that belongs to a class the prescribed
+        // medication also belongs to (e.g. prescribing "ampicillin").
+        for (const [drugClass, members] of Object.entries(DRUG_CLASS_MEMBERS)) {
+          if (members.includes(allergen) && members.some((drug) => medName.includes(drug)) && !medName.includes(allergen)) {
+            alerts.push({
+              medication: medName,
+              allergen,
+              severity,
+              rationale: `Patient has a recorded ${severity} allergy to "${allergen}" (${drugClass} class); "${medName}" is in the same class and may trigger the same reaction.`,
+              matchType: 'cross-reactive',
+            });
+            break;
+          }
+        }
+      }
+    }
+    return alerts;
+  }
+
   async assessMedicationSafety(
     tenantDb: DataSource,
     patientId: string,
@@ -292,6 +374,13 @@ export class MedicationSafetyService {
     ]);
     const renalAlerts = this.deriveRenalAlerts(egfr, medications);
 
+    // A-007/MOAS-02: safetyDataMissing coming back true from the canonical
+    // context means we could not confirm the patient's allergy list — in
+    // that case we abstain (report no alerts but flag abstained=true)
+    // rather than silently asserting "no known allergies".
+    const abstained = context?.safetyDataMissing === true;
+    const allergyAlerts = abstained ? [] : this.deriveAllergyAlerts(context?.activeAllergies, medications);
+
     return {
       pregnancy: {
         isPregnant,
@@ -303,6 +392,10 @@ export class MedicationSafetyService {
         alerts: renalAlerts,
       },
       hepatic: hepatic,
+      allergy: {
+        abstained,
+        alerts: allergyAlerts,
+      },
     };
   }
 }

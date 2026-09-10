@@ -30,6 +30,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
     };
 
     Sentry.captureException(exception);
+    if (status >= 500) {
+      // Unhandled 5xx errors must be visible in server logs regardless of
+      // whether Sentry is configured in this environment — previously these
+      // only went to Sentry, so a local/dev environment with no DSN set had
+      // no way to see the actual stack trace behind an "INTERNAL_ERROR".
+      // eslint-disable-next-line no-console
+      console.error('[AllExceptionsFilter] Unhandled exception:', exception);
+    }
 
     const rid = (request as any)?.requestId || request.headers['x-request-id'] || request.headers['X-Request-ID'] || null;
 

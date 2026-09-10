@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 
 const ALLOWED_BUNDLE_ELEMENTS = [
   'lactate_measured',
@@ -283,7 +284,7 @@ export class SepsisService {
       `UPDATE sepsis_bundles SET ${element} = $1, ${timeColumn} = NOW() WHERE id = $2 RETURNING *`,
       [value, bundleId],
     );
-    const updated = result[0];
+    const updated = firstReturningRow(result);
 
     if (updated) {
       if (value === true) {

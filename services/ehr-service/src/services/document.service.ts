@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 import { MinioService } from './minio.service';
 
 @Injectable()
@@ -225,7 +226,8 @@ export class DocumentService {
       [documentId],
     );
 
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Document not found');
     }
 

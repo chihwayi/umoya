@@ -11,7 +11,7 @@ export class FollowUpController {
   async recommend(
     @Req() req: any,
     @Body() body: {
-      patientId: number;
+      patientId: string;
       encounterId?: number;
       encounterType: 'consultation' | 'telemedicine' | 'discharge';
       riskBand: 'low' | 'moderate' | 'high' | 'critical';
@@ -57,7 +57,7 @@ export class FollowUpController {
 
   @Get('patient/:patientId')
   async patientHistory(@Req() req: any, @Param('patientId') patientId: string) {
-    return this.svc.getPatientRecommendations(req.tenantDb, parseInt(patientId));
+    return this.svc.getPatientRecommendations(req.tenantDb, patientId);
   }
 
   @Get('overdue')

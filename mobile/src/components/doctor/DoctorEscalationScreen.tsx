@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Card, AiBadge, AiPulse, Badge } from '../ui';
 import { EscalationsService, ApiEscalation } from '../../services/escalations';
+import { useBadgeStore } from '../../stores/useBadgeStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -183,7 +184,8 @@ const EscCard: React.FC<{
   esc: Escalation;
   remainingMs: number | null;
   onPress: () => void;
-}> = ({ esc, remainingMs, onPress }) => {
+  onAck: () => void;
+}> = ({ esc, remainingMs, onPress, onAck }) => {
   const color = sevColor(esc.severity);
   const { urgent } = remainingMs !== null ? formatSla(remainingMs) : { urgent: false };
   const pulse = useRef(new Animated.Value(1)).current;
@@ -232,7 +234,10 @@ const EscCard: React.FC<{
           <Text style={styles.escNurse}>{esc.nurse}  ·  {esc.escalatedAt}</Text>
           {esc.status === 'active' && (
             <View style={styles.escActions}>
-              <TouchableOpacity style={[styles.escActionBtn, { borderColor: C.teal + '55' }]}>
+              <TouchableOpacity
+                style={[styles.escActionBtn, { borderColor: C.teal + '55' }]}
+                onPress={(e) => { e.stopPropagation?.(); onAck(); }}
+              >
                 <Text style={[styles.escActionText, { color: C.teal }]}>Acknowledge</Text>
               </TouchableOpacity>
             </View>
@@ -389,7 +394,9 @@ export const DoctorEscalationScreen: React.FC = () => {
   const loadEscalations = useCallback(async () => {
     try {
       const data = await EscalationsService.pending();
-      setEscalations((data ?? []).map(mapApiEscalation));
+      const mapped = (data ?? []).map(mapApiEscalation);
+      setEscalations(mapped);
+      useBadgeStore.getState().setInboxCount(mapped.filter(e => e.status === 'active').length);
     } catch {
       // keep current state
     } finally {
@@ -449,7 +456,6 @@ export const DoctorEscalationScreen: React.FC = () => {
             <Text style={styles.headerTitle}>Escalation Inbox</Text>
             <Text style={styles.headerSub}>Real-time clinical alerts</Text>
           </View>
-          <AiBadge text="S117" />
           {counts.active > 0 && (
             <View style={styles.activeBadge}>
               <Text style={styles.activeBadgeText}>{counts.active}</Text>
@@ -538,6 +544,7 @@ export const DoctorEscalationScreen: React.FC = () => {
               esc={item}
               remainingMs={getSlaMs(item.id)}
               onPress={() => setSelected(item)}
+              onAck={() => acknowledge(item.id)}
             />
           )}
         />
@@ -581,7 +588,7 @@ const styles = StyleSheet.create({
   tabCountText:  { fontFamily: FONT.uiBd, fontSize: 9, color: '#fff' },
 
   chipScroll:   { maxHeight: 44, borderBottomWidth: 1, borderBottomColor: C.border },
-  chipContent:  { paddingHorizontal: 14, paddingVertical: 8, gap: 6, flexDirection: 'row' },
+  chipContent:  { paddingHorizontal: 14, paddingVertical: 8, gap: 6, flexDirection: 'row', alignItems: 'center' },
   chip:         { paddingHorizontal: 12, paddingVertical: 5, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: C.border },
   chipText:     { fontFamily: FONT.uiBd, fontSize: 10, color: C.textMuted, letterSpacing: 0.5 },
 

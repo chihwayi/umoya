@@ -20,8 +20,17 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlocked, onSignOut })
     const compatible = await LocalAuthentication.hasHardwareAsync();
     const enrolled = await LocalAuthentication.isEnrolledAsync();
 
+    // No biometric hardware, or hardware present but nothing enrolled (very
+    // common — plenty of real users never set up Face ID/Touch ID, and it's
+    // the default state of every iOS Simulator). The user already proved
+    // their identity with their password at login; the lock screen is a
+    // best-effort app-resume convenience layer, not a mandatory biometric
+    // gate. Signing them all the way out here (discarding a freshly-issued,
+    // still-valid JWT) just because biometrics aren't configured was the
+    // root cause of A-006 — every login appeared to "succeed" for one
+    // frame and then silently bounce back to the login screen.
     if (!compatible || !enrolled) {
-      onSignOut();
+      onUnlocked();
       return;
     }
 

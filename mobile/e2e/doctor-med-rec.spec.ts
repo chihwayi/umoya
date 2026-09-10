@@ -53,18 +53,24 @@ describe('Umoya Mobile — Doctor Med Rec', () => {
     await element(by.id('login-password-input')).typeText('Demo1234!');
     await element(by.id('login-submit-staff')).tap();
     // iOS's native "Save Password?" Keychain prompt appears after a
-    // successful login and sits outside the RN view hierarchy. Detox's
-    // matchers can't see it while synchronization is disabled (its
-    // accessibility-tree snapshot never picks up the new alert window) —
-    // briefly re-enable sync so Detox can find and dismiss it.
-    await device.enableSynchronization();
-    try {
-      await waitFor(element(by.text('Not Now'))).toBeVisible().withTimeout(5000);
-      await element(by.text('Not Now')).tap();
-    } catch {
-      // Prompt didn't appear this run — nothing to dismiss.
+    // successful login and sits outside the RN view hierarchy. Toggling
+    // device.enableSynchronization() to "let Detox see it" doesn't work
+    // reliably here — this screen's AiPulse decorative loop animation (see
+    // smoke.spec.ts) is still running underneath, so re-enabling full-app
+    // synchronization just hangs waiting for an idle state that never
+    // comes, burning the whole dismiss-attempt window without ever
+    // actually querying for the alert. Poll for it directly with
+    // synchronization left off instead — that's how every other assertion
+    // in this suite already finds elements.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        await waitFor(element(by.text('Not Now'))).toBeVisible().withTimeout(500);
+        await element(by.text('Not Now')).tap();
+        break;
+      } catch {
+        // Not visible yet (or already dismissed) — keep polling briefly.
+      }
     }
-    await device.disableSynchronization();
     await waitFor(element(by.id('tab-DRounds'))).toBeVisible().withTimeout(15000);
   });
 

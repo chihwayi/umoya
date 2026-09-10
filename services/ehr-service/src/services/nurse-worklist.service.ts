@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { HipaaAuditAction, HipaaAuditService } from './hipaa-audit.service';
 import { HivService } from './hiv.service';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class NurseWorklistService {
@@ -765,7 +766,7 @@ export class NurseWorklistService {
       `,
       [note, requestId],
     );
-    return rows[0] || null;
+    return firstReturningRow(rows) || null;
   }
 
   private async createHivAdherenceTrackingEntry(
@@ -9624,7 +9625,7 @@ export class NurseWorklistService {
       [escalationTaskId, user.id],
     );
 
-    const escalation = rows[0];
+    const escalation = firstReturningRow(rows);
     if (!escalation) {
       throw new BadRequestException('Clinical escalation task not found');
     }
@@ -9717,7 +9718,7 @@ export class NurseWorklistService {
       [escalationTaskId, user.id, payload?.note || null],
     );
 
-    const escalation = rows[0];
+    const escalation = firstReturningRow(rows);
     if (!escalation) {
       throw new BadRequestException('Clinical escalation task not found');
     }

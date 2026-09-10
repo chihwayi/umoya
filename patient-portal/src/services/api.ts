@@ -1301,4 +1301,29 @@ export const patientPortalApi = {
     _ensureOk(response, 'Failed to fetch patient flags');
     return response.json();
   },
+
+  // Imaging
+  getImagingStudies: async (token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/imaging/studies`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch imaging studies');
+    return response.json();
+  },
+
+  getImagingReport: async (studyId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/imaging/studies/${studyId}/report`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch imaging report');
+    return response.json();
+  },
+
+  getImagingImages: async (studyId: string, token: string, tenantSlug: string) => {
+    const response = await fetch(`${API_BASE_URL}/patient-portal/imaging/studies/${studyId}/images`, {
+      headers: _withRid({ 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` }),
+    });
+    _ensureOk(response, 'Failed to fetch imaging images');
+    return response.json();
+  },
 };

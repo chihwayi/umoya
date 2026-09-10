@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Post, Param, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PatientJwtAuthGuard } from '../guards/patient-jwt-auth.guard';
 import { LabAiNarrativeService } from '../services/lab-ai-narrative.service';
@@ -57,6 +57,9 @@ export class LabNarrativeController {
     @Req() req: any,
   ): Promise<{ patientNarrative: string; hasCriticalValue: boolean }> {
     const narrative: any = await this.narrativeSvc.getNarrative(resultId, req.tenantDb);
+    if (narrative && narrative.patient_id !== req.patientId) {
+      throw new ForbiddenException('You do not have access to this lab result');
+    }
     return {
       patientNarrative: narrative?.patient_narrative ?? 'Interpretation pending.',
       hasCriticalValue: narrative?.has_critical_value ?? false,

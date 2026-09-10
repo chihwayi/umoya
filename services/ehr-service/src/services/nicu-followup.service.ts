@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 // Bayley-III composite score <85 = 1 SD below mean = significant delay
 const BAYLEY_THRESHOLD = 85;
@@ -162,6 +163,6 @@ export class NicuFollowupService {
       `UPDATE hie_records SET neurodevelopmental_outcome=$1, outcome_assessed_at=$2::date WHERE id=$3 RETURNING *`,
       [body.outcome, body.assessedAt ?? new Date().toISOString().slice(0, 10), id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 }

@@ -429,35 +429,14 @@ export class PatientPortalController {
   async getRecords(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string, @Query('type') type?: string) {
     const patientId = req.user?.sub || req.user?.id;
     if (!patientId) {
-      this.logger.error(`[getRecords] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      this.logger.error('[getRecords] No patient ID found in token');
       throw new Error('Patient ID not found in token');
     }
-    this.logger.log(`[getRecords] Patient ID from token: ${patientId}, Tenant ID: ${req.tenantId}, User object: ${JSON.stringify(req.user)}`);
-    
-    // Debug: Check if patient exists and has records
-    try {
-      if (req.tenantDb) {
-        const patientCheck = await req.tenantDb.query(`SELECT id, first_name, last_name FROM patients WHERE id = $1`, [patientId]);
-        this.logger.log(`[getRecords] Patient check result: ${JSON.stringify(patientCheck)}`);
-        
-        const recordCount = await req.tenantDb.query(`SELECT COUNT(*) as count FROM medical_records WHERE patient_id = $1`, [patientId]);
-        this.logger.log(`[getRecords] Record count for patient ${patientId}: ${JSON.stringify(recordCount)}`);
-        
-        // Test the exact query
-        const testQuery = await req.tenantDb.query(
-          `SELECT id, visit_date, chief_complaint FROM medical_records WHERE patient_id = $1 LIMIT 1`,
-          [patientId]
-        );
-        this.logger.log(`[getRecords] Test query result: ${JSON.stringify(testQuery)}`);
-      }
-    } catch (debugError: any) {
-      this.logger.error(`[getRecords] Debug query error: ${debugError.message || debugError}`);
-    }
-    
+    this.logger.debug(`[getRecords] Patient ID: ${patientId}, Tenant ID: ${req.tenantId}`);
+
     try {
       const result = await this.patientPortalService.getPatientRecords(patientId, req.tenantId, { startDate, endDate, type });
-      this.logger.log(`[getRecords] Service returned ${result.length} records`);
-      this.logger.log(`[getRecords] First record sample: ${JSON.stringify(result[0] || null)}`);
+      this.logger.debug(`[getRecords] Service returned ${result.length} records`);
       return result;
     } catch (serviceError: any) {
       this.logger.error(`[getRecords] Service error: ${serviceError.message || serviceError}`);
@@ -516,6 +495,34 @@ export class PatientPortalController {
   async getLabResults(@Req() req: RequestWithTenant & { user: any }, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
     const patientId = req.user.sub;
     return this.patientPortalService.getPatientLabResults(patientId, req.tenantId, { startDate, endDate });
+  }
+
+  // Imaging
+  @Get('imaging/studies')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get patient imaging studies', description: 'Get finalized imaging studies/reports for the logged-in patient' })
+  async getImagingStudies(@Req() req: RequestWithTenant & { user: any }) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalService.getPatientImagingStudies(patientId, req.tenantId);
+  }
+
+  @Get('imaging/studies/:studyId/report')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get imaging study report', description: 'Get the finalized radiology report for one of the logged-in patient\'s own studies' })
+  async getImagingReport(@Req() req: RequestWithTenant & { user: any }, @Param('studyId') studyId: string) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalService.getPatientImagingReport(patientId, req.tenantId, studyId);
+  }
+
+  @Get('imaging/studies/:studyId/images')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get imaging study images', description: 'Get signed image URLs for one of the logged-in patient\'s own studies' })
+  async getImagingImages(@Req() req: RequestWithTenant & { user: any }, @Param('studyId') studyId: string) {
+    const patientId = req.user?.sub || req.user?.id;
+    return this.patientPortalService.getPatientImagingImages(patientId, req.tenantId, studyId);
   }
 
   // Prescriptions
@@ -1689,7 +1696,7 @@ export class PatientPortalController {
   async getAvailableQuestionnaires(@Req() req: RequestWithTenant & { user: { sub?: string; id?: string } }) {
     const patientId = req.user?.sub || req.user?.id;
     if (!patientId) {
-      this.logger.error(`[getAvailableQuestionnaires] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      this.logger.error('[getAvailableQuestionnaires] No patient ID found in token');
       throw new Error('Patient ID not found in token');
     }
     this.logger.debug(`[getAvailableQuestionnaires] Patient ID: ${patientId}`);
@@ -1704,7 +1711,7 @@ export class PatientPortalController {
   async getPendingQuestionnaires(@Req() req: RequestWithTenant & { user: { sub?: string; id?: string } }) {
     const patientId = req.user?.sub || req.user?.id;
     if (!patientId) {
-      this.logger.error(`[getPendingQuestionnaires] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      this.logger.error('[getPendingQuestionnaires] No patient ID found in token');
       throw new Error('Patient ID not found in token');
     }
     this.logger.debug(`[getPendingQuestionnaires] Patient ID: ${patientId}`);
@@ -1725,7 +1732,7 @@ export class PatientPortalController {
   ) {
     const patientId = req.user?.sub || req.user?.id;
     if (!patientId) {
-      this.logger.error(`[getQuestionnaireHistory] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      this.logger.error('[getQuestionnaireHistory] No patient ID found in token');
       throw new Error('Patient ID not found in token');
     }
     this.logger.debug(`[getQuestionnaireHistory] Patient ID: ${patientId}`);
@@ -1761,7 +1768,7 @@ export class PatientPortalController {
   ) {
     const patientId = req.user?.sub || req.user?.id;
     if (!patientId) {
-      this.logger.error(`[getProTrends] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      this.logger.error('[getProTrends] No patient ID found in token');
       throw new Error('Patient ID not found in token');
     }
     this.logger.debug(`[getProTrends] Patient ID: ${patientId}`);
@@ -1781,7 +1788,7 @@ export class PatientPortalController {
   async getSchedules(@Req() req: RequestWithTenant & { user: { sub?: string; id?: string } }) {
     const patientId = req.user?.sub || req.user?.id;
     if (!patientId) {
-      this.logger.error(`[getSchedules] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      this.logger.error('[getSchedules] No patient ID found in token');
       throw new Error('Patient ID not found in token');
     }
     this.logger.debug(`[getSchedules] Patient ID: ${patientId}`);
@@ -1801,7 +1808,7 @@ export class PatientPortalController {
   ) {
     const patientId = req.user?.sub || req.user?.id;
     if (!patientId) {
-      this.logger.error(`[getQuestionnaire] No patient ID found in token. User object: ${JSON.stringify(req.user)}`);
+      this.logger.error('[getQuestionnaire] No patient ID found in token');
       throw new Error('Patient ID not found in token');
     }
     this.logger.debug(`[getQuestionnaire] Patient ID: ${patientId}, Questionnaire ID: ${questionnaireId}`);

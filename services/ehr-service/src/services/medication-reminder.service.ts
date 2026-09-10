@@ -118,9 +118,10 @@ export class MedicationReminderService {
       FROM medication_reminders m
       JOIN patients p ON m.patient_id = p.id
       JOIN prescriptions pr ON m.prescription_id = pr.id
-      WHERE m.is_active = true 
+      WHERE m.is_active = true
         AND m.${timestampColumn} <= $1
         AND ${prescriptionWhereClause}
+        AND p.deceased_at IS NULL
       ORDER BY m.${timestampColumn} ASC
       LIMIT 50`,
       [now],

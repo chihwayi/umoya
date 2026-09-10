@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 const EVENT_COLUMN: Record<string, string> = {
   dispatched:       'dispatched_at',
@@ -47,7 +48,7 @@ export class PatientTransportService {
       `UPDATE transport_jobs SET ${col}=NOW()${extra} WHERE id=$1 RETURNING *, response_time_mins, p1_target_met`,
       params,
     );
-    const result = rows[0];
+    const result = firstReturningRow(rows);
     if (body.event === 'cleared' && result?.vehicle_id) {
       await db.query(`UPDATE transport_vehicles SET status='available' WHERE id=$1`, [result.vehicle_id]);
     }

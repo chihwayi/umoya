@@ -10,7 +10,7 @@ export type Urgency = 'urgent' | 'soon' | 'routine';
 
 export interface FollowUpRecommendation {
   id: number;
-  patientId: number;
+  patientId: string;
   recommendedDays: number;
   recommendedModality: Modality;
   urgency: Urgency;
@@ -30,7 +30,7 @@ export class FollowUpRecommendationService {
   async generateRecommendation(
     db: any,
     params: {
-      patientId: number;
+      patientId: string;
       encounterId?: number;
       encounterType: 'consultation' | 'telemedicine' | 'discharge';
       riskBand: 'low' | 'moderate' | 'high' | 'critical';
@@ -101,16 +101,16 @@ export class FollowUpRecommendationService {
   async acceptRecommendation(
     db: any,
     id: number,
-    acceptedBy: number,
+    acceptedBy: string,
     override?: { days?: number; modality?: string },
   ): Promise<void> {
     await db.query(
       `UPDATE followup_recommendations
          SET accepted_by = $1, accepted_at = NOW(),
-             clinician_override_days = $2,
+             clinician_override_days = $2::integer,
              clinician_override_modality = $3,
              appointment_due_by = CASE
-               WHEN $2 IS NOT NULL
+               WHEN $2::integer IS NOT NULL
                THEN NOW() + ($2::integer * INTERVAL '1 day')
                ELSE appointment_due_by
              END,
@@ -120,7 +120,7 @@ export class FollowUpRecommendationService {
     );
   }
 
-  async dismissRecommendation(db: any, id: number, dismissedBy: number): Promise<void> {
+  async dismissRecommendation(db: any, id: number, dismissedBy: string): Promise<void> {
     await db.query(
       `UPDATE followup_recommendations
          SET dismissed_by = $1, dismissed_at = NOW(), updated_at = NOW()
@@ -138,7 +138,7 @@ export class FollowUpRecommendationService {
     );
   }
 
-  async getPatientRecommendations(db: any, patientId: number): Promise<any[]> {
+  async getPatientRecommendations(db: any, patientId: string): Promise<any[]> {
     return db.query(
       `SELECT * FROM followup_recommendations
         WHERE patient_id = $1
@@ -150,7 +150,9 @@ export class FollowUpRecommendationService {
 
   async getOverdueFollowUps(db: any): Promise<any[]> {
     return db.query(
-      `SELECT fr.*, p.full_name, p.mrn
+      `SELECT fr.*,
+              (p.first_name || ' ' || p.last_name) AS full_name,
+              p.patient_number AS mrn
          FROM followup_recommendations fr
          JOIN patients p ON p.id = fr.patient_id
         WHERE fr.appointment_booked = FALSE

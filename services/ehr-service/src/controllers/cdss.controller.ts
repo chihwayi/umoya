@@ -31,7 +31,8 @@ export class CdssController {
     return this.cdssService.checkDrugInteractions(
       body.drugIds,
       body.patientId,
-      req.tenantDb
+      req.tenantDb,
+      req.tenantId
     );
   }
 
@@ -46,10 +47,10 @@ export class CdssController {
   @ApiOperation({ summary: 'Get clinical guidelines for condition' })
   @ApiResponse({ status: 200, description: 'Clinical guidelines retrieved' })
   async getGuidelines(
-    @Body() body: { condition: string, patientData?: any },
+    @Body() body: { condition: string, diagnosisCode?: string, patientData?: any },
     @Request() req: RequestWithTenant
   ) {
-    return this.cdssService.getGuidelines(body.condition, body.patientData, req.tenantId, req.tenantDb);
+    return this.cdssService.getGuidelines(body.condition, body.patientData, req.tenantId, req.tenantDb, body.diagnosisCode);
   }
 
   @Post('guidelines/search')
@@ -167,7 +168,7 @@ export class CdssController {
   @ApiOperation({ summary: 'Detect duplicate therapy' })
   @ApiResponse({ status: 200, description: 'Duplicate therapy detected' })
   async detectDuplicateTherapy(@Body() body: { medications: any[], prescriptions?: any[] }, @Request() req: RequestWithTenant) {
-    return this.cdssService.detectDuplicateTherapy(body.medications, body.prescriptions);
+    return this.cdssService.detectDuplicateTherapy(body.medications, body.prescriptions, req.tenantId);
   }
 
   @Post('medications/high-risk')
@@ -179,7 +180,8 @@ export class CdssController {
       body.patientAge,
       body.patientGender,
       body.diagnoses,
-      body.renalFunction
+      body.renalFunction,
+      req.tenantId
     );
   }
 

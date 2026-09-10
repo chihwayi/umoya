@@ -2270,6 +2270,17 @@ export class MaternityService {
       gestationalAgeDays = diffDays % 7;
     }
 
+    // visit_number is NOT NULL but no caller (mobile or web) actually tracks a running
+    // sequence per enrollment, so assign the next one server-side when not supplied.
+    let resolvedVisitNumber = visit_number;
+    if (resolvedVisitNumber === undefined || resolvedVisitNumber === null) {
+      const countResult = await tenantDb.query(
+        `SELECT COUNT(*)::int AS count FROM anc_visits WHERE maternity_enrollment_id = $1`,
+        [maternity_enrollment_id],
+      );
+      resolvedVisitNumber = (countResult[0]?.count ?? 0) + 1;
+    }
+
     // Calculate BMI if weight and height provided
     let bmi = null;
     if (vitalFields.weight && vitalFields.height) {
@@ -2312,14 +2323,14 @@ export class MaternityService {
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
         $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
         $31, $32, $33, $34, $35, $36, $37, $38, $39::jsonb, $40, $41::jsonb,
-        $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52
+        $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53
       )
       RETURNING *
       `,
       [
         maternity_enrollment_id,
         patient_id,
-        visit_number,
+        resolvedVisitNumber,
         visit_date,
         gestationalAge,
         gestationalAgeDays,
@@ -2382,10 +2393,10 @@ export class MaternityService {
       sourceRecordId: createdVisit.id,
       createdBy: userId,
       title: 'ANC visit requires doctor review',
-      summary: `ANC visit #${visit_number} recorded on ${visit_date} triggered maternity safety escalation.`,
+      summary: `ANC visit #${resolvedVisitNumber} recorded on ${visit_date} triggered maternity safety escalation.`,
       precheck,
       taskContext: {
-        visitNumber: visit_number,
+        visitNumber: resolvedVisitNumber,
         visitDate: visit_date,
       },
     });
@@ -2795,7 +2806,7 @@ export class MaternityService {
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18,
         $19, $20, $21, $22, $23, $24, $25, $26,
-        $27::jsonb, $28, $29, $30
+        $27::jsonb, $28, $29, $30, $31
       )
       RETURNING *
       `,

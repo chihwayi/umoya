@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class AviationMedicineService {
@@ -52,7 +53,7 @@ export class AviationMedicineService {
        WHERE id=$5 RETURNING *, bmi, bp_meets_standard`,
       [body.decision, JSON.stringify(body.limitations ?? []), body.nextExamMonths ?? 12, body.notes ?? null, id],
     );
-    const result = rows[0];
+    const result = firstReturningRow(rows);
     const alerts: string[] = [];
     if (!result.bp_meets_standard) alerts.push(`Blood pressure ${result.bp_systolic}/${result.bp_diastolic} mmHg exceeds ICAO Class 1 standard (≤160/95). Certificate cannot be issued.`);
     if (!result.vision_meets_standard) alerts.push('Visual acuity does not meet ICAO standard. Refer to ophthalmology.');

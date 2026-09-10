@@ -49,10 +49,28 @@ describe('TelemedicineVideoService', () => {
         meetingRoomId: 'room-abc123',
         meetingUrl: 'https://umoya.daily.co/room-abc123',
       });
+      // MOAS-06: recording defaults off (a Daily.co plan-restriction error
+      // used to surface as an opaque 500 for every meeting room create) —
+      // it's opt-in via DAILY_ENABLE_RECORDING, not a default-on property.
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+        '/rooms',
+        expect.objectContaining({ properties: expect.not.objectContaining({ enable_recording: expect.anything() }) }),
+      );
+    });
+
+    it('enables cloud recording only when DAILY_ENABLE_RECORDING=true', async () => {
+      process.env.DAILY_ENABLE_RECORDING = 'true';
+      mockAxiosInstance.post.mockResolvedValueOnce({
+        data: { name: 'room-abc123', url: 'https://umoya.daily.co/room-abc123' },
+      });
+
+      await service.createMeetingRoom('consult-1', 'patient-1', 'doctor-1');
+
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
         '/rooms',
         expect.objectContaining({ properties: expect.objectContaining({ enable_recording: 'cloud' }) }),
       );
+      delete process.env.DAILY_ENABLE_RECORDING;
     });
 
     it('falls back to placeholder when DAILY_API_KEY is not set', async () => {

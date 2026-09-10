@@ -1,9 +1,13 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { ModuleReportsService } from '../services/module-reports.service';
 
+// A-004/MOAS-20: tenant-wide, cross-module aggregate reporting — admin-level.
 @Controller('tenants/:tenantId/module-reports')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class ModuleReportsController {
   constructor(private readonly moduleReports: ModuleReportsService) {}
 

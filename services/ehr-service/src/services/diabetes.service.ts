@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 import {
   CreateDiabetesRegistryDto,
   UpdateDiabetesRegistryDto,
@@ -192,10 +193,11 @@ export class DiabetesService {
       `UPDATE diabetes_registry SET ${updates.join(', ')}, updated_at = NOW() WHERE patient_id = $${params.length} RETURNING *`,
       params,
     );
-    if (!result.length) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(`Diabetes registry not found for patient ${patientId}`);
     }
-    return result[0];
+    return row;
   }
 
   async createCareBundle(

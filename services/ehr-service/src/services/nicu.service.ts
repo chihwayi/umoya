@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { firstReturningRow } from '../utils/returning-row';
 
 // Bhutani nomogram thresholds (total bilirubin μmol/L by hours of life, term infants ≥38 weeks)
 // Source: Bhutani VK, Johnson L, Sivieri EM. Pediatrics 1999
@@ -40,7 +41,7 @@ export class NicuService {
 
   async getCensus(db: any): Promise<any[]> {
     return db.query(
-      `SELECT na.id, na.gestational_age_weeks, na.birth_weight_grams, na.is_premature, na.is_vlbw,
+      `SELECT na.id, na.patient_id, na.gestational_age_weeks, na.birth_weight_grams, na.is_premature, na.is_vlbw,
               na.is_elbw, na.incubator_code, na.los_days, na.hiv_exposed, na.status,
               p.first_name, p.last_name,
               latest_bili.total_bilirubin, latest_bili.hours_of_life,
@@ -90,7 +91,7 @@ export class NicuService {
        RETURNING *, los_days`,
       [body.status ?? null, body.dischargeWeightGrams ?? null, id],
     );
-    return rows[0] ?? null;
+    return firstReturningRow(rows) ?? null;
   }
 
   async recordIncubatorSettings(db: any, recordedBy: string, admissionId: string, body: any): Promise<any> {

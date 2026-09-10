@@ -4,6 +4,22 @@ import { C, FONT, RADIUS } from '../../design/tokens';
 
 export type Period = 'today' | 'week' | 'month' | 'quarter' | 'year';
 
+/** Convert a Period into explicit startDate/endDate (YYYY-MM-DD) for backends
+ * that take date ranges rather than a period keyword (e.g. tenant-scoped
+ * cascade/equity/mdsr analytics endpoints). */
+export function periodToDateRange(period: Period): { startDate: string; endDate: string } {
+  const end = new Date();
+  const start = new Date(end);
+  switch (period) {
+    case 'today':   break;
+    case 'week':    start.setDate(start.getDate() - 7); break;
+    case 'month':   start.setMonth(start.getMonth() - 1); break;
+    case 'quarter': start.setMonth(start.getMonth() - 3); break;
+    case 'year':    start.setFullYear(start.getFullYear() - 1); break;
+  }
+  return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
+}
+
 interface Props {
   value: Period;
   onChange: (p: Period) => void;
@@ -22,7 +38,7 @@ export const PeriodSelector: React.FC<Props> = ({ value, onChange }) => (
     horizontal
     showsHorizontalScrollIndicator={false}
     style={s.row}
-    contentContainerStyle={{ paddingRight: 20 }}
+    contentContainerStyle={{ paddingRight: 20, alignItems: 'center' }}
   >
     {OPTIONS.map(opt => (
       <TouchableOpacity

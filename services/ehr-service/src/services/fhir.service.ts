@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { TenantService } from './tenant.service';
 import { DataSource } from 'typeorm';
+import { firstReturningRow } from '../utils/returning-row';
 import { Patient } from '../entities/patient.entity';
 import { MedicalRecord, RecordType } from '../entities/medical-record.entity';
 import { Prescription, PrescriptionStatus } from '../entities/prescription.entity';
@@ -23,7 +25,9 @@ import { ProcedureMapper } from '../fhir/mappers/procedure.mapper';
 import { AllergyIntoleranceMapper } from '../fhir/mappers/allergy-intolerance.mapper';
 import { ServiceRequestMapper } from '../fhir/mappers/service-request.mapper';
 import { DocumentReferenceMapper } from '../fhir/mappers/document-reference.mapper';
+import { ImagingStudyMapper } from '../fhir/mappers/imaging-study.mapper';
 import { OperationOutcomeUtil, IssueType } from '../fhir/utils/operation-outcome.util';
+import { DicomStudy } from '../entities/dicom-study.entity';
 import { Drug } from '../entities/drug.entity';
 import { PharmacyDispensing } from '../entities/pharmacy-dispensing.entity';
 import { PharmacyDispensingItem } from '../entities/pharmacy-dispensing-item.entity';
@@ -40,7 +44,10 @@ type BundleEntry = {
 
 @Injectable()
 export class FhirService {
-  constructor(private readonly fhirValidator?: FhirValidatorService) {}
+  constructor(
+    private readonly fhirValidator?: FhirValidatorService,
+    @Optional() private readonly tenantService?: TenantService,
+  ) {}
   
   async getResourceHistory(resourceType: string, id: string, tenantDb: DataSource) {
     // Basic implementation: return current version only as history is not fully tracked yet
@@ -172,6 +179,7 @@ export class FhirService {
           this.buildResourceCapability('AllergyIntolerance'),
           this.buildResourceCapability('ServiceRequest'),
           this.buildResourceCapability('DocumentReference'),
+          this.buildResourceCapability('ImagingStudy'),
           this.buildResourceCapability('Immunization'),
           this.buildResourceCapability('Procedure'),
           this.buildResourceCapability('CarePlan'),
@@ -731,10 +739,14 @@ export class FhirService {
     }
 
     // Try to find as lab order observation
-    // Lab order ID format: {labOrderId}-{index}
-    if (parts.length >= 2) {
-      // Try first part as UUID
-      const labOrderId = parts[0];
+    // Lab order ID format: {labOrderId}-{index}, where labOrderId is itself
+    // a UUID containing hyphens — A-B003/MOAS-13: this previously took only
+    // `parts[0]` (the UUID's first ~8-char segment) instead of reconstructing
+    // the full UUID from the first 5 hyphen-separated parts (the same fix
+    // already applied to the vitals branch above), so GET on any lab-result
+    // Observation id always 404'd.
+    if (parts.length >= 5) {
+      const labOrderId = parts.slice(0, 5).join('-');
       try {
         const labOrderRepository = tenantDb.getRepository(LabOrder);
         const labOrder = await labOrderRepository.findOne({ where: { id: labOrderId } });
@@ -809,13 +821,26 @@ export class FhirService {
     } else {
       // Lab result
       const labData = ObservationMapper.fromFhirToLabOrder(fhirObservation, tenantId);
+
+      // A-B003/MOAS-13: `ordering_provider_id` is a required (NOT NULL) FK on
+      // lab_orders, but fromFhirToLabOrder() defaults it to '' when the FHIR
+      // `performer` element is absent (it's optional per the FHIR spec) —
+      // that used to reach Postgres as an empty-string UUID and fail with an
+      // opaque "invalid input syntax for type uuid" 500. Surface a clean,
+      // actionable OperationOutcome-style 400 instead.
+      if (!labData.orderingProviderId) {
+        throw new BadRequestException(
+          'Observation.performer is required when creating a laboratory-category Observation (maps to the ordering provider).',
+        );
+      }
+
       const labOrderRepository = tenantDb.getRepository(LabOrder);
-      
+
       const labOrder = labOrderRepository.create({
         ...labData,
         patientId,
       } as any);
-      
+
       const saved = await labOrderRepository.save(labOrder);
       // TypeORM save() can return array, but we passed single entity, so ensure single
       const savedLabOrder = Array.isArray(saved) ? saved[0] : saved;
@@ -874,9 +899,10 @@ export class FhirService {
       const code = fhirObservation.code?.coding?.[0]?.code;
       return observations.find(obs => obs.code?.coding?.[0]?.code === code) || observations.find(obs => obs.id === id) || observations[0];
     } else {
-      // Update lab order
+      // Update lab order — same {labOrderId}-{index} UUID-reconstruction fix
+      // as getObservation() above (A-B003/MOAS-13).
       const parts = id.split('-');
-      const labOrderId = parts[0];
+      const labOrderId = parts.length >= 5 ? parts.slice(0, 5).join('-') : parts[0];
       
       const labData = ObservationMapper.fromFhirToLabOrder(fhirObservation, tenantId);
       
@@ -1262,7 +1288,15 @@ export class FhirService {
       medicationNameSnomedDefinitionStatus: prescriptionData.medicationNameSnomedDefinitionStatus,
       dosage: prescriptionData.dosage || '',
       frequency: prescriptionData.frequency || '',
-      duration: prescriptionData.duration,
+      // A-B003/MOAS-13: `duration` is NOT NULL on prescriptions, but
+      // MedicationRequestMapper.fromFhir only sets it when the FHIR
+      // `dispenseRequest.expectedSupplyDuration` element is present — which
+      // is legitimately optional per the FHIR spec (e.g. PRN/ongoing
+      // orders). Previously left undefined here, so any spec-valid
+      // MedicationRequest without that element failed with an opaque
+      // "null value in column duration" 500 instead of persisting like
+      // dosage/frequency do above.
+      duration: prescriptionData.duration || '',
       quantity: prescriptionData.quantity || 1,
       instructions: prescriptionData.instructions,
       status: prescriptionData.status || PrescriptionStatus.ACTIVE,
@@ -2014,14 +2048,16 @@ export class FhirService {
   async getDocumentReference(id: string, tenantDb: DataSource, tenantId: string) {
     const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
     
-    // Use raw query to avoid recordNumber column issue
-    const sql = `SELECT id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", 'consultation'::varchar as type, visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", 
-      COALESCE(
-        (SELECT jsonb_agg(jsonb_build_object('code', code, 'description', code, 'type', 'primary'))
-         FROM unnest(diagnosis_codes) code),
-        '[]'::jsonb
-      ) as diagnoses,
-      NULL::jsonb as procedures, NULL::text as "followUpInstructions", NULL::jsonb as attachments, false as "isConfidential", created_at as "createdAt", updated_at as "updatedAt" 
+    // Use raw query to avoid recordNumber column issue.
+    // A-B003/MOAS-14: this previously selected `diagnosis_codes` (a column
+    // that exists on medical_aid_claims, not medical_records — apparent
+    // copy/paste from claims code) and hardcoded type as a literal
+    // 'consultation' string, silently discarding the real record_type on
+    // every read. Fixed to read the real `diagnoses` jsonb column and the
+    // real `record_type` column.
+    const sql = `SELECT id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", record_type as type, title, content, visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns",
+      COALESCE(diagnoses, '[]'::jsonb) as diagnoses,
+      NULL::jsonb as procedures, NULL::text as "followUpInstructions", attachments, is_confidential as "isConfidential", created_at as "createdAt", updated_at as "updatedAt"
       FROM medical_records WHERE id = $1`;
     
     const result = await medicalRecordRepository.query(sql, [id]);
@@ -2050,10 +2086,31 @@ export class FhirService {
     // Remove recordNumber if it exists (column doesn't exist in database)
     const { recordNumber, isConfidential, ...dataWithoutRecordNumber } = recordData;
 
+    // A-B003/MOAS-14: `record_type`, `title`, `content` and `created_by` are
+    // all NOT NULL on medical_records, but this insert previously omitted
+    // all four entirely — DocumentReferenceMapper.fromFhir() DOES compute
+    // `type` (record_type), it just was never read here, and there was no
+    // title/content/created_by derivation at all. Every FHIR DocumentReference
+    // create has always failed with a NOT NULL violation as a result.
+    const attachment = fhirDocRef.content?.[0]?.attachment;
+    const title = attachment?.title || fhirDocRef.type?.text || 'Clinical Document';
+    let content = dataWithoutRecordNumber.chiefComplaint || fhirDocRef.description || '';
+    if (attachment?.data) {
+      try {
+        content = Buffer.from(attachment.data, 'base64').toString('utf-8');
+      } catch {
+        // Not valid base64 — keep the chiefComplaint/description fallback above.
+      }
+    }
+
     // Map entity property names to database column names
     const dbData: any = {
       patient_id: dataWithoutRecordNumber.patientId,
       doctor_id: dataWithoutRecordNumber.providerId,
+      created_by: dataWithoutRecordNumber.providerId,
+      record_type: dataWithoutRecordNumber.type,
+      title,
+      content: content || 'No content provided',
       visit_date: dataWithoutRecordNumber.recordDate,
       chief_complaint: dataWithoutRecordNumber.chiefComplaint,
       history_present_illness: dataWithoutRecordNumber.historyOfPresentIllness || null,
@@ -2067,9 +2124,9 @@ export class FhirService {
     // Use raw query to insert (avoids TypeORM trying to save recordNumber column)
     const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
     const result = await medicalRecordRepository.query(
-      `INSERT INTO medical_records (${Object.keys(dbData).join(', ')}) 
-       VALUES (${Object.keys(dbData).map((_, i) => `$${i + 1}`).join(', ')}) 
-       RETURNING id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", created_at as "createdAt", updated_at as "updatedAt"`,
+      `INSERT INTO medical_records (${Object.keys(dbData).join(', ')})
+       VALUES (${Object.keys(dbData).map((_, i) => `$${i + 1}`).join(', ')})
+       RETURNING id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", record_type as "type", title, content, visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", created_at as "createdAt", updated_at as "updatedAt"`,
       Object.values(dbData)
     );
     
@@ -2171,14 +2228,15 @@ export class FhirService {
     const updateSql = `UPDATE medical_records SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", created_at as "createdAt", updated_at as "updatedAt"`;
     
     const result = await medicalRecordRepository.query(updateSql, updateValues);
-    
-    if (!result || result.length === 0) {
+
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException(OperationOutcomeUtil.notFound('DocumentReference', id));
     }
 
     // Map to entity instance
     const updated = new MedicalRecord();
-    Object.assign(updated, result[0]);
+    Object.assign(updated, row);
     updated.recordNumber = undefined; // Column doesn't exist
 
     return DocumentReferenceMapper.toFhir(updated, tenantId);
@@ -2798,15 +2856,45 @@ export class FhirService {
     };
   }
 
+  // A-B003/MOAS-13: resource types whose controller actually implements a
+  // DELETE endpoint (services/ehr-service/src/controllers/fhir.controller.ts)
+  // — the CapabilityStatement must declare exactly the interactions that
+  // exist, since a partner integrating against this server has no other way
+  // to discover that e.g. MedicationRequest supports delete but Encounter
+  // does not.
+  private static readonly RESOURCES_SUPPORTING_DELETE = new Set([
+    'Patient',
+    'MedicationRequest',
+    'Medication',
+    'MedicationDispense',
+    'AllergyIntolerance',
+    'ServiceRequest',
+    'DocumentReference',
+  ]);
+
+  // These reference/directory resources only have @Get search+read routes in
+  // fhir.controller.ts (no @Post/@Put) — declaring create/update for them
+  // previously told partners an interaction existed that would 404.
+  private static readonly READ_ONLY_RESOURCES = new Set([
+    'Location',
+    'Organization',
+    'Practitioner',
+    'PractitionerRole',
+    'CarePlan',
+    'ImagingStudy',
+  ]);
+
   private buildResourceCapability(resourceType: string) {
+    const readOnly = FhirService.READ_ONLY_RESOURCES.has(resourceType);
+    const interaction = readOnly
+      ? [{ code: 'read' }, { code: 'search-type' }]
+      : [{ code: 'read' }, { code: 'search-type' }, { code: 'create' }, { code: 'update' }];
+    if (FhirService.RESOURCES_SUPPORTING_DELETE.has(resourceType)) {
+      interaction.push({ code: 'delete' });
+    }
     return {
       type: resourceType,
-      interaction: [
-        { code: 'read' },
-        { code: 'search-type' },
-        { code: 'create' },
-        { code: 'update' },
-      ],
+      interaction,
       versioning: 'no-version',
       readHistory: false,
       updateCreate: false,
@@ -3487,14 +3575,19 @@ export class FhirService {
 
   // ========== Location Resource ==========
 
-  async searchLocations(query: any, tenantDb: DataSource) {
-    // Return default clinic location
-    // In a real system, you'd have a locations table
-    const location = {
+  // A-B003/MOAS-15: this used to return a hardcoded "Umoya Clinic" object
+  // for every tenant regardless of which clinic was actually asking. There
+  // is genuinely no per-clinic-building `locations` table in this system —
+  // a tenant is one clinic — so the real, non-fabricated source of truth is
+  // the tenant's own registration record (name/address/contact) in the
+  // master `tenants` table, which we now read via TenantService instead.
+  private async buildLocationFromTenant(id: string, tenantId: string) {
+    const meta = this.tenantService ? await this.tenantService.getTenantMetadata(tenantId) : null;
+    return {
       resourceType: 'Location',
-      id: 'clinic',
+      id,
       status: 'active',
-      name: 'Umoya Clinic',
+      name: meta?.clinicName || 'Unknown Clinic',
       description: 'Primary clinic location',
       type: [
         {
@@ -3507,11 +3600,25 @@ export class FhirService {
           ],
         },
       ],
-      address: {
-        use: 'work',
-      },
+      address: meta
+        ? {
+            use: 'work',
+            line: meta.address ? [meta.address] : undefined,
+            city: meta.city || undefined,
+            country: meta.country || undefined,
+          }
+        : { use: 'work' },
+      telecom: meta?.contactPhone || meta?.contactEmail
+        ? [
+            ...(meta.contactPhone ? [{ system: 'phone', value: meta.contactPhone }] : []),
+            ...(meta.contactEmail ? [{ system: 'email', value: meta.contactEmail }] : []),
+          ]
+        : undefined,
     };
+  }
 
+  async searchLocations(query: any, tenantDb: DataSource, tenantId: string) {
+    const location = await this.buildLocationFromTenant('clinic', tenantId);
     return this.buildBundle([
       {
         resource: location,
@@ -3520,36 +3627,19 @@ export class FhirService {
     ]);
   }
 
-  async getLocation(id: string, tenantDb: DataSource) {
-    return {
-      resourceType: 'Location',
-      id: id,
-      status: 'active',
-      name: 'Umoya Clinic',
-      description: 'Primary clinic location',
-      type: [
-        {
-          coding: [
-            {
-              system: 'http://terminology.hl7.org/CodeSystem/v3-RoleCode',
-              code: 'HOSP',
-              display: 'Hospital',
-            },
-          ],
-        },
-      ],
-    };
+  async getLocation(id: string, tenantDb: DataSource, tenantId: string) {
+    return this.buildLocationFromTenant(id, tenantId);
   }
 
   // ========== Organization Resource ==========
 
-  async searchOrganizations(query: any, tenantDb: DataSource) {
-    // Return default organization
-    const organization = {
+  private async buildOrganizationFromTenant(id: string, tenantId: string) {
+    const meta = this.tenantService ? await this.tenantService.getTenantMetadata(tenantId) : null;
+    return {
       resourceType: 'Organization',
-      id: 'umoya',
+      id,
       active: true,
-      name: 'Umoya Solutions',
+      name: meta?.clinicName || 'Unknown Organization',
       type: [
         {
           coding: [
@@ -3561,8 +3651,20 @@ export class FhirService {
           ],
         },
       ],
+      telecom: meta?.contactPhone || meta?.contactEmail
+        ? [
+            ...(meta.contactPhone ? [{ system: 'phone', value: meta.contactPhone }] : []),
+            ...(meta.contactEmail ? [{ system: 'email', value: meta.contactEmail }] : []),
+          ]
+        : undefined,
+      address: meta?.address || meta?.city || meta?.country
+        ? [{ line: meta.address ? [meta.address] : undefined, city: meta.city || undefined, country: meta.country || undefined }]
+        : undefined,
     };
+  }
 
+  async searchOrganizations(query: any, tenantDb: DataSource, tenantId: string) {
+    const organization = await this.buildOrganizationFromTenant('umoya', tenantId);
     return this.buildBundle([
       {
         resource: organization,
@@ -3571,24 +3673,8 @@ export class FhirService {
     ]);
   }
 
-  async getOrganization(id: string, tenantDb: DataSource) {
-    return {
-      resourceType: 'Organization',
-      id: id,
-      active: true,
-      name: 'Umoya Solutions',
-      type: [
-        {
-          coding: [
-            {
-              system: 'http://terminology.hl7.org/CodeSystem/organization-type',
-              code: 'prov',
-              display: 'Healthcare Provider',
-            },
-          ],
-        },
-      ],
-    };
+  async getOrganization(id: string, tenantDb: DataSource, tenantId: string) {
+    return this.buildOrganizationFromTenant(id, tenantId);
   }
 
   // ========== Practitioner Resource ==========
@@ -3771,6 +3857,41 @@ export class FhirService {
   }
 
   // ========== CarePlan Resource ==========
+
+  // ========== ImagingStudy Resource (A-B003/MOAS-14) ==========
+  // Read-only: backed by the real dicom_studies table, no fabricated create
+  // path (see ImagingStudyMapper's docstring for why).
+
+  async searchImagingStudies(query: any, tenantDb: DataSource, tenantId: string) {
+    const dicomStudyRepository = tenantDb.getRepository(DicomStudy);
+    const queryBuilder = dicomStudyRepository.createQueryBuilder('study');
+
+    if (query.patient) {
+      queryBuilder.andWhere('study.patientId = :patientId', { patientId: this.extractId(query.patient) || query.patient });
+    }
+    if (query.modality) {
+      queryBuilder.andWhere('study.modality = :modality', { modality: query.modality });
+    }
+
+    const studies = await queryBuilder.orderBy('study.uploadedAt', 'DESC').getMany();
+    const entries = studies.map((study) => ({
+      resource: ImagingStudyMapper.toFhir(study, tenantId),
+      search: { mode: 'match' as const },
+    }));
+
+    return this.buildBundle(entries);
+  }
+
+  async getImagingStudy(id: string, tenantDb: DataSource, tenantId: string) {
+    const dicomStudyRepository = tenantDb.getRepository(DicomStudy);
+    const study = await dicomStudyRepository.findOne({ where: { id } });
+
+    if (!study) {
+      throw new NotFoundException(OperationOutcomeUtil.notFound('ImagingStudy', id));
+    }
+
+    return ImagingStudyMapper.toFhir(study, tenantId);
+  }
 
   async searchCarePlans(query: any, tenantDb: DataSource) {
     // Care plans can be derived from various sources

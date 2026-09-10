@@ -8,7 +8,7 @@ import { api } from '../services/api';
 
 interface OverdueItem {
   id: number;
-  patientId: number;
+  patientId: string;
   fullName: string;
   mrn: string;
   urgency: string;

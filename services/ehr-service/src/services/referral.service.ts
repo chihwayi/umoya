@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
+import { firstReturningRow } from '../utils/returning-row';
 
 @Injectable()
 export class ReferralService {
@@ -125,6 +126,8 @@ export class ReferralService {
       values,
     );
 
+    const row = firstReturningRow(result);
+
     // If status changed, add to history
     if (updates.status && updates.status !== existing[0].status) {
       await this.addStatusHistory(
@@ -137,14 +140,15 @@ export class ReferralService {
       );
     }
 
-    return result[0];
+    return row;
   }
 
   async deleteReferral(referralId: string, tenantDb: DataSource) {
     this.ensureTenantDb(tenantDb);
 
     const result = await tenantDb.query(`DELETE FROM referrals WHERE id = $1 RETURNING *`, [referralId]);
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Referral not found');
     }
 
@@ -248,11 +252,13 @@ export class ReferralService {
     this.ensureTenantDb(tenantDb);
 
     const existing = await this.getReferralById(referralId, tenantDb);
-    
+
     const result = await tenantDb.query(
       `UPDATE referrals SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
       [status, referralId],
     );
+
+    const row = firstReturningRow(result);
 
     await this.addStatusHistory(referralId, existing.status, status, userId, notes, tenantDb);
 
@@ -267,7 +273,7 @@ export class ReferralService {
       await tenantDb.query(`UPDATE referrals SET appointment_completed_date = CURRENT_DATE WHERE id = $1`, [referralId]);
     }
 
-    return result[0];
+    return row;
   }
 
   async sendReferral(referralId: string, method: string, userId: string, tenantDb: DataSource) {
@@ -547,7 +553,8 @@ export class ReferralService {
       [attachmentId],
     );
 
-    if (result.length === 0) {
+    const row = firstReturningRow(result);
+    if (!row) {
       throw new NotFoundException('Attachment not found');
     }
 

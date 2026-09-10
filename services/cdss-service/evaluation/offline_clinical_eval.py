@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +27,7 @@ OVERCONFIDENT_TERMS = (
 @dataclass(frozen=True)
 class CaseMetrics:
     case_id: str
+    subgroup: str
     retrieved_relevant: int
     relevant_total: int
     recall_at_k: Optional[float]
@@ -75,6 +77,7 @@ def _contains_overconfident_language(text: str) -> bool:
 
 def evaluate_case(case: Dict[str, Any], k: int) -> CaseMetrics:
     case_id = str(case.get("id") or "unknown-case")
+    subgroup = str(case.get("subgroup") or "unspecified")
     expected = case.get("expected") or {}
     prediction = case.get("prediction") or {}
 
@@ -113,6 +116,7 @@ def evaluate_case(case: Dict[str, Any], k: int) -> CaseMetrics:
 
     return CaseMetrics(
         case_id=case_id,
+        subgroup=subgroup,
         retrieved_relevant=retrieved_relevant,
         relevant_total=relevant_total,
         recall_at_k=recall_at_k,
@@ -129,21 +133,13 @@ def _avg(values: Sequence[float]) -> float:
     return sum(values) / float(len(values))
 
 
-def evaluate_dataset(payload: Dict[str, Any], k_override: Optional[int] = None) -> Dict[str, Any]:
-    cases = _ensure_list(payload.get("cases"))
-    k = int(k_override or payload.get("k") or 3)
-    case_metrics = [evaluate_case(case, k) for case in cases]
-
+def _metrics_for(case_metrics: Sequence[CaseMetrics]) -> Dict[str, Any]:
     recall_values = [m.recall_at_k for m in case_metrics if m.recall_at_k is not None]
     hit_values = [m.hit_at_k for m in case_metrics if m.hit_at_k is not None]
     support_values = [1.0 if m.citation_support_pass else 0.0 for m in case_metrics if m.citation_support_pass is not None]
-
     unsafe_count = sum(1 for m in case_metrics if m.unsafe_overconfident)
     abstain_correct_count = sum(1 for m in case_metrics if m.abstain_correct)
-
-    summary = {
-        "dataset_version": payload.get("dataset_version") or "unknown",
-        "k": k,
+    return {
         "total_cases": len(case_metrics),
         "cases_with_relevance_labels": len(recall_values),
         "cases_with_citation_support_requirement": len(support_values),
@@ -162,9 +158,43 @@ def evaluate_dataset(payload: Dict[str, Any], k_override: Optional[int] = None) 
         },
     }
 
+
+def evaluate_dataset(
+    payload: Dict[str, Any],
+    k_override: Optional[int] = None,
+    max_workers: int = 8,
+    case_artifacts_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
+    cases = _ensure_list(payload.get("cases"))
+    k = int(k_override or payload.get("k") or 3)
+
+    # MOAS-22/B-015: evaluate_case() is pure (no shared mutable state), so
+    # running it across a thread pool is safe; results are written back by
+    # original index (not completion order) so the report is byte-for-byte
+    # identical regardless of worker scheduling — "reproducible parallel
+    # runs" means same input -> same output, not just "doesn't crash".
+    case_metrics: List[Optional[CaseMetrics]] = [None] * len(cases)
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(evaluate_case, case, k): idx for idx, case in enumerate(cases)}
+        for future in futures:
+            idx = futures[future]
+            case_metrics[idx] = future.result()
+
+    dataset_version = payload.get("dataset_version") or "unknown"
+    summary = {"dataset_version": dataset_version, "k": k, **_metrics_for(case_metrics)}
+
+    # Subgroup summaries: any case may tag itself with a "subgroup" (e.g.
+    # "pediatric", "maternity", "elderly") so a perfect aggregate score can't
+    # conceal a subgroup that's actually failing.
+    subgroups: Dict[str, List[CaseMetrics]] = {}
+    for m in case_metrics:
+        subgroups.setdefault(m.subgroup, []).append(m)
+    subgroup_summary = {name: _metrics_for(members) for name, members in sorted(subgroups.items())}
+
     case_details = [
       {
           "case_id": m.case_id,
+          "subgroup": m.subgroup,
           "retrieved_relevant": m.retrieved_relevant,
           "relevant_total": m.relevant_total,
           "recall_at_k": None if m.recall_at_k is None else round(m.recall_at_k, 4),
@@ -176,18 +206,36 @@ def evaluate_dataset(payload: Dict[str, Any], k_override: Optional[int] = None) 
       for m in case_metrics
     ]
 
+    if case_artifacts_dir is not None:
+        case_artifacts_dir.mkdir(parents=True, exist_ok=True)
+        for detail in case_details:
+            case_path = case_artifacts_dir / f"{detail['case_id']}.json"
+            with case_path.open("w", encoding="utf-8") as handle:
+                json.dump(detail, handle, indent=2)
+                handle.write("\n")
+
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": summary,
+        "subgroup_summary": subgroup_summary,
         "cases": case_details,
     }
 
 
-def run(dataset_path: Path, output_path: Path, k_override: Optional[int] = None) -> Dict[str, Any]:
+def run(
+    dataset_path: Path,
+    output_path: Path,
+    k_override: Optional[int] = None,
+    write_case_artifacts: bool = False,
+) -> Dict[str, Any]:
     with dataset_path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
 
-    report = evaluate_dataset(payload, k_override=k_override)
+    dataset_version = str(payload.get("dataset_version") or "unversioned")
+    case_artifacts_dir = (
+        output_path.parent / "cases" / dataset_version if write_case_artifacts else None
+    )
+    report = evaluate_dataset(payload, k_override=k_override, case_artifacts_dir=case_artifacts_dir)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2)
@@ -224,9 +272,14 @@ def main() -> None:
         default=None,
         help="Override retrieval cutoff k (defaults to dataset value).",
     )
+    parser.add_argument(
+        "--case-artifacts",
+        action="store_true",
+        help="Write one JSON artifact per case under reports/cases/<dataset_version>/.",
+    )
     args = parser.parse_args()
 
-    report = run(args.dataset, args.output, k_override=args.k)
+    report = run(args.dataset, args.output, k_override=args.k, write_case_artifacts=args.case_artifacts)
     metrics = report["summary"]["metrics"]
     print("Offline clinical evaluation complete.")
     print(f"Dataset: {args.dataset}")

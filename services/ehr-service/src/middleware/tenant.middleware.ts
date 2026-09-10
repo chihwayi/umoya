@@ -35,7 +35,17 @@ export class TenantMiddleware implements NestMiddleware {
       normalizedPath.startsWith('/tenants/subdomain/') ||
       normalizedOriginal.startsWith('/tenants/subdomain/') ||
       normalizedPath.startsWith('/terminology/import/') ||
-      normalizedOriginal.startsWith('/terminology/import/')
+      normalizedOriginal.startsWith('/terminology/import/') ||
+      // B-012/MOAS-16: liveness/readiness probes have no tenant context by
+      // definition — an orchestrator or docker-compose healthcheck calling
+      // these has no X-Tenant-ID to send. (ehr.module.ts's MiddlewareConsumer
+      // .exclude() also lists these, but this hardcoded allowlist is what
+      // actually governs the bypass at runtime, same as the two entries
+      // above — keep both in sync.)
+      normalizedPath === '/health' ||
+      normalizedOriginal === '/health' ||
+      normalizedPath === '/health/ready' ||
+      normalizedOriginal === '/health/ready'
     );
     
     if (isPublicTenantEndpoint) {

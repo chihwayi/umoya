@@ -56,6 +56,7 @@ export class AppointmentReminderCronService {
             WHERE a.status IN ('scheduled', 'confirmed')
               AND a.appointment_date >= NOW() + INTERVAL '23 hours'
               AND a.appointment_date <  NOW() + INTERVAL '24 hours'
+              AND p.deceased_at IS NULL
           `);
 
           for (const appointment of upcoming) {

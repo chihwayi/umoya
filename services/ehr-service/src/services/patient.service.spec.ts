@@ -11,6 +11,7 @@ describe('PatientService.createPatient — MRN collision handling', () => {
     let saveAttempts = 0;
     const repo = {
       findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockImplementation((dto) => ({ ...dto })),
       save: jest.fn().mockImplementation(async (patient) => {
         saveAttempts += 1;
@@ -38,6 +39,7 @@ describe('PatientService.createPatient — MRN collision handling', () => {
     const service = new PatientService();
     const repo = {
       findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockImplementation((dto) => ({ ...dto })),
       save: jest.fn().mockImplementation(async () => {
         const err: any = new Error('duplicate key value violates unique constraint');
@@ -57,6 +59,7 @@ describe('PatientService.createPatient — MRN collision handling', () => {
     const service = new PatientService();
     const repo = {
       findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockImplementation((dto) => ({ ...dto })),
       save: jest.fn().mockRejectedValue(new Error('connection lost')),
     };

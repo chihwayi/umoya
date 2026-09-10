@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
-import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, Bell, X, Droplet, Heart, AlarmClock, CheckCircle2, Download, ClipboardList, Users, Shield, Route, Syringe, AlertCircle, Bot, BookOpen } from 'lucide-react';
+import { Calendar, FileText, Pill, CreditCard, MessageSquare, Activity, LogOut, ArrowRight, Bell, X, Droplet, Heart, AlarmClock, CheckCircle2, Download, ClipboardList, Users, Shield, Route, Syringe, AlertCircle, Bot, BookOpen, FlaskConical, ScanLine } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
 import { useNotifications } from '../hooks/useNotifications';
@@ -355,6 +355,24 @@ const PatientDashboard: React.FC = () => {
             <FileText className="w-5 h-5 opacity-90 mb-2" />
             <p className="text-green-100 text-xs mb-1">Medical Records</p>
             <p className="text-2xl font-bold">{stats.medicalRecords}</p>
+          </Link>
+
+          <Link
+            to={`/${tenantSlug}/lab-results`}
+            className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer"
+          >
+            <FlaskConical className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-teal-100 text-xs mb-1">Lab Results</p>
+            <ArrowRight className="w-4 h-4 opacity-75 mt-1" />
+          </Link>
+
+          <Link
+            to={`/${tenantSlug}/imaging-results`}
+            className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl shadow-md p-3 text-white transform hover:scale-105 transition-transform cursor-pointer"
+          >
+            <ScanLine className="w-5 h-5 opacity-90 mb-2" />
+            <p className="text-cyan-100 text-xs mb-1">Imaging Results</p>
+            <ArrowRight className="w-4 h-4 opacity-75 mt-1" />
           </Link>
 
           {/* Merged Vitals Card - Shows both count and latest vitals */}
