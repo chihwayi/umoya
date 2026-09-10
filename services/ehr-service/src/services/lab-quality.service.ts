@@ -119,24 +119,22 @@ export class LabQualityService {
 
     const [tatRow] = await db.query(
       `SELECT
-         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (completed_at - ordered_at))/3600) AS p50_hours,
-         PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (completed_at - ordered_at))/3600) AS p95_hours
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (updated_at - created_at))/3600) AS p50_hours,
+         PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (updated_at - created_at))/3600) AS p95_hours
        FROM lab_orders
-       WHERE tenant_id = $1
-         AND completed_at IS NOT NULL
-         AND DATE_TRUNC('month', ordered_at) = DATE_TRUNC('month', $2::TIMESTAMPTZ)`,
-      [tenantId, startDate],
+       WHERE status = 'completed'
+         AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', $1::TIMESTAMPTZ)`,
+      [startDate],
     );
 
     const [critRow] = await db.query(
       `SELECT
          COUNT(*) AS total_critical,
-         COUNT(*) FILTER (WHERE notified_at IS NOT NULL
-           AND EXTRACT(EPOCH FROM (notified_at - resulted_at))/3600 <= 1) AS notified_within_1h
-       FROM lab_critical_values
-       WHERE tenant_id = $1
-         AND DATE_TRUNC('month', resulted_at) = DATE_TRUNC('month', $2::TIMESTAMPTZ)`,
-      [tenantId, startDate],
+         COUNT(*) FILTER (WHERE acknowledged_at IS NOT NULL
+           AND EXTRACT(EPOCH FROM (acknowledged_at - alerted_at))/3600 <= 1) AS notified_within_1h
+       FROM lab_critical_alerts
+       WHERE DATE_TRUNC('month', alerted_at) = DATE_TRUNC('month', $1::TIMESTAMPTZ)`,
+      [startDate],
     );
 
     const [rejRow] = await db.query(
@@ -144,9 +142,8 @@ export class LabQualityService {
          COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
          COUNT(*) AS total
        FROM lab_orders
-       WHERE tenant_id = $1
-         AND DATE_TRUNC('month', ordered_at) = DATE_TRUNC('month', $2::TIMESTAMPTZ)`,
-      [tenantId, startDate],
+       WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', $1::TIMESTAMPTZ)`,
+      [startDate],
     );
 
     const byAnalyte: Record<string, number> = {};
