@@ -127,7 +127,7 @@ export class ImmunizationController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    await this.immunizationService.recordAdverseEvent(id, eventData, req.user.userId, tenantDb);
+    await this.immunizationService.recordAdverseEvent(id, eventData, (req.user.sub || req.user.id), tenantDb);
     return { message: 'Adverse event recorded successfully' };
   }
 

@@ -59,7 +59,7 @@ export class DocumentController {
       const result = await this.documentService.uploadDocument(
         body.patientId, 
         documentData, 
-        req.user.userId, 
+        (req.user.sub || req.user.id), 
         req.tenantDb,
         file.buffer,
         req.tenantId,
@@ -106,7 +106,7 @@ export class DocumentController {
   @ApiParam({ name: 'id', description: 'Document ID' })
   @ApiResponse({ status: 200, description: 'Document retrieved successfully' })
   async getDocumentById(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
-    return this.documentService.getDocumentById(id, req.user.userId, req.tenantDb);
+    return this.documentService.getDocumentById(id, (req.user.sub || req.user.id), req.tenantDb);
   }
 
   @Get(':id/view')
@@ -114,7 +114,7 @@ export class DocumentController {
   @ApiParam({ name: 'id', description: 'Document ID' })
   @ApiResponse({ status: 200, description: 'Document content' })
   async viewDocument(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
-    const result = await this.documentService.viewDocument(id, req.user.userId, req.tenantDb);
+    const result = await this.documentService.viewDocument(id, (req.user.sub || req.user.id), req.tenantDb);
     // Redirect to the signed URL
     return { redirectUrl: result.url };
   }
@@ -128,7 +128,7 @@ export class DocumentController {
     @Body() updates: any,
     @Req() req: RequestWithTenant & { user: any },
   ) {
-    return this.documentService.updateDocument(id, updates, req.user.userId, req.tenantDb);
+    return this.documentService.updateDocument(id, updates, (req.user.sub || req.user.id), req.tenantDb);
   }
 
   @Delete(':id')
@@ -136,7 +136,7 @@ export class DocumentController {
   @ApiParam({ name: 'id', description: 'Document ID' })
   @ApiResponse({ status: 200, description: 'Document deleted successfully' })
   async deleteDocument(@Param('id') id: string, @Req() req: RequestWithTenant & { user: any }) {
-    return this.documentService.deleteDocument(id, req.user.userId, req.tenantDb);
+    return this.documentService.deleteDocument(id, (req.user.sub || req.user.id), req.tenantDb);
   }
 
   // ==================== VERSIONS ====================
@@ -173,7 +173,7 @@ export class DocumentController {
       mimeType: file.mimetype,
     };
 
-    return this.documentService.uploadNewVersion(id, fileData, body.changeSummary, req.user.userId, req.tenantDb);
+    return this.documentService.uploadNewVersion(id, fileData, body.changeSummary, (req.user.sub || req.user.id), req.tenantDb);
   }
 
   @Post(':id/versions/:versionId/restore')
@@ -186,7 +186,7 @@ export class DocumentController {
     @Param('versionId') versionId: string,
     @Req() req: RequestWithTenant & { user: any },
   ) {
-    return this.documentService.restoreVersion(id, versionId, req.user.userId, req.tenantDb);
+    return this.documentService.restoreVersion(id, versionId, (req.user.sub || req.user.id), req.tenantDb);
   }
 
   // ==================== SHARING ====================
@@ -200,14 +200,14 @@ export class DocumentController {
     @Body() shareData: any,
     @Req() req: RequestWithTenant & { user: any },
   ) {
-    return this.documentService.shareDocument(id, shareData, req.user.userId, req.tenantDb);
+    return this.documentService.shareDocument(id, shareData, (req.user.sub || req.user.id), req.tenantDb);
   }
 
   @Get('shared/with-me')
   @ApiOperation({ summary: 'Get documents shared with me' })
   @ApiResponse({ status: 200, description: 'Shared documents retrieved' })
   async getSharedDocuments(@Req() req: RequestWithTenant & { user: any }) {
-    return this.documentService.getSharedDocuments(req.user.userId, req.user.role, req.tenantDb);
+    return this.documentService.getSharedDocuments((req.user.sub || req.user.id), req.user.role, req.tenantDb);
   }
 
   @Delete('sharing/:sharingId')
@@ -230,7 +230,7 @@ export class DocumentController {
     @Req() req: RequestWithTenant & { user: any },
   ) {
     const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string) || null;
-    return this.documentService.signDocument(id, signatureData, req.user.userId, ipAddress, req.tenantDb);
+    return this.documentService.signDocument(id, signatureData, (req.user.sub || req.user.id), ipAddress, req.tenantDb);
   }
 
   @Get(':id/signatures')
@@ -252,7 +252,7 @@ export class DocumentController {
     @Body() body: { tagName: string },
     @Req() req: RequestWithTenant & { user: any },
   ) {
-    return this.documentService.addTag(id, body.tagName, req.user.userId, req.tenantDb);
+    return this.documentService.addTag(id, body.tagName, (req.user.sub || req.user.id), req.tenantDb);
   }
 
   @Delete(':id/tags/:tagName')

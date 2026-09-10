@@ -45,7 +45,7 @@ export class ConsentController {
   @ApiResponse({ status: 201, description: 'Template created successfully' })
   async createTemplate(@Body() templateData: CreateConsentTemplateDto, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.consentTemplateService.createTemplate(templateData, req.user.userId, tenantDb);
+    return await this.consentTemplateService.createTemplate(templateData, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('templates')
@@ -104,7 +104,7 @@ export class ConsentController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.consentTemplateService.duplicateTemplate(id, newVersion, req.user.userId, tenantDb);
+    return await this.consentTemplateService.duplicateTemplate(id, newVersion, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Post('templates/:id/preview')
@@ -128,7 +128,7 @@ export class ConsentController {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     return await this.patientConsentService.createConsent(
       consentData,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       req.ip,
       req.headers['user-agent'],
       tenantDb,
@@ -160,7 +160,7 @@ export class ConsentController {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
     return await this.patientConsentService.presentConsent(
       id,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       req.ip,
       req.headers['user-agent'],
       tenantDb,
@@ -179,7 +179,7 @@ export class ConsentController {
     return await this.patientConsentService.signConsent(
       id,
       signatureData,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       req.ip,
       req.headers['user-agent'],
       tenantDb,
@@ -198,7 +198,7 @@ export class ConsentController {
     return await this.patientConsentService.declineConsent(
       id,
       declineData,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       req.ip,
       req.headers['user-agent'],
       tenantDb,
@@ -217,7 +217,7 @@ export class ConsentController {
     return await this.patientConsentService.revokeConsent(
       id,
       revokeData,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       req.ip,
       req.headers['user-agent'],
       tenantDb,
@@ -242,7 +242,7 @@ export class ConsentController {
     return await this.patientConsentService.exportConsent(
       id,
       format,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       req.ip,
       req.headers['user-agent'],
       tenantDb,

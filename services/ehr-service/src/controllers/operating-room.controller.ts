@@ -53,7 +53,7 @@ export class OperatingRoomController {
   @ApiOperation({ summary: 'Schedule a surgical case' })
   async scheduleSurgicalCase(@Body() caseData: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.scheduleSurgicalCase(caseData, req.user.userId, tenantDb);
+    return await this.orService.scheduleSurgicalCase(caseData, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('cases')
@@ -80,7 +80,7 @@ export class OperatingRoomController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.updateCaseStatus(caseId, status, req.user.userId, tenantDb);
+    return await this.orService.updateCaseStatus(caseId, status, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Put('cases/:id/documentation')
@@ -92,7 +92,7 @@ export class OperatingRoomController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.updateCaseDocumentation(caseId, documentation, req.user.userId, tenantDb);
+    return await this.orService.updateCaseDocumentation(caseId, documentation, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Post('cases/:id/cancel')
@@ -104,14 +104,14 @@ export class OperatingRoomController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.cancelCase(caseId, reason, req.user.userId, tenantDb);
+    return await this.orService.cancelCase(caseId, reason, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Post('implants')
   @ApiOperation({ summary: 'Track surgical implant' })
   async trackImplant(@Body() implantData: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.trackImplant(implantData, req.user.userId, tenantDb);
+    return await this.orService.trackImplant(implantData, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('implants/case/:caseId')
@@ -146,7 +146,7 @@ export class OperatingRoomController {
   @HttpCode(HttpStatus.OK)
   async safetyChecklistSignIn(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.updateSafetyChecklistSignIn(caseId, body, req.user.userId, tenantDb);
+    return await this.orService.updateSafetyChecklistSignIn(caseId, body, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Post('cases/:id/safety-checklist/time-out')
@@ -154,7 +154,7 @@ export class OperatingRoomController {
   @HttpCode(HttpStatus.OK)
   async safetyChecklistTimeOut(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.updateSafetyChecklistTimeOut(caseId, body, req.user.userId, tenantDb);
+    return await this.orService.updateSafetyChecklistTimeOut(caseId, body, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Post('cases/:id/safety-checklist/sign-out')
@@ -162,7 +162,7 @@ export class OperatingRoomController {
   @HttpCode(HttpStatus.OK)
   async safetyChecklistSignOut(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.updateSafetyChecklistSignOut(caseId, body, req.user.userId, tenantDb);
+    return await this.orService.updateSafetyChecklistSignOut(caseId, body, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('cases/:id/count-sheets')
@@ -176,14 +176,14 @@ export class OperatingRoomController {
   @ApiOperation({ summary: 'Add count sheet item' })
   async addCountSheet(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.addCountSheet(caseId, body, req.user.userId, tenantDb);
+    return await this.orService.addCountSheet(caseId, body, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Put('count-sheets/:id/verify')
   @ApiOperation({ summary: 'Verify count (final count)' })
   async verifyCountSheet(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.verifyCountSheet(id, body, req.user.userId, tenantDb);
+    return await this.orService.verifyCountSheet(id, body, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('cases/:id/specimens')
@@ -197,7 +197,7 @@ export class OperatingRoomController {
   @ApiOperation({ summary: 'Add specimen' })
   async addSpecimen(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.addSpecimen(caseId, body, req.user.userId, tenantDb);
+    return await this.orService.addSpecimen(caseId, body, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('preference-cards')
@@ -218,7 +218,7 @@ export class OperatingRoomController {
   @ApiOperation({ summary: 'Create preference card' })
   async createPreferenceCard(@Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.orService.createPreferenceCard(body, req.user.userId, tenantDb);
+    return await this.orService.createPreferenceCard(body, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Put('preference-cards/:id')

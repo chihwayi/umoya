@@ -10,7 +10,7 @@ export class MockAppointmentController {
 
   @Post()
   create(@Body() createAppointmentDto: CreateAppointmentDto, @Req() req: any) {
-    return this.appointmentService.create(createAppointmentDto, req.user.userId);
+    return this.appointmentService.create(createAppointmentDto, (req.user.sub || req.user.id));
   }
 
   @Get()

@@ -25,7 +25,7 @@ export class VitalsController {
       this.proactiveAiService.triggerAnalysis({
         patientId: body.patientId,
         tenantId,
-        triggeredByUserId: req.user?.userId,
+        triggeredByUserId: (req.user?.sub || req.user?.id),
         triggerType: 'vitals',
         freshVitals: {
           systolic_bp: body.systolicBp,

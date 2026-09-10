@@ -30,7 +30,7 @@ export class EDController {
   @ApiOperation({ summary: 'Register ED visit' })
   async registerVisit(@Body() visitData: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.edService.registerEDVisit(visitData, req.user.userId, tenantDb);
+    return await this.edService.registerEDVisit(visitData, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Post('visits/:id/triage')
@@ -42,7 +42,7 @@ export class EDController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.edService.triagePatient(visitId, triageData, req.user.userId, tenantDb);
+    return await this.edService.triagePatient(visitId, triageData, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('tracking-board')
@@ -61,7 +61,7 @@ export class EDController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.edService.updateEDStatus(visitId, status, req.user.userId, tenantDb);
+    return await this.edService.updateEDStatus(visitId, status, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('metrics')

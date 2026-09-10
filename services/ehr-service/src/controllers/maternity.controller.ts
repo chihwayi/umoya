@@ -26,7 +26,7 @@ export class MaternityController {
     @Request() req: RequestWithTenant,
     @Body() enrollmentData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.maternityService.createEnrollment(req.tenantDb, enrollmentData, userId);
   }
 
@@ -91,7 +91,7 @@ export class MaternityController {
     @Request() req: RequestWithTenant,
     @Body() visitData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.maternityService.createANCVisit(req.tenantDb, visitData, userId);
   }
 
@@ -135,7 +135,7 @@ export class MaternityController {
     @Request() req: RequestWithTenant,
     @Body() scanData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.maternityService.createUltrasoundScan(req.tenantDb, scanData, userId);
   }
 
@@ -179,7 +179,7 @@ export class MaternityController {
     @Request() req: RequestWithTenant,
     @Body() deliveryData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     const delivery = await this.maternityService.createDelivery(req.tenantDb, deliveryData, userId);
     if (delivery?.id && deliveryData?.patient_id && req.tenantId) {
       this.outcomeLinkage.scheduleFollowUpsFromDb(
@@ -261,7 +261,7 @@ export class MaternityController {
     @Request() req: RequestWithTenant,
     @Body() visitData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.maternityService.createPostnatalVisit(req.tenantDb, visitData, userId);
   }
 
@@ -296,7 +296,7 @@ export class MaternityController {
     @Param('enrollmentId') enrollmentId: string,
     @Body() riskData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.maternityService.addRiskFactor(req.tenantDb, enrollmentId, riskData, userId);
   }
 

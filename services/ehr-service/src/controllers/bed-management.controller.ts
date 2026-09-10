@@ -60,7 +60,7 @@ export class BedManagementController {
       bedId,
       body.patientId,
       body.admissionId,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       tenantDb,
     );
   }
@@ -74,7 +74,7 @@ export class BedManagementController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.bedManagementService.releaseBed(bedId, req.user.userId, body.reason, tenantDb);
+    return await this.bedManagementService.releaseBed(bedId, (req.user.sub || req.user.id), body.reason, tenantDb);
   }
 
   @Post(':id/cleaned')
@@ -82,7 +82,7 @@ export class BedManagementController {
   @HttpCode(HttpStatus.OK)
   async markBedCleaned(@Param('id') bedId: string, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.bedManagementService.markBedCleaned(bedId, req.user.userId, tenantDb);
+    return await this.bedManagementService.markBedCleaned(bedId, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Get('occupancy')
@@ -104,7 +104,7 @@ export class BedManagementController {
   @ApiOperation({ summary: 'Admit patient' })
   async admitPatient(@Body() admissionData: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.adtService.admitPatient(admissionData, req.user.userId, tenantDb);
+    return await this.adtService.admitPatient(admissionData, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Post('admissions/:id/discharge')
@@ -116,7 +116,7 @@ export class BedManagementController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.adtService.dischargePatient(admissionId, dischargeData, req.user.userId, tenantDb);
+    return await this.adtService.dischargePatient(admissionId, dischargeData, (req.user.sub || req.user.id), tenantDb);
   }
 
   @Post('admissions/:id/transfer')
@@ -128,7 +128,7 @@ export class BedManagementController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return await this.adtService.transferPatient(admissionId, transferData, req.user.userId, tenantDb);
+    return await this.adtService.transferPatient(admissionId, transferData, (req.user.sub || req.user.id), tenantDb);
   }
 
   // Specific routes must come before general routes

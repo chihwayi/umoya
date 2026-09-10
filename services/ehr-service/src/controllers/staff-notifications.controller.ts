@@ -26,14 +26,14 @@ export class StaffNotificationsController {
     const opts: { read?: boolean; limit?: number } = {};
     if (read !== undefined) opts.read = read === 'true';
     if (limit) opts.limit = parseInt(limit, 10);
-    return this.svc.getForUser(req.tenantId!, req.user.userId, opts);
+    return this.svc.getForUser(req.tenantId!, (req.user.sub || req.user.id), opts);
   }
 
   @Get('unread-count')
   @ApiOperation({ summary: 'Get unread notification badge count for authenticated user' })
   @ApiResponse({ status: 200, description: 'Returns { count: number }' })
   async getUnreadCount(@Request() req: RequestWithTenant & { user: { userId: string } }) {
-    const count = await this.svc.getUnreadCount(req.tenantId!, req.user.userId);
+    const count = await this.svc.getUnreadCount(req.tenantId!, (req.user.sub || req.user.id));
     return { count };
   }
 
@@ -44,13 +44,13 @@ export class StaffNotificationsController {
     @Param('id') id: string,
     @Request() req: RequestWithTenant & { user: { userId: string } },
   ) {
-    return this.svc.markAsRead(req.tenantId!, id, req.user.userId);
+    return this.svc.markAsRead(req.tenantId!, id, (req.user.sub || req.user.id));
   }
 
   @Patch('read-all')
   @ApiOperation({ summary: 'Mark all notifications as read for the authenticated user' })
   @ApiResponse({ status: 200 })
   markAllAsRead(@Request() req: RequestWithTenant & { user: { userId: string } }) {
-    return this.svc.markAllAsRead(req.tenantId!, req.user.userId);
+    return this.svc.markAllAsRead(req.tenantId!, (req.user.sub || req.user.id));
   }
 }

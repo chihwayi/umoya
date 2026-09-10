@@ -26,7 +26,7 @@ export class LabCriticalAlertController {
   @ApiOperation({ summary: 'Get alerts for current user' })
   @ApiResponse({ status: 200, description: 'Alerts assigned to current user' })
   async getMyAlerts(@Request() req: RequestWithTenant) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.labCriticalAlertService.getAlertsForUser(req.tenantDb, userId);
   }
 
@@ -64,7 +64,7 @@ export class LabCriticalAlertController {
     @Request() req: RequestWithTenant,
     @Body() alertData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.labCriticalAlertService.createAlert(req.tenantDb, alertData, userId);
   }
 
@@ -75,7 +75,7 @@ export class LabCriticalAlertController {
     @Request() req: RequestWithTenant,
     @Body() body: { lab_order_id: string; results: any[] },
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.labCriticalAlertService.checkAndGenerateAlerts(
       req.tenantDb,
       body.lab_order_id,
@@ -92,7 +92,7 @@ export class LabCriticalAlertController {
     @Param('alertId') alertId: string,
     @Body() body: { acknowledgment_notes?: string },
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.labCriticalAlertService.acknowledgeAlert(
       req.tenantDb,
       alertId,
@@ -109,7 +109,7 @@ export class LabCriticalAlertController {
     @Param('alertId') alertId: string,
     @Body() body: { escalate_to: string },
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.labCriticalAlertService.escalateAlert(
       req.tenantDb,
       alertId,

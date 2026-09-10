@@ -49,7 +49,7 @@ export class LabOrderSetEnhancedController {
     @Request() req: RequestWithTenant,
     @Body() orderSetData: any,
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.labOrderSetEnhancedService.createOrderSet(req.tenantDb, orderSetData, userId);
   }
 
@@ -125,7 +125,7 @@ export class LabOrderSetEnhancedController {
       clinical_indication?: string;
     },
   ) {
-    const userId = req.user?.userId;
+    const userId = (req.user?.sub || req.user?.id);
     return this.labOrderSetEnhancedService.createOrdersFromSet(req.tenantDb, body, userId);
   }
 }

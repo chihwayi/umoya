@@ -48,7 +48,7 @@ export class ClinicalPathwayController {
       enrollData.pathwayId,
       enrollData.patientId,
       enrollData.admissionId,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       tenantDb,
     );
   }
@@ -73,7 +73,7 @@ export class ClinicalPathwayController {
       enrollmentId,
       body.stepId,
       body.completed,
-      req.user.userId,
+      (req.user.sub || req.user.id),
       tenantDb,
     );
     return { message: 'Adherence tracked successfully' };

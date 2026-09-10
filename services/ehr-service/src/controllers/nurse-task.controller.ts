@@ -59,7 +59,7 @@ export class NurseTaskController {
     @Param('id') id: string,
     @Request() req: RequestWithTenant & { user: { userId: string } },
   ) {
-    return this.nurseTaskService.markAsViewed(id, req.user.userId, req.tenantDb!);
+    return this.nurseTaskService.markAsViewed(id, (req.user.sub || req.user.id), req.tenantDb!);
   }
 
   @Patch(':id')

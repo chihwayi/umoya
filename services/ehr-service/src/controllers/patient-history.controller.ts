@@ -36,7 +36,7 @@ export class PatientHistoryController {
     return this.patientHistoryService.createMedicalHistory(
       { ...dto, patientId },
       req.tenantDb,
-      req.user?.userId
+      (req.user?.sub || req.user?.id)
     );
   }
 
@@ -78,7 +78,7 @@ export class PatientHistoryController {
     return this.patientHistoryService.createFamilyHistory(
       { ...dto, patientId },
       req.tenantDb,
-      req.user?.userId
+      (req.user?.sub || req.user?.id)
     );
   }
 
@@ -120,7 +120,7 @@ export class PatientHistoryController {
     return this.patientHistoryService.createSocialHistory(
       { ...dto, patientId },
       req.tenantDb,
-      req.user?.userId
+      (req.user?.sub || req.user?.id)
     );
   }
 

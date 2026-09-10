@@ -10,7 +10,7 @@ export class MockPatientController {
 
   @Post()
   create(@Body() createPatientDto: CreatePatientDto, @Req() req: any) {
-    return this.patientService.create(createPatientDto, req.user.userId);
+    return this.patientService.create(createPatientDto, (req.user.sub || req.user.id));
   }
 
   @Get()

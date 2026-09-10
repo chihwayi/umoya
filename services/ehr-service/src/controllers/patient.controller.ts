@@ -92,7 +92,7 @@ export class PatientController {
     const context: any = await this.patientService.getPatientContext(id, req.tenantDb);
 
     const tenantId = req.tenantId;
-    const userId = (req as any).user?.userId;
+    const userId = (req as any).user?.sub || (req as any).user?.id;
 
     // Fire async proactive analysis — does NOT block this response
     this.proactiveAiService.triggerAnalysis({
