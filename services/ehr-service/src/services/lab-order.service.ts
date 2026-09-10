@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { DataSource, DeepPartial } from 'typeorm';
 import { LabOrder, LabOrderStatus } from '../entities/lab-order.entity';
 import { LabTest } from '../entities/lab-test.entity';
@@ -706,13 +707,62 @@ export class LabOrderService {
       throw new NotFoundException('Lab order not found');
     }
     
-    labOrder.results = resultsDto.results;
+    labOrder.results = this.withResultIds(resultsDto.results);
     labOrder.interpretation = resultsDto.interpretation;
     labOrder.reviewedById = reviewedById;
     labOrder.reviewedAt = new Date();
     labOrder.status = LabOrderStatus.COMPLETED;
-    
+
     return labOrderRepository.save(labOrder);
+  }
+
+  private withResultIds(results: any[] | undefined): any[] {
+    if (!Array.isArray(results)) return results as any;
+    return results.map((result) => (result.id ? result : { ...result, id: randomUUID() }));
+  }
+
+  async findByResultId(
+    resultId: string,
+    tenantDb: DataSource,
+  ): Promise<{ order: LabOrder; result: any } | null> {
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const order = await labOrderRepository
+      .createQueryBuilder('labOrder')
+      .where(
+        `EXISTS (SELECT 1 FROM jsonb_array_elements(labOrder.results) elem WHERE elem->>'id' = :resultId)`,
+        { resultId },
+      )
+      .getOne();
+    if (!order) return null;
+    const result = (order.results || []).find((r: any) => r.id === resultId);
+    if (!result) return null;
+    return { order, result };
+  }
+
+  async getPreviousResultValues(
+    patientId: string,
+    testName: string,
+    tenantDb: DataSource,
+    limit = 5,
+  ): Promise<Array<{ value: string; resultedAt: Date }>> {
+    const labOrderRepository = tenantDb.getRepository(LabOrder);
+    const orders = await labOrderRepository
+      .createQueryBuilder('labOrder')
+      .where('labOrder.patientId = :patientId', { patientId })
+      .andWhere('labOrder.status = :status', { status: LabOrderStatus.COMPLETED })
+      .orderBy('labOrder.reviewedAt', 'DESC', 'NULLS LAST')
+      .addOrderBy('labOrder.createdAt', 'DESC')
+      .getMany();
+
+    const values: Array<{ value: string; resultedAt: Date }> = [];
+    for (const order of orders) {
+      for (const result of order.results || []) {
+        if (result.testName === testName) {
+          values.push({ value: result.value, resultedAt: result.resultDate ?? order.reviewedAt ?? order.createdAt });
+        }
+      }
+    }
+    return values.slice(0, limit);
   }
 
   async getPatientResults(patientId: string, tenantDb: DataSource): Promise<LabOrder[]> {
@@ -880,7 +930,7 @@ export class LabOrderService {
         }
       }
       
-      labOrder.results = results;
+      labOrder.results = this.withResultIds(results);
       labOrder.interpretation = resultsDto.interpretation || labOrder.interpretation;
       labOrder.attachments = resultsDto.attachments || labOrder.attachments;
       labOrder.reviewedById = reviewedById;

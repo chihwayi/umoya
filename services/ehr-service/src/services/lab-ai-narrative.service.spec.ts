@@ -1,24 +1,31 @@
 import { LabAiNarrativeService } from './lab-ai-narrative.service';
 
-function makeService(cdss?: any, alert?: any, abstention?: any) {
+const mockResult = {
+  id: 'r1', testName: 'Haemoglobin', value: '12', unit: 'g/dL', referenceRange: '13-17', flag: 'L',
+};
+
+function makeLabOrderService(result: any = mockResult) {
+  return {
+    findByResultId: jest.fn().mockResolvedValue(
+      result ? { order: { patientId: 'p1' }, result } : null,
+    ),
+    getPreviousResultValues: jest.fn().mockResolvedValue([]),
+  };
+}
+
+function makeService(labOrderService?: any, cdss?: any, alert?: any, abstention?: any) {
   return new LabAiNarrativeService(
+    labOrderService ?? makeLabOrderService(),
     cdss ?? null,
     alert ?? null,
     abstention ?? null,
   );
 }
 
-const mockResult = {
-  id: 'r1', patient_id: 'p1', test_name: 'Haemoglobin',
-  value: '12', unit: 'g/dL', reference_range: '13-17', flag: 'L',
-};
-
-function makeDb(result: any = mockResult) {
+function makeDb() {
   return {
     query: jest.fn().mockImplementation((sql: string) => {
-      if (sql.includes('FROM lab_results lr')) return Promise.resolve(result ? [result] : []);
       if (sql.includes('FROM patients')) return Promise.resolve([{ first_name: 'Jane', date_of_birth: '1980-01-01', sex: 'F' }]);
-      if (sql.includes('FROM lab_results') && sql.includes('ORDER BY')) return Promise.resolve([]);
       if (sql.includes('INSERT INTO lab_ai_narratives')) {
         return Promise.resolve([{
           id: 'n1',
@@ -49,7 +56,7 @@ describe('LabAiNarrativeService', () => {
         critical_alerts: [],
       }),
     };
-    const svc = makeService(cdss);
+    const svc = makeService(undefined, cdss);
     const db = makeDb();
     await svc.generateNarrative('r1', 'p1', db, 'test');
     expect(cdss.interpretLabResults).toHaveBeenCalled();
@@ -57,7 +64,7 @@ describe('LabAiNarrativeService', () => {
 
   it('uses abstention narrative when CDSS is null', async () => {
     const abstention = { log: jest.fn().mockResolvedValue(undefined) };
-    const svc = makeService(null, null, abstention);
+    const svc = makeService(undefined, null, null, abstention);
     const db = makeDb();
     await svc.generateNarrative('r1', 'p1', db, 'test');
     expect(abstention.log).toHaveBeenCalledWith(db, 'lab_interpretation', 'not_configured', expect.any(Object));
@@ -65,8 +72,9 @@ describe('LabAiNarrativeService', () => {
 
   it('sends critical alert for HH flag', async () => {
     const alert = { broadcastCriticalAlert: jest.fn().mockResolvedValue(undefined) };
-    const svc = makeService(null, alert);
-    const db = makeDb({ ...mockResult, flag: 'HH', alert_sent: false });
+    const labOrderService = makeLabOrderService({ ...mockResult, flag: 'HH' });
+    const svc = makeService(labOrderService, null, alert);
+    const db = makeDb();
     await svc.generateNarrative('r1', 'p1', db, 'clinic1');
     expect(alert.broadcastCriticalAlert).toHaveBeenCalledWith(
       'clinic1',

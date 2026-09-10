@@ -1,6 +1,7 @@
 import { Vitals } from '../../entities/vitals.entity';
 import { LabOrder } from '../../entities/lab-order.entity';
 import type * as fhir from 'fhir/r4';
+import { randomUUID } from 'crypto';
 
 export class ObservationMapper {
   /**
@@ -613,6 +614,7 @@ export class ObservationMapper {
     };
 
     const result = value ? {
+      id: randomUUID(),
       testCode: code || 'UNKNOWN',
       testName,
       value: value.toString(),

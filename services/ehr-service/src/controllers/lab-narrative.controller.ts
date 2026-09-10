@@ -1,11 +1,15 @@
-import { Controller, ForbiddenException, Get, Post, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PatientJwtAuthGuard } from '../guards/patient-jwt-auth.guard';
 import { LabAiNarrativeService } from '../services/lab-ai-narrative.service';
+import { LabOrderService } from '../services/lab-order.service';
 
 @Controller('labs')
 export class LabNarrativeController {
-  constructor(private readonly narrativeSvc: LabAiNarrativeService) {}
+  constructor(
+    private readonly narrativeSvc: LabAiNarrativeService,
+    private readonly labOrderService: LabOrderService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get('results/:resultId/narrative')
@@ -15,14 +19,11 @@ export class LabNarrativeController {
   ): Promise<unknown> {
     let narrative = await this.narrativeSvc.getNarrative(resultId, req.tenantDb);
     if (!narrative) {
-      const results = await req.tenantDb.query(
-        `SELECT patient_id FROM lab_results WHERE id = $1`,
-        [resultId],
-      );
-      if (results.length > 0) {
+      const match = await this.labOrderService.findByResultId(resultId, req.tenantDb);
+      if (match) {
         narrative = await this.narrativeSvc.generateNarrative(
           resultId,
-          results[0].patient_id,
+          match.order.patientId,
           req.tenantDb,
           req.tenantSubdomain ?? '',
         );
@@ -37,14 +38,11 @@ export class LabNarrativeController {
     @Param('resultId') resultId: string,
     @Req() req: any,
   ): Promise<unknown> {
-    const results = await req.tenantDb.query(
-      `SELECT patient_id FROM lab_results WHERE id = $1`,
-      [resultId],
-    );
-    if (!results.length) return { error: 'Result not found' };
+    const match = await this.labOrderService.findByResultId(resultId, req.tenantDb);
+    if (!match) return { error: 'Result not found' };
     return this.narrativeSvc.generateNarrative(
       resultId,
-      results[0].patient_id,
+      match.order.patientId,
       req.tenantDb,
       req.tenantSubdomain ?? '',
     );
@@ -56,9 +54,19 @@ export class LabNarrativeController {
     @Param('resultId') resultId: string,
     @Req() req: any,
   ): Promise<{ patientNarrative: string; hasCriticalValue: boolean }> {
-    const narrative: any = await this.narrativeSvc.getNarrative(resultId, req.tenantDb);
-    if (narrative && narrative.patient_id !== req.patientId) {
-      throw new ForbiddenException('You do not have access to this lab result');
+    const match = await this.labOrderService.findByResultId(resultId, req.tenantDb);
+    if (!match || match.order.patientId !== req.patientId) {
+      return { patientNarrative: 'Interpretation pending.', hasCriticalValue: false };
+    }
+
+    let narrative: any = await this.narrativeSvc.getNarrative(resultId, req.tenantDb);
+    if (!narrative) {
+      narrative = await this.narrativeSvc.generateNarrative(
+        resultId,
+        match.order.patientId,
+        req.tenantDb,
+        req.tenantSubdomain ?? '',
+      );
     }
     return {
       patientNarrative: narrative?.patient_narrative ?? 'Interpretation pending.',
