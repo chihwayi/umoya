@@ -1,4 +1,4 @@
-export const TENANT_NCD_COMPLICATIONS_BUNDLE_VERSION = '2026.04.18.1';
+export const TENANT_NCD_COMPLICATIONS_BUNDLE_VERSION = '2026.04.18.2';
 
 export const TENANT_NCD_COMPLICATIONS_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS diabetic_foot_assessments (
@@ -115,4 +115,19 @@ export const TENANT_NCD_COMPLICATIONS_STATEMENTS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_ncd_summary_patient ON ncd_complication_summaries(patient_id)`,
   `CREATE INDEX IF NOT EXISTS idx_ncd_summary_high_risk ON ncd_complication_summaries(high_risk)`,
+
+  `CREATE TABLE IF NOT EXISTS ncd_complication_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL,
+    recorded_by UUID NOT NULL,
+    event_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    complication_type VARCHAR(60) NOT NULL,
+    severity VARCHAR(15) NOT NULL,
+    measurements JSONB,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_ncd_complication_events_patient ON ncd_complication_events(patient_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ncd_complication_events_type ON ncd_complication_events(complication_type)`,
+  `CREATE INDEX IF NOT EXISTS idx_ncd_complication_events_severity ON ncd_complication_events(severity)`,
 ];

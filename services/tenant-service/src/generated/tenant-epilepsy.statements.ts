@@ -1,4 +1,4 @@
-export const TENANT_EPILEPSY_BUNDLE_VERSION = '2026.04.12.19';
+export const TENANT_EPILEPSY_BUNDLE_VERSION = '2026.04.12.20';
 
 export const TENANT_EPILEPSY_STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS epilepsy_register (
@@ -72,4 +72,28 @@ export const TENANT_EPILEPSY_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_aed_tox_patient ON aed_toxicity_events(patient_id)`,
   `CREATE INDEX IF NOT EXISTS idx_aed_tox_drug ON aed_toxicity_events(drug_name)`,
   `CREATE INDEX IF NOT EXISTS idx_aed_tox_severity ON aed_toxicity_events(severity)`,
+  `CREATE TABLE IF NOT EXISTS epilepsy_seizure_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL,
+    epilepsy_register_id UUID,
+    recorded_by UUID NOT NULL,
+    event_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    seizure_type VARCHAR(60) NOT NULL,
+    duration_seconds INT NOT NULL,
+    is_status_epilepticus BOOLEAN NOT NULL DEFAULT false,
+    aed_given BOOLEAN NOT NULL DEFAULT false,
+    aed_detail VARCHAR(200),
+    post_ictal BOOLEAN NOT NULL DEFAULT false,
+    consciousness_lost BOOLEAN NOT NULL DEFAULT true,
+    injury_sustained BOOLEAN NOT NULL DEFAULT false,
+    injury_detail VARCHAR(200),
+    trigger_identified VARCHAR(100),
+    emergency_services_called BOOLEAN NOT NULL DEFAULT false,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_seizure_patient ON epilepsy_seizure_events(patient_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_seizure_register ON epilepsy_seizure_events(epilepsy_register_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_seizure_date ON epilepsy_seizure_events(event_date)`,
+  `CREATE INDEX IF NOT EXISTS idx_seizure_status_epilepticus ON epilepsy_seizure_events(is_status_epilepticus)`,
 ];

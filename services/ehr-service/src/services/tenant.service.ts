@@ -216,6 +216,7 @@ import { ScdComplicationScreening } from '../entities/scd-complication-screening
 import { EpilepsyRegister } from '../entities/epilepsy-register.entity';
 import { AedTherapyRecord } from '../entities/aed-therapy-record.entity';
 import { AedToxicityEvent } from '../entities/aed-toxicity-event.entity';
+import { EpilepsySeizureEvent } from '../entities/epilepsy-seizure-event.entity';
 import { AnimalExposure } from '../entities/animal-exposure.entity';
 import { OneHealthReport } from '../entities/one-health-report.entity';
 import { PsychiatricEncounter } from '../entities/psychiatric-encounter.entity';
@@ -349,6 +350,7 @@ import { EmoncSignal } from '../entities/emonc-signal.entity';
 import { DiabeticFootAssessment } from '../entities/diabetic-foot-assessment.entity';
 import { RetinopathyScreening } from '../entities/retinopathy-screening.entity';
 import { CkdStagingRecord } from '../entities/ckd-staging-record.entity';
+import { NcdComplicationEvent } from '../entities/ncd-complication-event.entity';
 import { NtdAssessment } from '../entities/ntd-assessment.entity';
 import { MdaCampaign } from '../entities/mda-campaign.entity';
 import { MalariaEpisode } from '../entities/malaria-episode.entity';
@@ -824,6 +826,7 @@ export class TenantService {
         EpilepsyRegister,
         AedTherapyRecord,
         AedToxicityEvent,
+        EpilepsySeizureEvent,
         AnimalExposure,
         OneHealthReport,
         PsychiatricEncounter,
@@ -959,6 +962,7 @@ export class TenantService {
         DiabeticFootAssessment,
         RetinopathyScreening,
         CkdStagingRecord,
+        NcdComplicationEvent,
         NtdAssessment,
         MdaCampaign,
         MalariaEpisode,

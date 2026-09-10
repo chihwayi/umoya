@@ -4,6 +4,10 @@ import { CdssService } from './cdss.service';
 import { EpilepsyRegister } from '../entities/epilepsy-register.entity';
 import { AedTherapyRecord } from '../entities/aed-therapy-record.entity';
 import { AedToxicityEvent } from '../entities/aed-toxicity-event.entity';
+import { EpilepsySeizureEvent } from '../entities/epilepsy-seizure-event.entity';
+import { Patient } from '../entities/patient.entity';
+
+const STATUS_EPILEPTICUS_THRESHOLD_SECONDS = 300;
 
 @Injectable()
 export class EpilepsyService {
@@ -135,6 +139,66 @@ export class EpilepsyService {
       where: { patientId },
       order: { eventDate: 'DESC', createdAt: 'DESC' },
     });
+  }
+
+  async recordSeizureEvent(
+    tenantId: string,
+    patientId: string,
+    recordedBy: string,
+    dto: Partial<EpilepsySeizureEvent>,
+  ): Promise<{ seizureEvent: EpilepsySeizureEvent; statusEpilepticusProtocol: Record<string, any> | null }> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    const repo = db.getRepository(EpilepsySeizureEvent);
+    const register = await this.getRegister(tenantId, patientId);
+    const durationSeconds = dto.durationSeconds ?? 0;
+    const isStatusEpilepticus = durationSeconds >= STATUS_EPILEPTICUS_THRESHOLD_SECONDS;
+
+    let statusEpilepticusProtocol: Record<string, any> | null = null;
+    if (isStatusEpilepticus) {
+      const patient = await db.getRepository(Patient).findOne({ where: { id: patientId } });
+      statusEpilepticusProtocol = await this.cdssService.epilepsyStatusEpilepticus(
+        {
+          duration_minutes: Number((durationSeconds / 60).toFixed(2)),
+          patient_age_years: this.calculateAge(patient?.dateOfBirth),
+          iv_access: true,
+          drugs_available: dto.aedGiven ? ['benzodiazepine'] : [],
+        },
+        tenantId,
+      );
+    }
+
+    const entity = repo.create({
+      ...dto,
+      patientId,
+      epilepsyRegisterId: dto.epilepsyRegisterId ?? register?.id ?? null,
+      recordedBy,
+      eventDate: dto.eventDate ?? new Date().toISOString().slice(0, 10),
+      isStatusEpilepticus,
+    } as Partial<EpilepsySeizureEvent>);
+
+    const seizureEvent = await repo.save(entity) as unknown as EpilepsySeizureEvent;
+    return { seizureEvent, statusEpilepticusProtocol };
+  }
+
+  async getSeizureEvents(tenantId: string, patientId: string): Promise<EpilepsySeizureEvent[]> {
+    const db = await this.tenantService.getTenantDatabase(tenantId);
+    return db.getRepository(EpilepsySeizureEvent).find({
+      where: { patientId },
+      order: { eventDate: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
+  private calculateAge(dateOfBirth?: Date | string | null): number {
+    if (!dateOfBirth) return 0;
+    const birth = new Date(dateOfBirth);
+    if (Number.isNaN(birth.getTime())) return 0;
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return Math.max(0, age);
   }
 
   async getAedDose(tenantId: string, payload: Record<string, any>): Promise<Record<string, any>> {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { ScdService } from '../services/scd.service';
@@ -60,6 +60,22 @@ export class ScdController {
   @Post('patient/:patientId/risk')
   getComplicationRisk(@Param('patientId') patientId: string, @Body() body: any, @Request() req: RequestWithTenant) {
     return this.scdService.getComplicationRisk(req.tenantId!, patientId, body ?? {});
+  }
+
+  @Post('crisis-events')
+  recordCrisisEvent(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.scdService.recordCrisis(req.tenantId!, body.patientId, req.user?.sub || req.user?.id, {
+      crisisType: typeof body.crisisType === 'string' ? body.crisisType.toLowerCase() : body.crisisType,
+      painScore: body.painScore,
+      spo2AtEvent: body.o2Saturation,
+      triggerIdentified: body.triggeringFactor,
+      notes: body.notes,
+    });
+  }
+
+  @Get('crisis-events')
+  getCrisisEvents(@Query('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.scdService.getCrisisHistory(req.tenantId!, patientId);
   }
 
   @Post('cdss/hydroxyurea-dose')

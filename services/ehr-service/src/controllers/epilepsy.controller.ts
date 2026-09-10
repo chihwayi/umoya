@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { EpilepsyService } from '../services/epilepsy.service';
@@ -54,6 +54,22 @@ export class EpilepsyController {
   @Get('patient/:patientId/toxicity')
   getToxicityEvents(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {
     return this.epilepsyService.getToxicityEvents(req.tenantId!, patientId);
+  }
+
+  @Post('seizures')
+  recordSeizureEvent(@Body() body: any, @Request() req: RequestWithTenant) {
+    const user = req.user as any;
+    return this.epilepsyService.recordSeizureEvent(req.tenantId!, body.patientId, user?.userId ?? user?.id, {
+      seizureType: body.seizureType,
+      durationSeconds: body.durationSeconds,
+      aedGiven: body.aedGiven,
+      notes: body.notes,
+    });
+  }
+
+  @Get('seizures')
+  getSeizureEvents(@Query('patientId') patientId: string, @Request() req: RequestWithTenant) {
+    return this.epilepsyService.getSeizureEvents(req.tenantId!, patientId);
   }
 
   @Post('cdss/aed-dose')
