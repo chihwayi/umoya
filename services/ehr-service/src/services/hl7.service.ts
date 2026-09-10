@@ -1,4 +1,5 @@
 import { Injectable, Optional, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import { LabOrder } from '../entities/lab-order.entity';
@@ -134,6 +135,7 @@ export class Hl7Service {
 
       // Process results
       const results = obxSegments.map(obx => ({
+        id: randomUUID(),
         testCode: obx[3]?.[0]?.split('^')[0],
         testName: obx[3]?.[0]?.split('^')[1],
         value: obx[5]?.[0],

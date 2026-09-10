@@ -121,6 +121,7 @@ export class LabOrder {
 
   @Column({ type: 'jsonb', name: 'results', nullable: true })
   results: Array<{
+    id: string;
     testCode: string;
     testName: string;
     value: string;

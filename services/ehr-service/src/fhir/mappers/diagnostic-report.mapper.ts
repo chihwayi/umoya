@@ -1,5 +1,6 @@
 import { LabOrder, LabOrderStatus, Priority, LabTestCategory } from '../../entities/lab-order.entity';
 import * as fhir from 'fhir/r4';
+import { randomUUID } from 'crypto';
 
 export class DiagnosticReportMapper {
   /**
@@ -178,6 +179,7 @@ export class DiagnosticReportMapper {
       const display = ref.display || '';
       const match = display.match(/(.+):\s*(.+)\s+(.+)/);
       return {
+        id: randomUUID(),
         testCode: loincCode || snomedCode || 'UNKNOWN',
         testName: match ? match[1] : testName,
         value: match ? match[2] : '',

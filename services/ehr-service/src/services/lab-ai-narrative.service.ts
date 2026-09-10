@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { CdssService } from './cdss.service';
 import { AlertDeliveryService } from './alert-delivery.service';
 import { AbstentionLogService } from './abstention-log.service';
+import { LabOrderService } from './lab-order.service';
 
 const ABSTENTION_NARRATIVE =
   'Interpretation pending — please consult your clinician.';
@@ -11,6 +12,7 @@ export class LabAiNarrativeService {
   private readonly logger = new Logger(LabAiNarrativeService.name);
 
   constructor(
+    private readonly labOrderService: LabOrderService,
     @Optional() private readonly cdss: CdssService,
     @Optional() private readonly alertDelivery: AlertDeliveryService,
     @Optional() private readonly abstentionLog: AbstentionLogService,
@@ -22,18 +24,19 @@ export class LabAiNarrativeService {
     db: any,
     subdomain: string,
   ): Promise<unknown> {
-    const results = await db.query(
-      `SELECT lr.*, lp.name AS panel_name
-       FROM lab_results lr
-       LEFT JOIN lab_panels lp ON lp.id = lr.panel_id
-       WHERE lr.id = $1`,
-      [resultId],
-    );
-    const result = results[0] ?? null;
-    if (!result) throw new Error(`Lab result ${resultId} not found`);
+    const match = await this.labOrderService.findByResultId(resultId, db);
+    if (!match) throw new Error(`Lab result ${resultId} not found`);
+    const result = {
+      test_name: match.result.testName,
+      value: match.result.value,
+      unit: match.result.unit,
+      reference_range: match.result.referenceRange,
+      flag: match.result.flag,
+      alert_sent: false,
+    };
 
     const patients = await db.query(
-      `SELECT first_name, last_name, date_of_birth, sex
+      `SELECT first_name, last_name, date_of_birth, gender
        FROM patients WHERE id = $1`,
       [patientId],
     );
@@ -49,13 +52,13 @@ export class LabAiNarrativeService {
     if (this.cdss) {
       try {
         const labResultPayload = {
-          test_name: result.test_name ?? result.panel_name,
+          test_name: result.test_name,
           value: result.value,
           unit: result.unit,
           reference_range: result.reference_range,
           flag: result.flag,
           patient_age: this.calcAge(patient.date_of_birth),
-          patient_sex: patient.sex,
+          patient_sex: patient.gender,
           historical: previousValues,
         };
 
@@ -163,12 +166,7 @@ export class LabAiNarrativeService {
     testName: string,
     db: any,
   ): Promise<Array<{ value: string; resultedAt: string }>> {
-    const rows = await db.query(
-      `SELECT value, resulted_at FROM lab_results
-       WHERE patient_id = $1 AND test_name = $2 AND status = 'resulted'
-       ORDER BY resulted_at DESC LIMIT 5`,
-      [patientId, testName],
-    );
-    return rows.map((r: any) => ({ value: r.value, resultedAt: r.resulted_at }));
+    const rows = await this.labOrderService.getPreviousResultValues(patientId, testName, db);
+    return rows.map((r) => ({ value: r.value, resultedAt: String(r.resultedAt) }));
   }
 }
