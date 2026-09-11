@@ -1102,3 +1102,88 @@ Bug ref:       services/ehr-service/src/controllers/antibiogram.controller.ts (t
 **New feature built (not a bug fix):** Culture & Sensitivity recording + facility-wide Antibiogram
 summary/empirical-recommendation, previously unreachable from any platform, now available on
 mobile (doctor + nurse).
+
+### Test 22 — Systemic sweep: entity-registration and tenant-header bugs (backend)
+
+```
+Module:        Codebase-wide (triggered by the antibiogram investigation)
+Platform:      Backend
+Context:       Since antibiogram's root cause was "entity never registered in tenant DataSource,"
+               generalized the check: scanned every entity file for classes never mentioned in
+               tenant.service.ts, then filtered to only those actually accessed via
+               `getRepository()` (the only access pattern that requires registration).
+Findings:      47 additional entities, spanning ~20 services, were confirmed genuinely broken this
+               way: EPI/immunization (AefiReport, ColdChainLog, EpiSchedule, ImmunizationRecord,
+               ImmunizationSchedule, VaccineInventory, VaccineLot), PMTCT (ArtCohort,
+               PepfarMerIndicator, PmtctEnrollment, PmtctInfant), outbreak surveillance
+               (CholeraCase, ContactTrace, MohAlert, NotifiableDisease, OutbreakCase, TyphoidCase,
+               RegionalDiseaseReport), pharmacogenomics (PgxAlert, PgxProfile), BCMA
+               (MedicationBarcodeMaster, PatientWristband), IoT (IotDataIngestion,
+               IotDeviceRegistration), mobile money (MobileMoneyConfig, MobileMoneyTransaction),
+               SDOH (CommunityResource, SdohReferral, SdohScreeningLog), predictive risk
+               (DeteriorationPrediction, ReadmissionPrediction), clinical trial matching
+               (TrialMatch), supply chain AI (ProcurementAlert, StockoutPrediction), patient
+               history (PatientFamilyHistory, PatientMedicalHistory, PatientSocialHistory), plus
+               AiRecommendationAudit, AutoCodingSuggestion, ClinicalAlertDelivery,
+               Dhis2TrackerSyncLog, FhirIngestionLog, FormIntelligenceConfig,
+               FormularyAiSuggestion, PatientEducationMaterial, SchedulingAiPrediction.
+               Fixed by registering all 47 in tenant.service.ts (mechanical, low-risk — import +
+               array entry per entity, matching the exact pattern already fixed for PatientMessage
+               and the 3 antibiogram entities).
+               Verified live: re-tested the immunization forecast endpoint (the same one
+               VaccinationCardScreen.tsx was fixed to call earlier this session) — confirmed the
+               entity-registration fix alone was NOT sufficient; it surfaced a second, separate bug
+               underneath (see below).
+Second bug:    ImmunizationSchedule declares 6 columns (precautions, notes, cdc_schedule_version,
+               target_disease_snomed_codes, contraindications_snomed, precautions_snomed) that the
+               original provisioning bundle never created — the same "entity/service intends
+               columns the provisioning bundle never created" pattern as patient_messages and
+               pharmacy_alerts. Fixed via additive ALTER TABLE in database-provisioning.service.ts,
+               applied directly to the live tenant DB. Retested: forecast endpoint now returns
+               real due-dose data correctly.
+Third finding: While spot-checking a few more of the 47 newly-registered entities live, found an
+               entirely separate, larger systemic bug: 17 controllers (antibiogram + 16 more —
+               pgx, nephrology, geriatrics, neurology, dermatology, malaria, ntd, pulmonology,
+               palliative, pmtct, sdoh, pepfar-mer, smart-scheduling, ai-explainability,
+               auto-coding, smart-defaults, formulary-optimization) share an identical copy-pasted
+               bug: a `tenant(h)` helper reading a nonstandard `x-tenant-subdomain` header that no
+               client (mobile/web/patient-portal) has ever sent — every request silently resolves
+               to a nonexistent 'default' tenant, so every endpoint on all 17 controllers has
+               always either crashed (`getTenantDatabase(null)` → `.getRepository()` on null) or
+               returned wrong-tenant data. Confirmed live via pgx.controller.ts:
+               `POST /pgx/patient/:id/profile` threw "Cannot read properties of null (reading
+               'getRepository')". Fixed by rewriting all 17 controllers to use the standard
+               `req.tenantDb`/`req.tenantId` pattern (matching every other controller in the
+               codebase) and updating their service method signatures to accept a DataSource
+               directly, exactly as done for antibiogram. Dispatched as 4 parallel fix batches;
+               results pending at time of writing this entry.
+Status:        In progress — entity registration (47) done and verified; immunization-schedule
+               schema drift done and verified; 17-controller tenant-header sweep dispatched,
+               awaiting batch completion and consolidated live verification.
+Bug ref:       services/ehr-service/src/services/tenant.service.ts (47 entity registrations),
+               services/tenant-service/src/services/database-provisioning.service.ts
+               (immunization_schedules missing columns) — both applied and verified. The 17
+               controller/service tenant-header fixes are tracked separately once batches complete.
+```
+
+## Update to Step 4 Deliverables — Systemic Sweep, Final
+
+All 17 tenant-header fixes completed and verified. Summary:
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 28 | 47 entities never registered in tenant DataSource (EPI, PMTCT, outbreak surveillance, pharmacogenomics, BCMA, IoT, mobile money, SDOH, predictive risk, clinical trial matching, supply chain AI, patient history, and more) | Clinical safety | Fixed |
+| 29 | immunization_schedules missing 6 columns the entity always tried to write | Functional | Fixed |
+| 30 | 17 controllers (antibiogram, pgx, nephrology, geriatrics, neurology, dermatology, malaria, ntd, pulmonology, palliative, pmtct, sdoh, pepfar-mer, smart-scheduling, ai-explainability, auto-coding, smart-defaults, formulary-optimization) shared an identical broken tenant-header pattern — every endpoint on every one of these modules has always resolved to a nonexistent tenant | Clinical safety + widespread correctness | Fixed |
+| 31 | Two call sites (encounter-copilot.service.ts, pharmacy-intelligence.service.ts) broke after the signature change to smart-defaults/formulary-optimization services | Regression from bug #30's fix | Fixed |
+| 32 | nephrology's CKD assessment endpoint never derived the assessing clinician or defaulted the assessment date — required client-supplied fields with no fallback | Functional | Fixed |
+
+**Verification:** Full `npx tsc --noEmit` across the entire ehr-service package: clean. Live-verified
+a representative sample across the fix: pgx (previously crashed with a null-repository error, now
+saves correctly), sdoh (previously would have hit the same class of error, now works), and
+nephrology (surfaced two further genuine bugs during verification, both fixed and reverified).
+
+This closes out the drill-down testing pass's systemic-bug-hunting thread. Between the ORM
+RETURNING-tuple bug (bugs #19-22) and this tenant-resolution bug (bugs #28-32), roughly 20 clinical
+modules across the codebase had significant portions of their backend completely non-functional in
+production, entirely undetected because nothing had ever driven them end-to-end before this session.

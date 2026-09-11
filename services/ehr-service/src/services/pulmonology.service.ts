@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { SpirometryResult } from '../entities/spirometry-result.entity';
@@ -18,14 +19,12 @@ export class PulmonologyService {
 
   // ── Spirometry ─────────────────────────────────────────────────────────────
 
-  async addSpirometry(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addSpirometry(ds: DataSource, dto: any) {
     const repo = ds.getRepository(SpirometryResult);
     return repo.save(repo.create(dto));
   }
 
-  async getSpirometryResults(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getSpirometryResults(ds: DataSource, patientId: string) {
     return ds.getRepository(SpirometryResult).find({
       where: { patientId },
       order: { testDate: 'DESC' },
@@ -34,22 +33,19 @@ export class PulmonologyService {
 
   // ── COPD ───────────────────────────────────────────────────────────────────
 
-  async addCopdAssessment(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addCopdAssessment(ds: DataSource, dto: any) {
     const repo = ds.getRepository(CopdAssessment);
     return repo.save(repo.create(dto));
   }
 
-  async getCopdAssessments(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getCopdAssessments(ds: DataSource, patientId: string) {
     return ds.getRepository(CopdAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
     });
   }
 
-  async updateCopdAssessment(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateCopdAssessment(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(CopdAssessment);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -57,22 +53,19 @@ export class PulmonologyService {
 
   // ── Asthma ─────────────────────────────────────────────────────────────────
 
-  async addAsthmaRecord(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addAsthmaRecord(ds: DataSource, dto: any) {
     const repo = ds.getRepository(AsthmaRecord);
     return repo.save(repo.create(dto));
   }
 
-  async getAsthmaRecords(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getAsthmaRecords(ds: DataSource, patientId: string) {
     return ds.getRepository(AsthmaRecord).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
     });
   }
 
-  async updateAsthmaRecord(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateAsthmaRecord(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(AsthmaRecord);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -80,14 +73,12 @@ export class PulmonologyService {
 
   // ── Peak Flow ──────────────────────────────────────────────────────────────
 
-  async addPeakFlow(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addPeakFlow(ds: DataSource, dto: any) {
     const repo = ds.getRepository(PeakFlowDiary);
     return repo.save(repo.create(dto));
   }
 
-  async getPeakFlowDiary(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getPeakFlowDiary(ds: DataSource, patientId: string) {
     return ds.getRepository(PeakFlowDiary).find({
       where: { patientId },
       order: { recordedAt: 'DESC' },
@@ -97,22 +88,19 @@ export class PulmonologyService {
 
   // ── Oxygen Therapy ─────────────────────────────────────────────────────────
 
-  async addOxygenTherapy(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addOxygenTherapy(ds: DataSource, dto: any) {
     const repo = ds.getRepository(OxygenTherapyRecord);
     return repo.save(repo.create(dto));
   }
 
-  async getOxygenTherapy(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getOxygenTherapy(ds: DataSource, patientId: string) {
     return ds.getRepository(OxygenTherapyRecord).find({
       where: { patientId },
       order: { startDate: 'DESC' },
     });
   }
 
-  async updateOxygenTherapy(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateOxygenTherapy(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(OxygenTherapyRecord);
     await repo.update(id, dto);
     return repo.findOneBy({ id });

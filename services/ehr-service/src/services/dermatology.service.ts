@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { SkinLesion } from '../entities/skin-lesion.entity';
 import { WoundAssessment } from '../entities/wound-assessment.entity';
@@ -15,22 +16,19 @@ export class DermatologyService {
 
   // ── Skin Lesions ───────────────────────────────────────────────────────────
 
-  async addLesion(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addLesion(ds: DataSource, dto: any) {
     const repo = ds.getRepository(SkinLesion);
     return repo.save(repo.create(dto));
   }
 
-  async getLesions(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getLesions(ds: DataSource, patientId: string) {
     return ds.getRepository(SkinLesion).find({
       where: { patientId },
       order: { recordedAt: 'DESC' },
     });
   }
 
-  async updateLesion(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateLesion(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(SkinLesion);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -38,22 +36,19 @@ export class DermatologyService {
 
   // ── Wound Assessments ──────────────────────────────────────────────────────
 
-  async addWound(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addWound(ds: DataSource, dto: any) {
     const repo = ds.getRepository(WoundAssessment);
     return repo.save(repo.create(dto));
   }
 
-  async getWounds(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getWounds(ds: DataSource, patientId: string) {
     return ds.getRepository(WoundAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
     });
   }
 
-  async updateWound(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateWound(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(WoundAssessment);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -61,14 +56,12 @@ export class DermatologyService {
 
   // ── Burn Assessments ───────────────────────────────────────────────────────
 
-  async addBurn(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addBurn(ds: DataSource, dto: any) {
     const repo = ds.getRepository(BurnAssessment);
     return repo.save(repo.create(dto));
   }
 
-  async getBurns(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getBurns(ds: DataSource, patientId: string) {
     return ds.getRepository(BurnAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
@@ -77,14 +70,12 @@ export class DermatologyService {
 
   // ── Dermatology Notes ──────────────────────────────────────────────────────
 
-  async addNote(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addNote(ds: DataSource, dto: any) {
     const repo = ds.getRepository(DermatologyNote);
     return repo.save(repo.create(dto));
   }
 
-  async getNotes(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getNotes(ds: DataSource, patientId: string) {
     return ds.getRepository(DermatologyNote).find({
       where: { patientId },
       order: { noteDate: 'DESC' },

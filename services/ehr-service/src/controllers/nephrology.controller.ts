@@ -1,84 +1,82 @@
-import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { NephrologyService } from '../services/nephrology.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('nephrology')
 @UseGuards(JwtAuthGuard)
 export class NephrologyController {
   constructor(private readonly svc: NephrologyService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
-  }
-
   // ── CKD ────────────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/ckd')
-  addCkd(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addCkdAssessment(this.tenant(h), { ...dto, patientId });
+  addCkd(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    const assessedBy = dto.assessedBy || (req.user as any)?.sub || (req.user as any)?.id;
+    return this.svc.addCkdAssessment(req.tenantDb!, { ...dto, patientId, assessedBy });
   }
 
   @Get('patient/:patientId/ckd')
-  getCkd(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getCkdAssessments(this.tenant(h), patientId);
+  getCkd(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getCkdAssessments(req.tenantDb!, patientId);
   }
 
   // ── Dialysis ───────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/dialysis')
-  addDialysis(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addDialysisRecord(this.tenant(h), { ...dto, patientId });
+  addDialysis(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addDialysisRecord(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/dialysis')
-  getDialysis(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getDialysisRecords(this.tenant(h), patientId);
+  getDialysis(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getDialysisRecords(req.tenantDb!, patientId);
   }
 
   @Patch('dialysis/:id')
-  updateDialysis(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateDialysisRecord(this.tenant(h), id, dto);
+  updateDialysis(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateDialysisRecord(req.tenantDb!, id, dto);
   }
 
   // ── Fluid Balance ──────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/fluid')
-  addFluid(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addFluidBalance(this.tenant(h), { ...dto, patientId });
+  addFluid(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addFluidBalance(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/fluid')
-  getFluid(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getFluidBalance(this.tenant(h), patientId);
+  getFluid(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getFluidBalance(req.tenantDb!, patientId);
   }
 
   // ── Biopsy ─────────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/biopsy')
-  addBiopsy(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addBiopsy(this.tenant(h), { ...dto, patientId });
+  addBiopsy(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addBiopsy(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/biopsy')
-  getBiopsies(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getBiopsies(this.tenant(h), patientId);
+  getBiopsies(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getBiopsies(req.tenantDb!, patientId);
   }
 
   // ── Transplant ─────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/transplant')
-  addTransplant(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addTransplantRecord(this.tenant(h), { ...dto, patientId });
+  addTransplant(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addTransplantRecord(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/transplant')
-  getTransplant(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getTransplantRecords(this.tenant(h), patientId);
+  getTransplant(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getTransplantRecords(req.tenantDb!, patientId);
   }
 
   @Patch('transplant/:id')
-  updateTransplant(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateTransplantRecord(this.tenant(h), id, dto);
+  updateTransplant(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateTransplantRecord(req.tenantDb!, id, dto);
   }
 
   // ── CDSS ───────────────────────────────────────────────────────────────────

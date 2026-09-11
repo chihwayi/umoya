@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { GeriatricAssessment } from '../entities/geriatric-assessment.entity';
@@ -18,22 +19,19 @@ export class GeriatricsService {
 
   // ── Geriatric Assessments ──────────────────────────────────────────────────
 
-  async addAssessment(tenantSubdomain: string, dto: Partial<GeriatricAssessment>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addAssessment(ds: DataSource, dto: Partial<GeriatricAssessment>) {
     const repo = ds.getRepository(GeriatricAssessment);
     return repo.save(repo.create(dto as any));
   }
 
-  async getAssessments(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getAssessments(ds: DataSource, patientId: string) {
     return ds.getRepository(GeriatricAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
     });
   }
 
-  async getLatestAssessment(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getLatestAssessment(ds: DataSource, patientId: string) {
     return ds.getRepository(GeriatricAssessment).findOne({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
@@ -42,14 +40,12 @@ export class GeriatricsService {
 
   // ── Falls Assessments ──────────────────────────────────────────────────────
 
-  async addFallsAssessment(tenantSubdomain: string, dto: Partial<FallsAssessment>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addFallsAssessment(ds: DataSource, dto: Partial<FallsAssessment>) {
     const repo = ds.getRepository(FallsAssessment);
     return repo.save(repo.create(dto as any));
   }
 
-  async getFallsAssessments(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getFallsAssessments(ds: DataSource, patientId: string) {
     return ds.getRepository(FallsAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
@@ -58,14 +54,12 @@ export class GeriatricsService {
 
   // ── Pressure Injury ────────────────────────────────────────────────────────
 
-  async addPressureAssessment(tenantSubdomain: string, dto: Partial<PressureInjuryAssessment>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addPressureAssessment(ds: DataSource, dto: Partial<PressureInjuryAssessment>) {
     const repo = ds.getRepository(PressureInjuryAssessment);
     return repo.save(repo.create(dto as any));
   }
 
-  async getPressureAssessments(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getPressureAssessments(ds: DataSource, patientId: string) {
     return ds.getRepository(PressureInjuryAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
@@ -74,14 +68,12 @@ export class GeriatricsService {
 
   // ── Polypharmacy Reviews ───────────────────────────────────────────────────
 
-  async addPolypharmacyReview(tenantSubdomain: string, dto: Partial<PolypharmacyReview>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addPolypharmacyReview(ds: DataSource, dto: Partial<PolypharmacyReview>) {
     const repo = ds.getRepository(PolypharmacyReview);
     return repo.save(repo.create(dto as any));
   }
 
-  async getPolypharmacyReviews(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getPolypharmacyReviews(ds: DataSource, patientId: string) {
     return ds.getRepository(PolypharmacyReview).find({
       where: { patientId },
       order: { reviewDate: 'DESC' },
@@ -90,22 +82,19 @@ export class GeriatricsService {
 
   // ── Advance Care Planning ──────────────────────────────────────────────────
 
-  async addAcpDocument(tenantSubdomain: string, dto: Partial<AdvanceCarePlanning>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addAcpDocument(ds: DataSource, dto: Partial<AdvanceCarePlanning>) {
     const repo = ds.getRepository(AdvanceCarePlanning);
     return repo.save(repo.create(dto as any));
   }
 
-  async getAcpDocuments(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getAcpDocuments(ds: DataSource, patientId: string) {
     return ds.getRepository(AdvanceCarePlanning).find({
       where: { patientId },
       order: { documentDate: 'DESC' },
     });
   }
 
-  async updateAcpDocument(tenantSubdomain: string, id: string, dto: Partial<AdvanceCarePlanning>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async updateAcpDocument(ds: DataSource, id: string, dto: Partial<AdvanceCarePlanning>) {
     await ds.getRepository(AdvanceCarePlanning).update(id, dto as any);
     return ds.getRepository(AdvanceCarePlanning).findOne({ where: { id } });
   }

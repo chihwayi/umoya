@@ -11144,6 +11144,15 @@ export class DatabaseProvisioningService {
       )`,
       `CREATE INDEX IF NOT EXISTS idx_imm_schedules_type ON immunization_schedules(schedule_type)`,
       `CREATE INDEX IF NOT EXISTS idx_imm_schedules_code ON immunization_schedules(vaccine_code)`,
+      // ImmunizationSchedule entity declares precautions/notes/cdc_schedule_version/
+      // target_disease_snomed_codes/contraindications_snomed/precautions_snomed, none
+      // of which the original CREATE TABLE above ever included.
+      `ALTER TABLE immunization_schedules ADD COLUMN IF NOT EXISTS precautions JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE immunization_schedules ADD COLUMN IF NOT EXISTS notes TEXT`,
+      `ALTER TABLE immunization_schedules ADD COLUMN IF NOT EXISTS cdc_schedule_version VARCHAR(20)`,
+      `ALTER TABLE immunization_schedules ADD COLUMN IF NOT EXISTS target_disease_snomed_codes JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE immunization_schedules ADD COLUMN IF NOT EXISTS contraindications_snomed JSONB DEFAULT '[]'::jsonb`,
+      `ALTER TABLE immunization_schedules ADD COLUMN IF NOT EXISTS precautions_snomed JSONB DEFAULT '[]'::jsonb`,
       `CREATE TABLE IF NOT EXISTS vaccine_adverse_events (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         immunization_id UUID NOT NULL,

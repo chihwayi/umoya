@@ -128,6 +128,53 @@ import { PostVisitCompanionMessage } from '../entities/post-visit-companion-mess
 import { AntibiogramEntry } from '../entities/antibiogram-entry.entity';
 import { AntibiogramSummary } from '../entities/antibiogram-summary.entity';
 import { CultureSensitivityResult } from '../entities/culture-sensitivity-result.entity';
+import { AefiReport } from '../entities/aefi-report.entity';
+import { AiRecommendationAudit } from '../entities/ai-recommendation-audit.entity';
+import { ArtCohort } from '../entities/art-cohort.entity';
+import { AutoCodingSuggestion } from '../entities/auto-coding-suggestion.entity';
+import { CholeraCase } from '../entities/cholera-case.entity';
+import { ClinicalAlertDelivery } from '../entities/clinical-alert-delivery.entity';
+import { ColdChainLog } from '../entities/cold-chain-log.entity';
+import { CommunityResource } from '../entities/community-resource.entity';
+import { ContactTrace } from '../entities/contact-trace.entity';
+import { DeteriorationPrediction } from '../entities/deterioration-prediction.entity';
+import { Dhis2TrackerSyncLog } from '../entities/dhis2-tracker-sync-log.entity';
+import { EpiSchedule } from '../entities/epi-schedule.entity';
+import { FhirIngestionLog } from '../entities/fhir-ingestion-log.entity';
+import { FormIntelligenceConfig } from '../entities/form-intelligence-config.entity';
+import { FormularyAiSuggestion } from '../entities/formulary-ai-suggestion.entity';
+import { ImmunizationRecord } from '../entities/immunization-record.entity';
+import { ImmunizationSchedule } from '../entities/immunization-schedule.entity';
+import { IotDataIngestion } from '../entities/iot-data-ingestion.entity';
+import { IotDeviceRegistration } from '../entities/iot-device-registration.entity';
+import { MedicationBarcodeMaster } from '../entities/medication-barcode-master.entity';
+import { MobileMoneyConfig } from '../entities/mobile-money-config.entity';
+import { MobileMoneyTransaction } from '../entities/mobile-money-transaction.entity';
+import { MohAlert } from '../entities/moh-alert.entity';
+import { NotifiableDisease } from '../entities/notifiable-disease.entity';
+import { NtdCase } from '../entities/ntd-case.entity';
+import { OutbreakCase } from '../entities/outbreak-case.entity';
+import { PatientEducationMaterial } from '../entities/patient-education-material.entity';
+import { PatientFamilyHistory } from '../entities/patient-family-history.entity';
+import { PatientMedicalHistory } from '../entities/patient-medical-history.entity';
+import { PatientSocialHistory } from '../entities/patient-social-history.entity';
+import { PatientWristband } from '../entities/patient-wristband.entity';
+import { PepfarMerIndicator } from '../entities/pepfar-mer-indicator.entity';
+import { PgxAlert } from '../entities/pgx-alert.entity';
+import { PgxProfile } from '../entities/pgx-profile.entity';
+import { PmtctEnrollment } from '../entities/pmtct-enrollment.entity';
+import { PmtctInfant } from '../entities/pmtct-infant.entity';
+import { ProcurementAlert } from '../entities/procurement-alert.entity';
+import { ReadmissionPrediction } from '../entities/readmission-prediction.entity';
+import { RegionalDiseaseReport } from '../entities/regional-disease-report.entity';
+import { SchedulingAiPrediction } from '../entities/scheduling-ai-prediction.entity';
+import { SdohReferral } from '../entities/sdoh-referral.entity';
+import { SdohScreeningLog } from '../entities/sdoh-screening-log.entity';
+import { StockoutPrediction } from '../entities/stockout-prediction.entity';
+import { TrialMatch } from '../entities/trial-match.entity';
+import { TyphoidCase } from '../entities/typhoid-case.entity';
+import { VaccineInventory } from '../entities/vaccine-inventory.entity';
+import { VaccineLot } from '../entities/vaccine-lot.entity';
 import { PostVisitEscalationEvent } from '../entities/post-visit-escalation-event.entity';
 import { PostVisitCompanionAcknowledgement } from '../entities/post-visit-companion-acknowledgement.entity';
 import { PatientMessage } from '../entities/patient-message.entity';
@@ -808,6 +855,53 @@ export class TenantService {
         AntibiogramEntry,
         AntibiogramSummary,
         CultureSensitivityResult,
+        AefiReport,
+        AiRecommendationAudit,
+        ArtCohort,
+        AutoCodingSuggestion,
+        CholeraCase,
+        ClinicalAlertDelivery,
+        ColdChainLog,
+        CommunityResource,
+        ContactTrace,
+        DeteriorationPrediction,
+        Dhis2TrackerSyncLog,
+        EpiSchedule,
+        FhirIngestionLog,
+        FormIntelligenceConfig,
+        FormularyAiSuggestion,
+        ImmunizationRecord,
+        ImmunizationSchedule,
+        IotDataIngestion,
+        IotDeviceRegistration,
+        MedicationBarcodeMaster,
+        MobileMoneyConfig,
+        MobileMoneyTransaction,
+        MohAlert,
+        NotifiableDisease,
+        NtdCase,
+        OutbreakCase,
+        PatientEducationMaterial,
+        PatientFamilyHistory,
+        PatientMedicalHistory,
+        PatientSocialHistory,
+        PatientWristband,
+        PepfarMerIndicator,
+        PgxAlert,
+        PgxProfile,
+        PmtctEnrollment,
+        PmtctInfant,
+        ProcurementAlert,
+        ReadmissionPrediction,
+        RegionalDiseaseReport,
+        SchedulingAiPrediction,
+        SdohReferral,
+        SdohScreeningLog,
+        StockoutPrediction,
+        TrialMatch,
+        TyphoidCase,
+        VaccineInventory,
+        VaccineLot,
         PostVisitEscalationEvent,
         PostVisitCompanionAcknowledgement,
         SymptomCheckerSession,

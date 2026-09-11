@@ -1,74 +1,71 @@
-import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { PalliativeService } from '../services/palliative.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('palliative')
 @UseGuards(JwtAuthGuard)
 export class PalliativeController {
   constructor(private readonly svc: PalliativeService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
-  }
-
   @Post('patient/:patientId/assessment')
-  addAssessment(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addAssessment(this.tenant(h), { ...dto, patientId });
+  addAssessment(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addAssessment(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/assessment')
-  getAssessments(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getAssessments(this.tenant(h), patientId);
+  getAssessments(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getAssessments(req.tenantDb!, patientId);
   }
 
   @Post('patient/:patientId/esas')
-  addEsas(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addSymptomScore(this.tenant(h), { ...dto, patientId });
+  addEsas(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addSymptomScore(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/esas')
-  getEsas(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getSymptomScores(this.tenant(h), patientId);
+  getEsas(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getSymptomScores(req.tenantDb!, patientId);
   }
 
   @Post('patient/:patientId/goals')
-  upsertGoals(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.upsertGoalsOfCare(this.tenant(h), patientId, dto);
+  upsertGoals(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.upsertGoalsOfCare(req.tenantDb!, patientId, dto);
   }
 
   @Get('patient/:patientId/goals')
-  getActiveGoals(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getActiveGoalsOfCare(this.tenant(h), patientId);
+  getActiveGoals(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getActiveGoalsOfCare(req.tenantDb!, patientId);
   }
 
   @Get('patient/:patientId/goals/history')
-  getGoalsHistory(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getGoalsOfCareHistory(this.tenant(h), patientId);
+  getGoalsHistory(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getGoalsOfCareHistory(req.tenantDb!, patientId);
   }
 
   @Post('patient/:patientId/directive')
-  addDirective(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addDirective(this.tenant(h), { ...dto, patientId });
+  addDirective(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addDirective(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/directive')
-  getDirectives(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getDirectives(this.tenant(h), patientId);
+  getDirectives(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getDirectives(req.tenantDb!, patientId);
   }
 
   @Patch('directive/:id')
-  updateDirective(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateDirective(this.tenant(h), id, dto);
+  updateDirective(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateDirective(req.tenantDb!, id, dto);
   }
 
   @Post('patient/:patientId/med-review')
-  addMedReview(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addMedReview(this.tenant(h), { ...dto, patientId });
+  addMedReview(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addMedReview(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/med-review')
-  getMedReviews(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getMedReviews(this.tenant(h), patientId);
+  getMedReviews(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getMedReviews(req.tenantDb!, patientId);
   }
 
   @Post('cdss/prognosis')

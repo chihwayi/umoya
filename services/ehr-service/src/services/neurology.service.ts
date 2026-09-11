@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { SeizureRecord } from '../entities/seizure-record.entity';
@@ -18,14 +19,12 @@ export class NeurologyService {
 
   // ── Seizures ───────────────────────────────────────────────────────────────
 
-  async addSeizure(tenantSubdomain: string, dto: Partial<SeizureRecord>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addSeizure(ds: DataSource, dto: Partial<SeizureRecord>) {
     const repo = ds.getRepository(SeizureRecord);
     return repo.save(repo.create(dto as any));
   }
 
-  async getSeizures(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getSeizures(ds: DataSource, patientId: string) {
     return ds.getRepository(SeizureRecord).find({
       where: { patientId },
       order: { seizureDate: 'DESC' },
@@ -34,36 +33,31 @@ export class NeurologyService {
 
   // ── Stroke ─────────────────────────────────────────────────────────────────
 
-  async addStrokeAssessment(tenantSubdomain: string, dto: Partial<StrokeAssessment>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addStrokeAssessment(ds: DataSource, dto: Partial<StrokeAssessment>) {
     const repo = ds.getRepository(StrokeAssessment);
     return repo.save(repo.create(dto as any));
   }
 
-  async getStrokeAssessments(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getStrokeAssessments(ds: DataSource, patientId: string) {
     return ds.getRepository(StrokeAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
     });
   }
 
-  async updateStrokeAssessment(tenantSubdomain: string, id: string, dto: Partial<StrokeAssessment>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async updateStrokeAssessment(ds: DataSource, id: string, dto: Partial<StrokeAssessment>) {
     await ds.getRepository(StrokeAssessment).update(id, dto as any);
     return ds.getRepository(StrokeAssessment).findOne({ where: { id } });
   }
 
   // ── Headache Diary ─────────────────────────────────────────────────────────
 
-  async addHeadacheEntry(tenantSubdomain: string, dto: Partial<HeadacheDiary>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addHeadacheEntry(ds: DataSource, dto: Partial<HeadacheDiary>) {
     const repo = ds.getRepository(HeadacheDiary);
     return repo.save(repo.create(dto as any));
   }
 
-  async getHeadacheDiary(tenantSubdomain: string, patientId: string, limit = 30) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getHeadacheDiary(ds: DataSource, patientId: string, limit = 30) {
     return ds.getRepository(HeadacheDiary).find({
       where: { patientId },
       order: { entryDate: 'DESC' },
@@ -73,14 +67,12 @@ export class NeurologyService {
 
   // ── Neurology Exam ─────────────────────────────────────────────────────────
 
-  async addExam(tenantSubdomain: string, dto: Partial<NeurologyExamination>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addExam(ds: DataSource, dto: Partial<NeurologyExamination>) {
     const repo = ds.getRepository(NeurologyExamination);
     return repo.save(repo.create(dto as any));
   }
 
-  async getExams(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getExams(ds: DataSource, patientId: string) {
     return ds.getRepository(NeurologyExamination).find({
       where: { patientId },
       order: { examDate: 'DESC' },
@@ -89,14 +81,12 @@ export class NeurologyService {
 
   // ── Cognitive Assessments ──────────────────────────────────────────────────
 
-  async addCognitiveAssessment(tenantSubdomain: string, dto: Partial<CognitiveAssessment>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addCognitiveAssessment(ds: DataSource, dto: Partial<CognitiveAssessment>) {
     const repo = ds.getRepository(CognitiveAssessment);
     return repo.save(repo.create(dto as any));
   }
 
-  async getCognitiveAssessments(tenantSubdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getCognitiveAssessments(ds: DataSource, patientId: string) {
     return ds.getRepository(CognitiveAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },

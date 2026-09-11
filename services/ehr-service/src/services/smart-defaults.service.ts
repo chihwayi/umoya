@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { FormIntelligenceConfig } from '../entities/form-intelligence-config.entity';
 import { CdssService } from './cdss.service';
@@ -21,8 +22,7 @@ export class SmartDefaultsService {
 
   // ── Form Intelligence Configs ─────────────────────────────────────────────
 
-  async upsertConfig(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async upsertConfig(ds: DataSource, dto: any) {
     const repo = ds.getRepository(FormIntelligenceConfig);
     const existing = await repo.findOne({ where: { formName: dto.formName } });
     if (existing) {
@@ -32,20 +32,18 @@ export class SmartDefaultsService {
     return repo.save(repo.create(dto));
   }
 
-  async getConfig(subdomain: string, formName: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getConfig(ds: DataSource, formName: string) {
     return ds.getRepository(FormIntelligenceConfig).findOne({ where: { formName, isActive: true } });
   }
 
-  async listConfigs(subdomain: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async listConfigs(ds: DataSource) {
     return ds.getRepository(FormIntelligenceConfig).find({ where: { isActive: true } });
   }
 
   // ── Smart Defaults Engine ─────────────────────────────────────────────────
 
-  async getDefaults(subdomain: string, formName: string, context: PatientContext) {
-    const config = await this.getConfig(subdomain, formName);
+  async getDefaults(ds: DataSource, formName: string, context: PatientContext) {
+    const config = await this.getConfig(ds, formName);
     const defaults: Record<string, { value: any; confidence: number; source: string }> = {};
 
     // Apply rule-based defaults from config
@@ -75,8 +73,8 @@ export class SmartDefaultsService {
     return defaults;
   }
 
-  async getVisibility(subdomain: string, formName: string, context: PatientContext) {
-    const config = await this.getConfig(subdomain, formName);
+  async getVisibility(ds: DataSource, formName: string, context: PatientContext) {
+    const config = await this.getConfig(ds, formName);
     const visibility: Record<string, boolean> = {};
     for (const rule of config?.visibilityRules || []) {
       if (this.evaluateCondition(rule.condition, context)) {
@@ -88,9 +86,8 @@ export class SmartDefaultsService {
 
   // ── CDSS ──────────────────────────────────────────────────────────────────
 
-  async aiSuggestDefaults(subdomain: string, payload: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return this.cdssService.suggestFormDefaults(payload, subdomain, ds);
+  async aiSuggestDefaults(tenantId: string, ds: DataSource, payload: any) {
+    return this.cdssService.suggestFormDefaults(payload, tenantId, ds);
   }
 
   private evaluateCondition(condition: any, context: PatientContext): boolean {

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { SchedulingAiPrediction } from '../entities/scheduling-ai-prediction.entity';
 import { CdssService } from './cdss.service';
@@ -13,13 +14,12 @@ export class SmartSchedulingService {
     private readonly cdssService: CdssService,
   ) {}
 
-  async predictAppointment(subdomain: string, appointmentId: string, features: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async predictAppointment(tenantId: string, ds: DataSource, appointmentId: string, features: any) {
     let predData: any = { no_show_probability: 0.1, cancel_probability: 0.05, recommended_duration: 30, confidence_score: 0.5, model: 'default', feature_importance: {} };
     try {
       predData = await this.cdssService.predictSchedulingRisk(
         { appointmentId, ...features },
-        subdomain,
+        tenantId,
         ds,
       );
     } catch (e: any) {
@@ -48,13 +48,11 @@ export class SmartSchedulingService {
     return repo.save(repo.create(prediction));
   }
 
-  async getPrediction(subdomain: string, appointmentId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getPrediction(ds: DataSource, appointmentId: string) {
     return ds.getRepository(SchedulingAiPrediction).findOneBy({ appointmentId });
   }
 
-  async getHighRiskAppointments(subdomain: string, days = 7) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getHighRiskAppointments(ds: DataSource, days = 7) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() + days);
     return ds.query(
@@ -76,10 +74,11 @@ export class SmartSchedulingService {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
       for (const tenant of tenants) {
         const subdomain = typeof tenant === 'string' ? tenant : tenant?.subdomain;
+        const tenantId = typeof tenant === 'string' ? undefined : tenant?.id;
         if (!subdomain) {
           continue;
         }
-        await this.predictNextWeek(subdomain).catch(e =>
+        await this.predictNextWeek(subdomain, tenantId).catch(e =>
           this.logger.error(`Scheduling prediction failed for ${subdomain}: ${e?.message}`));
       }
     } catch (e: any) {
@@ -87,8 +86,9 @@ export class SmartSchedulingService {
     }
   }
 
-  private async predictNextWeek(subdomain: string) {
+  private async predictNextWeek(subdomain: string, tenantId?: string) {
     const ds = await this.tenantService.getTenantDatabase(subdomain);
+    if (!ds || !tenantId) return;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() + 7);
     const appointments = await ds.query(
@@ -96,11 +96,11 @@ export class SmartSchedulingService {
       [cutoff.toISOString()]
     );
     for (const apt of appointments) {
-      await this.predictAppointment(subdomain, apt.id, {}).catch((e: any) => { this.logger.warn(`Appointment prediction update failed for ${apt.id}: ${e?.message}`); });
+      await this.predictAppointment(tenantId, ds, apt.id, {}).catch((e: any) => { this.logger.warn(`Appointment prediction update failed for ${apt.id}: ${e?.message}`); });
     }
   }
 
-  private async updateAppointmentRisk(ds: any, appointmentId: string, predData: any) {
+  private async updateAppointmentRisk(ds: DataSource, appointmentId: string, predData: any) {
     const risk = predData.no_show_probability >= 0.7 ? 'high'
       : predData.no_show_probability >= 0.4 ? 'medium' : 'low';
     await ds.query(

@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { MalariaCase } from '../entities/malaria-case.entity';
@@ -18,36 +19,31 @@ export class MalariaService {
 
   // ── Cases ──────────────────────────────────────────────────────────────────
 
-  async registerCase(tenantSubdomain: string, dto: Partial<MalariaCase>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async registerCase(ds: DataSource, dto: Partial<MalariaCase>) {
     const repo = ds.getRepository(MalariaCase);
     return repo.save(repo.create(dto as any));
   }
 
-  async listCases(tenantSubdomain: string, patientId?: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async listCases(ds: DataSource, patientId?: string) {
     const where: any = {};
     if (patientId) where.patientId = patientId;
     return ds.getRepository(MalariaCase).find({ where, order: { registeredAt: 'DESC' } });
   }
 
-  async getCase(tenantSubdomain: string, id: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getCase(ds: DataSource, id: string) {
     const c = await ds.getRepository(MalariaCase).findOne({ where: { id } });
     if (!c) throw new NotFoundException('Malaria case not found');
     return c;
   }
 
-  async updateCase(tenantSubdomain: string, id: string, dto: Partial<MalariaCase>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async updateCase(ds: DataSource, id: string, dto: Partial<MalariaCase>) {
     await ds.getRepository(MalariaCase).update(id, dto as any);
-    return this.getCase(tenantSubdomain, id);
+    return this.getCase(ds, id);
   }
 
   // ── Tests ──────────────────────────────────────────────────────────────────
 
-  async addTest(tenantSubdomain: string, dto: Partial<MalariaTest>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addTest(ds: DataSource, dto: Partial<MalariaTest>) {
     const repo = ds.getRepository(MalariaTest);
     const record = repo.save(repo.create(dto as any));
     // If positive, upgrade case type if needed
@@ -57,8 +53,7 @@ export class MalariaService {
     return record;
   }
 
-  async getTests(tenantSubdomain: string, caseId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getTests(ds: DataSource, caseId: string) {
     return ds.getRepository(MalariaTest).find({
       where: { malariaCaseId: caseId },
       order: { testDate: 'DESC' },
@@ -67,30 +62,26 @@ export class MalariaService {
 
   // ── Treatments ─────────────────────────────────────────────────────────────
 
-  async startTreatment(tenantSubdomain: string, dto: Partial<MalariaTreatment>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async startTreatment(ds: DataSource, dto: Partial<MalariaTreatment>) {
     const repo = ds.getRepository(MalariaTreatment);
     return repo.save(repo.create(dto as any));
   }
 
-  async getTreatments(tenantSubdomain: string, caseId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getTreatments(ds: DataSource, caseId: string) {
     return ds.getRepository(MalariaTreatment).find({
       where: { malariaCaseId: caseId },
       order: { startDate: 'DESC' },
     });
   }
 
-  async updateTreatment(tenantSubdomain: string, id: string, dto: Partial<MalariaTreatment>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async updateTreatment(ds: DataSource, id: string, dto: Partial<MalariaTreatment>) {
     await ds.getRepository(MalariaTreatment).update(id, dto as any);
     return ds.getRepository(MalariaTreatment).findOne({ where: { id } });
   }
 
   // ── Contact Tracing ────────────────────────────────────────────────────────
 
-  async addContact(tenantSubdomain: string, dto: Partial<MalariaContactTracing>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async addContact(ds: DataSource, dto: Partial<MalariaContactTracing>) {
     const repo = ds.getRepository(MalariaContactTracing);
     const saved = await repo.save(repo.create(dto as any));
     // Fire-and-forget CDSS risk assessment for the exposed contact
@@ -104,24 +95,21 @@ export class MalariaService {
     return saved;
   }
 
-  async getContacts(tenantSubdomain: string, caseId: string) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getContacts(ds: DataSource, caseId: string) {
     return ds.getRepository(MalariaContactTracing).find({
       where: { malariaCaseId: caseId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async updateContact(tenantSubdomain: string, id: string, dto: Partial<MalariaContactTracing>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async updateContact(ds: DataSource, id: string, dto: Partial<MalariaContactTracing>) {
     await ds.getRepository(MalariaContactTracing).update(id, dto as any);
     return ds.getRepository(MalariaContactTracing).findOne({ where: { id } });
   }
 
   // ── Surveillance Reports ───────────────────────────────────────────────────
 
-  async upsertSurveillanceReport(tenantSubdomain: string, dto: Partial<MalariaSurveillanceReport>) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async upsertSurveillanceReport(ds: DataSource, dto: Partial<MalariaSurveillanceReport>) {
     const repo = ds.getRepository(MalariaSurveillanceReport);
     const existing = await repo.findOne({
       where: { reportWeek: dto.reportWeek, reportYear: dto.reportYear, facilityId: dto.facilityId || null } as any,
@@ -133,8 +121,7 @@ export class MalariaService {
     return repo.save(repo.create(dto as any));
   }
 
-  async getSurveillanceReports(tenantSubdomain: string, year?: number) {
-    const ds = await this.tenantService.getTenantDatabase(tenantSubdomain);
+  async getSurveillanceReports(ds: DataSource, year?: number) {
     const where: any = {};
     if (year) where.reportYear = year;
     return ds.getRepository(MalariaSurveillanceReport).find({

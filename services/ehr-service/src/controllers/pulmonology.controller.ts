@@ -1,89 +1,86 @@
-import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { PulmonologyService } from '../services/pulmonology.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('pulmonology')
 @UseGuards(JwtAuthGuard)
 export class PulmonologyController {
   constructor(private readonly svc: PulmonologyService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
-  }
-
   // ── Spirometry ─────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/spirometry')
-  addSpirometry(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addSpirometry(this.tenant(h), { ...dto, patientId });
+  addSpirometry(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addSpirometry(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/spirometry')
-  getSpirometry(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getSpirometryResults(this.tenant(h), patientId);
+  getSpirometry(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getSpirometryResults(req.tenantDb!, patientId);
   }
 
   // ── COPD ───────────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/copd')
-  addCopd(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addCopdAssessment(this.tenant(h), { ...dto, patientId });
+  addCopd(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addCopdAssessment(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/copd')
-  getCopd(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getCopdAssessments(this.tenant(h), patientId);
+  getCopd(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getCopdAssessments(req.tenantDb!, patientId);
   }
 
   @Patch('copd/:id')
-  updateCopd(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateCopdAssessment(this.tenant(h), id, dto);
+  updateCopd(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateCopdAssessment(req.tenantDb!, id, dto);
   }
 
   // ── Asthma ─────────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/asthma')
-  addAsthma(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addAsthmaRecord(this.tenant(h), { ...dto, patientId });
+  addAsthma(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addAsthmaRecord(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/asthma')
-  getAsthma(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getAsthmaRecords(this.tenant(h), patientId);
+  getAsthma(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getAsthmaRecords(req.tenantDb!, patientId);
   }
 
   @Patch('asthma/:id')
-  updateAsthma(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateAsthmaRecord(this.tenant(h), id, dto);
+  updateAsthma(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateAsthmaRecord(req.tenantDb!, id, dto);
   }
 
   // ── Peak Flow ──────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/peak-flow')
-  addPeakFlow(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addPeakFlow(this.tenant(h), { ...dto, patientId });
+  addPeakFlow(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addPeakFlow(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/peak-flow')
-  getPeakFlow(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getPeakFlowDiary(this.tenant(h), patientId);
+  getPeakFlow(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getPeakFlowDiary(req.tenantDb!, patientId);
   }
 
   // ── Oxygen Therapy ─────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/oxygen')
-  addOxygen(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addOxygenTherapy(this.tenant(h), { ...dto, patientId });
+  addOxygen(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addOxygenTherapy(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/oxygen')
-  getOxygen(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getOxygenTherapy(this.tenant(h), patientId);
+  getOxygen(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getOxygenTherapy(req.tenantDb!, patientId);
   }
 
   @Patch('oxygen/:id')
-  updateOxygen(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.svc.updateOxygenTherapy(this.tenant(h), id, dto);
+  updateOxygen(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateOxygenTherapy(req.tenantDb!, id, dto);
   }
 
   // ── CDSS ───────────────────────────────────────────────────────────────────

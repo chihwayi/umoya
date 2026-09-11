@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { CkdAssessment } from '../entities/ckd-assessment.entity';
@@ -18,14 +19,12 @@ export class NephrologyService {
 
   // ── CKD ────────────────────────────────────────────────────────────────────
 
-  async addCkdAssessment(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addCkdAssessment(ds: DataSource, dto: any) {
     const repo = ds.getRepository(CkdAssessment);
-    return repo.save(repo.create(dto));
+    return repo.save(repo.create({ assessmentDate: new Date(), ...dto }));
   }
 
-  async getCkdAssessments(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getCkdAssessments(ds: DataSource, patientId: string) {
     return ds.getRepository(CkdAssessment).find({
       where: { patientId },
       order: { assessmentDate: 'DESC' },
@@ -34,14 +33,12 @@ export class NephrologyService {
 
   // ── Dialysis ───────────────────────────────────────────────────────────────
 
-  async addDialysisRecord(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addDialysisRecord(ds: DataSource, dto: any) {
     const repo = ds.getRepository(DialysisRecord);
     return repo.save(repo.create(dto));
   }
 
-  async getDialysisRecords(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getDialysisRecords(ds: DataSource, patientId: string) {
     return ds.getRepository(DialysisRecord).find({
       where: { patientId },
       order: { sessionDate: 'DESC' },
@@ -49,8 +46,7 @@ export class NephrologyService {
     });
   }
 
-  async updateDialysisRecord(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateDialysisRecord(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(DialysisRecord);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -58,14 +54,12 @@ export class NephrologyService {
 
   // ── Fluid Balance ──────────────────────────────────────────────────────────
 
-  async addFluidBalance(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addFluidBalance(ds: DataSource, dto: any) {
     const repo = ds.getRepository(FluidBalanceRecord);
     return repo.save(repo.create(dto));
   }
 
-  async getFluidBalance(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getFluidBalance(ds: DataSource, patientId: string) {
     return ds.getRepository(FluidBalanceRecord).find({
       where: { patientId },
       order: { recordedAt: 'DESC' },
@@ -75,14 +69,12 @@ export class NephrologyService {
 
   // ── Renal Biopsy ───────────────────────────────────────────────────────────
 
-  async addBiopsy(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addBiopsy(ds: DataSource, dto: any) {
     const repo = ds.getRepository(RenalBiopsy);
     return repo.save(repo.create(dto));
   }
 
-  async getBiopsies(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getBiopsies(ds: DataSource, patientId: string) {
     return ds.getRepository(RenalBiopsy).find({
       where: { patientId },
       order: { biopsyDate: 'DESC' },
@@ -91,22 +83,19 @@ export class NephrologyService {
 
   // ── Transplant ─────────────────────────────────────────────────────────────
 
-  async addTransplantRecord(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addTransplantRecord(ds: DataSource, dto: any) {
     const repo = ds.getRepository(TransplantRecord);
     return repo.save(repo.create(dto));
   }
 
-  async getTransplantRecords(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getTransplantRecords(ds: DataSource, patientId: string) {
     return ds.getRepository(TransplantRecord).find({
       where: { patientId },
       order: { transplantDate: 'DESC' },
     });
   }
 
-  async updateTransplantRecord(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateTransplantRecord(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(TransplantRecord);
     await repo.update(id, dto);
     return repo.findOneBy({ id });

@@ -1,126 +1,123 @@
-import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { GeriatricsService } from '../services/geriatrics.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('geriatrics')
 @UseGuards(JwtAuthGuard)
 export class GeriatricsController {
   constructor(private readonly svc: GeriatricsService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
-  }
-
   // ── Geriatric Assessments ──────────────────────────────────────────────────
 
   @Post('patient/:patientId/assessments')
   addAssessment(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.svc.addAssessment(this.tenant(h), { ...dto, patientId });
+    return this.svc.addAssessment(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/assessments')
   getAssessments(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.svc.getAssessments(this.tenant(h), patientId);
+    return this.svc.getAssessments(req.tenantDb!, patientId);
   }
 
   @Get('patient/:patientId/assessments/latest')
   getLatestAssessment(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.svc.getLatestAssessment(this.tenant(h), patientId);
+    return this.svc.getLatestAssessment(req.tenantDb!, patientId);
   }
 
   // ── Falls ──────────────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/falls')
   addFallsAssessment(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.svc.addFallsAssessment(this.tenant(h), { ...dto, patientId });
+    return this.svc.addFallsAssessment(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/falls')
   getFallsAssessments(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.svc.getFallsAssessments(this.tenant(h), patientId);
+    return this.svc.getFallsAssessments(req.tenantDb!, patientId);
   }
 
   // ── Pressure Injury ────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/pressure')
   addPressureAssessment(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.svc.addPressureAssessment(this.tenant(h), { ...dto, patientId });
+    return this.svc.addPressureAssessment(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/pressure')
   getPressureAssessments(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.svc.getPressureAssessments(this.tenant(h), patientId);
+    return this.svc.getPressureAssessments(req.tenantDb!, patientId);
   }
 
   // ── Polypharmacy ───────────────────────────────────────────────────────────
 
   @Post('patient/:patientId/polypharmacy')
   addPolypharmacyReview(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.svc.addPolypharmacyReview(this.tenant(h), { ...dto, patientId });
+    return this.svc.addPolypharmacyReview(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/polypharmacy')
   getPolypharmacyReviews(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.svc.getPolypharmacyReviews(this.tenant(h), patientId);
+    return this.svc.getPolypharmacyReviews(req.tenantDb!, patientId);
   }
 
   // ── Advance Care Planning ──────────────────────────────────────────────────
 
   @Post('patient/:patientId/acp')
   addAcpDocument(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
     @Body() dto: any,
   ) {
-    return this.svc.addAcpDocument(this.tenant(h), { ...dto, patientId });
+    return this.svc.addAcpDocument(req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/acp')
   getAcpDocuments(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
   ) {
-    return this.svc.getAcpDocuments(this.tenant(h), patientId);
+    return this.svc.getAcpDocuments(req.tenantDb!, patientId);
   }
 
   @Patch('acp/:id')
   updateAcpDocument(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('id') id: string,
     @Body() dto: any,
   ) {
-    return this.svc.updateAcpDocument(this.tenant(h), id, dto);
+    return this.svc.updateAcpDocument(req.tenantDb!, id, dto);
   }
 
   // ── CDSS ───────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { PgxProfile } from '../entities/pgx-profile.entity';
 import { PgxAlert } from '../entities/pgx-alert.entity';
@@ -45,8 +46,7 @@ export class PgxService {
 
   // ── PGx Profiles ─────────────────────────────────────────────────────────
 
-  async upsertProfile(subdomain: string, patientId: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async upsertProfile(ds: DataSource, patientId: string, dto: any) {
     const repo = ds.getRepository(PgxProfile);
     const existing = await repo.findOneBy({ patientId });
     if (existing) {
@@ -56,23 +56,20 @@ export class PgxService {
     return repo.save(repo.create({ ...dto, patientId }));
   }
 
-  async getProfile(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getProfile(ds: DataSource, patientId: string) {
     return ds.getRepository(PgxProfile).findOneBy({ patientId });
   }
 
   // ── PGx Alerts ────────────────────────────────────────────────────────────
 
-  async getAlerts(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getAlerts(ds: DataSource, patientId: string) {
     return ds.getRepository(PgxAlert).find({
       where: { patientId },
       order: { generatedAt: 'DESC' },
     });
   }
 
-  async acknowledgeAlert(subdomain: string, id: string, acknowledgedBy: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async acknowledgeAlert(ds: DataSource, id: string, acknowledgedBy: string) {
     const repo = ds.getRepository(PgxAlert);
     await repo.update(id, { acknowledged: true, acknowledgedBy });
     return repo.findOneBy({ id });
@@ -82,15 +79,14 @@ export class PgxService {
    * Check a drug against patient PGx profile. Called on every new prescription.
    * Fire-and-forget from PrescriptionService.
    */
-  async checkDrug(subdomain: string, patientId: string, drug: string): Promise<PgxAlert | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async checkDrug(tenantId: string, ds: DataSource, patientId: string, drug: string): Promise<PgxAlert | null> {
     const profile = await ds.getRepository(PgxProfile).findOneBy({ patientId });
     if (!profile) return null;
 
     try {
       const data = await this.cdssService.checkPgx(
         this.buildPgxPayload(patientId, drug, profile),
-        subdomain,
+        tenantId,
         ds,
       );
       const topAlert = Array.isArray(data.alerts) ? data.alerts[0] : null;

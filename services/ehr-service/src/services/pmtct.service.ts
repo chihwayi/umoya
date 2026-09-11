@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { Dhis2Service } from './dhis2.service';
 import { CdssService } from './cdss.service';
@@ -19,8 +20,7 @@ export class PmtctService {
 
   // ── PMTCT Enrollments ─────────────────────────────────────────────────────
 
-  async enrollMother(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async enrollMother(tenantId: string, ds: DataSource, dto: any) {
     const repo = ds.getRepository(PmtctEnrollment);
     const enrollment = repo.create(dto as Partial<PmtctEnrollment>);
     const saved = await repo.save(enrollment) as PmtctEnrollment;
@@ -37,29 +37,27 @@ export class PmtctService {
           { dataElement: 'MC_PMTCT_REGIMEN', value: saved.artRegimen || '' },
         ],
       },
-      ds, subdomain,
+      ds, tenantId,
     ).catch(e => this.logger.warn(`DHIS2 PMTCT enrollment push failed: ${e?.message}`));
     // Push monthly aggregate (fire-and-forget)
     const period = saved.enrollmentDate?.slice(0, 7).replace('-', '') || '';
     if (period) {
       this.dhis2Service.sendAggregateReport(
         { profile: 'pmtct_monthly', period },
-        ds, subdomain,
+        ds, tenantId,
       ).catch(e => this.logger.warn(`DHIS2 PMTCT aggregate push failed: ${e?.message}`));
     }
     return saved;
   }
 
-  async getEnrollment(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getEnrollment(ds: DataSource, patientId: string) {
     return ds.getRepository(PmtctEnrollment).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async updateEnrollment(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateEnrollment(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(PmtctEnrollment);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -67,22 +65,19 @@ export class PmtctService {
 
   // ── PMTCT Infants ─────────────────────────────────────────────────────────
 
-  async addInfant(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addInfant(ds: DataSource, dto: any) {
     const repo = ds.getRepository(PmtctInfant);
     return repo.save(repo.create(dto));
   }
 
-  async getInfants(subdomain: string, motherPatientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getInfants(ds: DataSource, motherPatientId: string) {
     return ds.getRepository(PmtctInfant).find({
       where: { motherPatientId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async updateInfant(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateInfant(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(PmtctInfant);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -90,14 +85,12 @@ export class PmtctService {
 
   // ── PEPFAR MER Indicators ─────────────────────────────────────────────────
 
-  async saveMerIndicator(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async saveMerIndicator(ds: DataSource, dto: any) {
     const repo = ds.getRepository(PepfarMerIndicator);
     return repo.save(repo.create(dto));
   }
 
-  async getMerIndicators(subdomain: string, reportingPeriod?: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getMerIndicators(ds: DataSource, reportingPeriod?: string) {
     const qb = ds.getRepository(PepfarMerIndicator)
       .createQueryBuilder('m')
       .orderBy('m.reporting_period', 'DESC');
@@ -105,8 +98,7 @@ export class PmtctService {
     return qb.getMany();
   }
 
-  async calculateMer(subdomain: string, reportingPeriod: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async calculateMer(ds: DataSource, reportingPeriod: string) {
     // Calculate key PEPFAR MER indicators from existing HIV data
     const raw = await ds.query(`
       SELECT
@@ -119,19 +111,16 @@ export class PmtctService {
 
   // ── ART Cohorts ───────────────────────────────────────────────────────────
 
-  async saveCohort(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async saveCohort(ds: DataSource, dto: any) {
     const repo = ds.getRepository(ArtCohort);
     return repo.save(repo.create(dto));
   }
 
-  async getCohorts(subdomain: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getCohorts(ds: DataSource) {
     return ds.getRepository(ArtCohort).find({ order: { cohortStartDate: 'DESC' } });
   }
 
-  async updateCohort(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateCohort(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(ArtCohort);
     await repo.update(id, dto);
     return repo.findOneBy({ id });

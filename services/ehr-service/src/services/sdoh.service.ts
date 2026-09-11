@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CommunityResource } from '../entities/community-resource.entity';
 import { SdohReferral } from '../entities/sdoh-referral.entity';
@@ -14,14 +15,12 @@ export class SdohService {
 
   // ── Community Resources ────────────────────────────────────────────────────
 
-  async addResource(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addResource(ds: DataSource, dto: any) {
     const repo = ds.getRepository(CommunityResource);
     return repo.save(repo.create(dto));
   }
 
-  async getResources(subdomain: string, category?: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getResources(ds: DataSource, category?: string) {
     const qb = ds.getRepository(CommunityResource).createQueryBuilder('r')
       .where('r.is_active = true')
       .orderBy('r.name', 'ASC');
@@ -29,8 +28,7 @@ export class SdohService {
     return qb.getMany();
   }
 
-  async updateResource(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateResource(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(CommunityResource);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -38,22 +36,19 @@ export class SdohService {
 
   // ── SDOH Referrals ─────────────────────────────────────────────────────────
 
-  async addReferral(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addReferral(ds: DataSource, dto: any) {
     const repo = ds.getRepository(SdohReferral);
     return repo.save(repo.create(dto));
   }
 
-  async getReferrals(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getReferrals(ds: DataSource, patientId: string) {
     return ds.getRepository(SdohReferral).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async updateReferral(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateReferral(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(SdohReferral);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -61,14 +56,12 @@ export class SdohService {
 
   // ── SDOH Screening Logs ────────────────────────────────────────────────────
 
-  async addScreeningLog(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addScreeningLog(ds: DataSource, dto: any) {
     const repo = ds.getRepository(SdohScreeningLog);
     return repo.save(repo.create(dto));
   }
 
-  async getScreeningLogs(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getScreeningLogs(ds: DataSource, patientId: string) {
     return ds.getRepository(SdohScreeningLog).find({
       where: { patientId },
       order: { screeningDate: 'DESC' },
@@ -77,13 +70,11 @@ export class SdohService {
 
   // ── CDSS Proxies ───────────────────────────────────────────────────────────
 
-  async screenSdoh(subdomain: string, payload: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return this.cdssService.screenSdohRisk(payload, subdomain, ds);
+  async screenSdoh(tenantId: string, ds: DataSource, payload: any) {
+    return this.cdssService.screenSdohRisk(payload, tenantId, ds);
   }
 
-  async matchResources(subdomain: string, payload: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async matchResources(tenantId: string, ds: DataSource, payload: any) {
     const resources = await ds.getRepository(CommunityResource).find({
       where: { isActive: true },
       order: { name: 'ASC' },
@@ -103,7 +94,7 @@ export class SdohService {
           availability: resource.availability,
         })),
       },
-      subdomain,
+      tenantId,
       ds,
     );
   }

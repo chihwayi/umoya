@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { AutoCodingSuggestion } from '../entities/auto-coding-suggestion.entity';
 import { CdssService } from './cdss.service';
@@ -15,8 +16,7 @@ export class AutoCodingService {
   /**
    * Called after a clinical note is saved. Fire-and-forget from MedicalRecordService.
    */
-  async extractAndSaveCodes(subdomain: string, noteId: string, patientId: string, noteText: string, encounterId?: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async extractAndSaveCodes(tenantId: string, ds: DataSource, noteId: string, patientId: string, noteText: string, encounterId?: string) {
     const repo = ds.getRepository(AutoCodingSuggestion);
 
     let suggestion: Partial<AutoCodingSuggestion> = {
@@ -31,7 +31,7 @@ export class AutoCodingService {
           noteId,
           encounterId,
         },
-        subdomain,
+        tenantId,
         ds,
       );
       suggestion.suggestedIcd10Codes = data.suggestedIcd10Codes || data.icd10_codes || [];
@@ -52,25 +52,22 @@ export class AutoCodingService {
     return repo.save(repo.create(suggestion as AutoCodingSuggestion));
   }
 
-  async getSuggestions(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getSuggestions(ds: DataSource, patientId: string) {
     return ds.getRepository(AutoCodingSuggestion).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async getSuggestionByNote(subdomain: string, noteId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getSuggestionByNote(ds: DataSource, noteId: string) {
     return ds.getRepository(AutoCodingSuggestion).findOneBy({ noteId });
   }
 
-  async reviewSuggestion(subdomain: string, id: string, dto: {
+  async reviewSuggestion(ds: DataSource, id: string, dto: {
     reviewStatus: string;
     confirmedCodes?: any;
     reviewedBy: string;
   }) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(AutoCodingSuggestion);
     await repo.update(id, {
       reviewStatus: dto.reviewStatus,
@@ -81,8 +78,7 @@ export class AutoCodingService {
     return repo.findOneBy({ id });
   }
 
-  async getPendingReview(subdomain: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getPendingReview(ds: DataSource) {
     return ds.getRepository(AutoCodingSuggestion).find({
       where: { reviewStatus: 'pending' },
       order: { createdAt: 'DESC' },

@@ -46,7 +46,7 @@ describe('PgxService', () => {
     };
 
     const service = new PgxService(tenantService as any, cdssService as any);
-    const result = await service.checkDrug('kids-clinic', 'patient-1', 'clopidogrel');
+    const result = await service.checkDrug('kids-clinic', tenantDb, 'patient-1', 'clopidogrel');
 
     expect(cdssService.checkPgx).toHaveBeenCalledWith(
       expect.objectContaining({

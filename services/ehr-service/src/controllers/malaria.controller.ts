@@ -1,102 +1,99 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Headers, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { MalariaService } from '../services/malaria.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @UseGuards(JwtAuthGuard)
 @Controller('malaria')
 export class MalariaController {
   constructor(private readonly malariaService: MalariaService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-id'] || h['x-tenant-subdomain'] || 'default';
-  }
-
   // ── Cases ──────────────────────────────────────────────────────────────────
 
   @Post()
-  registerCase(@Headers() h: Record<string, string>, @Body() dto: any) {
-    return this.malariaService.registerCase(this.tenant(h), dto);
+  registerCase(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.malariaService.registerCase(req.tenantDb!, dto);
   }
 
   @Get()
-  listCases(@Headers() h: Record<string, string>, @Query('patientId') patientId?: string) {
-    return this.malariaService.listCases(this.tenant(h), patientId);
+  listCases(@Req() req: RequestWithTenant, @Query('patientId') patientId?: string) {
+    return this.malariaService.listCases(req.tenantDb!, patientId);
   }
 
   @Get(':id')
-  getCase(@Headers() h: Record<string, string>, @Param('id') id: string) {
-    return this.malariaService.getCase(this.tenant(h), id);
+  getCase(@Req() req: RequestWithTenant, @Param('id') id: string) {
+    return this.malariaService.getCase(req.tenantDb!, id);
   }
 
   @Patch(':id')
-  updateCase(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.malariaService.updateCase(this.tenant(h), id, dto);
+  updateCase(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.malariaService.updateCase(req.tenantDb!, id, dto);
   }
 
   // ── Tests ──────────────────────────────────────────────────────────────────
 
   @Post(':id/tests')
-  addTest(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.malariaService.addTest(this.tenant(h), { ...dto, malariaCaseId: id });
+  addTest(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.malariaService.addTest(req.tenantDb!, { ...dto, malariaCaseId: id });
   }
 
   @Get(':id/tests')
-  getTests(@Headers() h: Record<string, string>, @Param('id') id: string) {
-    return this.malariaService.getTests(this.tenant(h), id);
+  getTests(@Req() req: RequestWithTenant, @Param('id') id: string) {
+    return this.malariaService.getTests(req.tenantDb!, id);
   }
 
   // ── Treatments ─────────────────────────────────────────────────────────────
 
   @Post(':id/treatments')
-  startTreatment(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.malariaService.startTreatment(this.tenant(h), { ...dto, malariaCaseId: id });
+  startTreatment(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.malariaService.startTreatment(req.tenantDb!, { ...dto, malariaCaseId: id });
   }
 
   @Get(':id/treatments')
-  getTreatments(@Headers() h: Record<string, string>, @Param('id') id: string) {
-    return this.malariaService.getTreatments(this.tenant(h), id);
+  getTreatments(@Req() req: RequestWithTenant, @Param('id') id: string) {
+    return this.malariaService.getTreatments(req.tenantDb!, id);
   }
 
   @Patch('treatments/:treatmentId')
   updateTreatment(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('treatmentId') treatmentId: string,
     @Body() dto: any,
   ) {
-    return this.malariaService.updateTreatment(this.tenant(h), treatmentId, dto);
+    return this.malariaService.updateTreatment(req.tenantDb!, treatmentId, dto);
   }
 
   // ── Contact Tracing ────────────────────────────────────────────────────────
 
   @Post(':id/contacts')
-  addContact(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: any) {
-    return this.malariaService.addContact(this.tenant(h), { ...dto, malariaCaseId: id });
+  addContact(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: any) {
+    return this.malariaService.addContact(req.tenantDb!, { ...dto, malariaCaseId: id });
   }
 
   @Get(':id/contacts')
-  getContacts(@Headers() h: Record<string, string>, @Param('id') id: string) {
-    return this.malariaService.getContacts(this.tenant(h), id);
+  getContacts(@Req() req: RequestWithTenant, @Param('id') id: string) {
+    return this.malariaService.getContacts(req.tenantDb!, id);
   }
 
   @Patch('contacts/:contactId')
   updateContact(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Param('contactId') contactId: string,
     @Body() dto: any,
   ) {
-    return this.malariaService.updateContact(this.tenant(h), contactId, dto);
+    return this.malariaService.updateContact(req.tenantDb!, contactId, dto);
   }
 
   // ── Surveillance ───────────────────────────────────────────────────────────
 
   @Post('surveillance')
-  upsertSurveillance(@Headers() h: Record<string, string>, @Body() dto: any) {
-    return this.malariaService.upsertSurveillanceReport(this.tenant(h), dto);
+  upsertSurveillance(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.malariaService.upsertSurveillanceReport(req.tenantDb!, dto);
   }
 
   @Get('surveillance')
-  getSurveillance(@Headers() h: Record<string, string>, @Query('year') year?: string) {
-    return this.malariaService.getSurveillanceReports(this.tenant(h), year ? +year : undefined);
+  getSurveillance(@Req() req: RequestWithTenant, @Query('year') year?: string) {
+    return this.malariaService.getSurveillanceReports(req.tenantDb!, year ? +year : undefined);
   }
 
   // ── CDSS ───────────────────────────────────────────────────────────────────

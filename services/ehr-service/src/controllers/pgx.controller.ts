@@ -1,34 +1,31 @@
-import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { PgxService } from '../services/pgx.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('pgx')
 @UseGuards(JwtAuthGuard)
 export class PgxController {
   constructor(private readonly svc: PgxService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
-  }
-
   @Post('patient/:patientId/profile')
-  upsertProfile(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.upsertProfile(this.tenant(h), patientId, dto);
+  upsertProfile(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.upsertProfile(req.tenantDb!, patientId, dto);
   }
 
   @Get('patient/:patientId/profile')
-  getProfile(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getProfile(this.tenant(h), patientId);
+  getProfile(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getProfile(req.tenantDb!, patientId);
   }
 
   @Get('patient/:patientId/alerts')
-  getAlerts(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getAlerts(this.tenant(h), patientId);
+  getAlerts(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getAlerts(req.tenantDb!, patientId);
   }
 
   @Patch('alert/:id/acknowledge')
-  acknowledgeAlert(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: { acknowledgedBy: string }) {
-    return this.svc.acknowledgeAlert(this.tenant(h), id, dto.acknowledgedBy);
+  acknowledgeAlert(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: { acknowledgedBy: string }) {
+    return this.svc.acknowledgeAlert(req.tenantDb!, id, dto.acknowledgedBy);
   }
 
   @Post('check')

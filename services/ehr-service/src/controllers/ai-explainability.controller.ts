@@ -1,33 +1,30 @@
-import { UseGuards, Controller, Get, Post, Patch, Body, Param, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { AiExplainabilityService } from '../services/ai-explainability.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('ai/explainability')
 @UseGuards(JwtAuthGuard)
 export class AiExplainabilityController {
   constructor(private readonly svc: AiExplainabilityService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
-  }
-
   @Get('patient/:patientId')
-  getAuditHistory(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getAuditHistory(this.tenant(h), patientId);
+  getAuditHistory(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getAuditHistory(req.tenantDb!, patientId);
   }
 
   @Get('overrides')
-  getOverrides(@Headers() h: Record<string, string>) {
-    return this.svc.getOverrides(this.tenant(h));
+  getOverrides(@Req() req: RequestWithTenant) {
+    return this.svc.getOverrides(req.tenantDb!);
   }
 
   @Patch(':id/override')
-  logOverride(@Headers() h: Record<string, string>, @Param('id') id: string, @Body() dto: { reason: string; overrideBy: string }) {
-    return this.svc.logOverride(this.tenant(h), id, dto.reason, dto.overrideBy);
+  logOverride(@Req() req: RequestWithTenant, @Param('id') id: string, @Body() dto: { reason: string; overrideBy: string }) {
+    return this.svc.logOverride(req.tenantDb!, id, dto.reason, dto.overrideBy);
   }
 
   @Patch(':id/displayed')
-  markDisplayed(@Headers() h: Record<string, string>, @Param('id') id: string) {
-    return this.svc.markDisplayed(this.tenant(h), id);
+  markDisplayed(@Req() req: RequestWithTenant, @Param('id') id: string) {
+    return this.svc.markDisplayed(req.tenantDb!, id);
   }
 }

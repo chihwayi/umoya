@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { Dhis2Service } from './dhis2.service';
 import { CdssService } from './cdss.service';
@@ -21,22 +22,19 @@ export class NtdService {
 
   // ── NTD Cases ──────────────────────────────────────────────────────────────
 
-  async addNtdCase(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addNtdCase(ds: DataSource, dto: any) {
     const repo = ds.getRepository(NtdCase);
     const saved = await repo.save(repo.create(dto));
-    this.pushNtdEvent(subdomain, ds, saved, 'NTD_CASE').catch(e =>
+    this.pushNtdEvent(ds, saved, 'NTD_CASE').catch(e =>
       this.logger.warn(`DHIS2 NTD event push failed: ${e?.message}`));
     return saved;
   }
 
-  async getNtdCases(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getNtdCases(ds: DataSource, patientId: string) {
     return ds.getRepository(NtdCase).find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
 
-  async updateNtdCase(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateNtdCase(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(NtdCase);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -109,22 +107,19 @@ export class NtdService {
 
   // ── Cholera Cases ─────────────────────────────────────────────────────────
 
-  async addCholeraCase(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addCholeraCase(ds: DataSource, dto: any) {
     const repo = ds.getRepository(CholeraCase);
     const saved = await repo.save(repo.create(dto));
-    this.pushNtdEvent(subdomain, ds, saved, 'CHOLERA_CASE').catch(e =>
+    this.pushNtdEvent(ds, saved, 'CHOLERA_CASE').catch(e =>
       this.logger.warn(`DHIS2 cholera event push failed: ${e?.message}`));
     return saved;
   }
 
-  async getCholeraCases(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getCholeraCases(ds: DataSource, patientId: string) {
     return ds.getRepository(CholeraCase).find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
 
-  async updateCholeraCase(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateCholeraCase(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(CholeraCase);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -132,22 +127,19 @@ export class NtdService {
 
   // ── Typhoid Cases ─────────────────────────────────────────────────────────
 
-  async addTyphoidCase(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addTyphoidCase(ds: DataSource, dto: any) {
     const repo = ds.getRepository(TyphoidCase);
     const saved = await repo.save(repo.create(dto));
-    this.pushNtdEvent(subdomain, ds, saved, 'TYPHOID_CASE').catch(e =>
+    this.pushNtdEvent(ds, saved, 'TYPHOID_CASE').catch(e =>
       this.logger.warn(`DHIS2 typhoid event push failed: ${e?.message}`));
     return saved;
   }
 
-  async getTyphoidCases(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getTyphoidCases(ds: DataSource, patientId: string) {
     return ds.getRepository(TyphoidCase).find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
 
-  async updateTyphoidCase(subdomain: string, id: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateTyphoidCase(ds: DataSource, id: string, dto: any) {
     const repo = ds.getRepository(TyphoidCase);
     await repo.update(id, dto);
     return repo.findOneBy({ id });
@@ -155,8 +147,7 @@ export class NtdService {
 
   // ── Regional Disease Reports ───────────────────────────────────────────────
 
-  async upsertReport(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async upsertReport(ds: DataSource, dto: any) {
     const repo = ds.getRepository(RegionalDiseaseReport);
     const existing = await repo.findOne({
       where: { reportPeriod: dto.reportPeriod, periodType: dto.periodType },
@@ -172,14 +163,13 @@ export class NtdService {
       const dhis2Period = dto.reportPeriod.replace('-W', 'W').replace('-', '');
       this.dhis2Service.sendAggregateReport(
         { profile: 'ntd_regional', period: dhis2Period },
-        ds, subdomain,
+        ds,
       ).catch(e => this.logger.warn(`DHIS2 NTD aggregate push failed: ${e?.message}`));
     }
     return report;
   }
 
-  async getReports(subdomain: string, periodType?: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getReports(ds: DataSource, periodType?: string) {
     const qb = ds.getRepository(RegionalDiseaseReport)
       .createQueryBuilder('r')
       .orderBy('r.report_period', 'DESC');
@@ -187,8 +177,7 @@ export class NtdService {
     return qb.getMany();
   }
 
-  async aggregateReport(subdomain: string, reportPeriod: string, periodType: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async aggregateReport(ds: DataSource, reportPeriod: string, periodType: string) {
     const raw = await ds.query(
       `SELECT
         (SELECT COUNT(*) FROM cholera_cases WHERE created_at::date >= $2 AND created_at::date <= $3) AS cholera_cases,
@@ -202,7 +191,7 @@ export class NtdService {
 
   // ── Internal ───────────────────────────────────────────────────────────────
 
-  private async pushNtdEvent(subdomain: string, ds: any, record: any, programStageCode: string) {
+  private async pushNtdEvent(ds: any, record: any, programStageCode: string) {
     return this.dhis2Service.sendEvent(
       {
         patientId: record.patientId,
@@ -214,7 +203,7 @@ export class NtdService {
           { dataElement: 'MC_NTD_TREATMENT', value: record.treatment || '' },
         ],
       },
-      ds, subdomain,
+      ds,
     );
   }
 

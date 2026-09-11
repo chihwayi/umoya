@@ -79,7 +79,7 @@ export class EncounterCopilotService {
     );
 
     const diagnosisTerms = this.collectDiagnosisTerms(activeProblems, latestMedicalRecord);
-    const smartDefaults = await this.smartDefaultsService.getDefaults(tenantId, 'encounter_copilot', {
+    const smartDefaults = await this.smartDefaultsService.getDefaults(tenantDb, 'encounter_copilot', {
       age: this.calculateAge(patient.date_of_birth),
       sex: patient.gender,
       diagnoses: diagnosisTerms,

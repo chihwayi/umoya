@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { FormularyAiSuggestion } from '../entities/formulary-ai-suggestion.entity';
 import { CdssService } from './cdss.service';
@@ -15,8 +16,7 @@ export class FormularyOptimizationService {
   /**
    * Called on every new prescription. Fire-and-forget.
    */
-  async optimizeOnPrescription(subdomain: string, prescriptionId: string, patientId: string, drugName: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async optimizeOnPrescription(tenantId: string, ds: DataSource, prescriptionId: string, patientId: string, drugName: string) {
     let suggestion: Partial<FormularyAiSuggestion> = {
       prescriptionId, patientId, brandedDrug: drugName,
       aiRecommendation: 'no_substitute', reason: 'No generic alternative found',
@@ -30,7 +30,7 @@ export class FormularyOptimizationService {
           brandedDrug: drugName,
           diagnoses: [],
         },
-        subdomain,
+        tenantId,
         ds,
       );
       suggestion = {
@@ -53,16 +53,14 @@ export class FormularyOptimizationService {
     return repo.save(repo.create(suggestion as FormularyAiSuggestion));
   }
 
-  async getSuggestions(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getSuggestions(ds: DataSource, patientId: string) {
     return ds.getRepository(FormularyAiSuggestion).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async respondToSuggestion(subdomain: string, id: string, accepted: boolean) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async respondToSuggestion(ds: DataSource, id: string, accepted: boolean) {
     const repo = ds.getRepository(FormularyAiSuggestion);
     await repo.update(id, { accepted });
     return repo.findOneBy({ id });

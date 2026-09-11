@@ -1,38 +1,35 @@
-import { UseGuards, Controller, Get, Post, Body, Param, Headers, Query } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Body, Param, Req, Query } from '@nestjs/common';
 import { SmartDefaultsService } from '../services/smart-defaults.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('forms/intelligence')
 @UseGuards(JwtAuthGuard)
 export class SmartDefaultsController {
   constructor(private readonly svc: SmartDefaultsService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
-  }
-
   @Get('config')
-  listConfigs(@Headers() h: Record<string, string>) {
-    return this.svc.listConfigs(this.tenant(h));
+  listConfigs(@Req() req: RequestWithTenant) {
+    return this.svc.listConfigs(req.tenantDb!);
   }
 
   @Post('config')
-  upsertConfig(@Headers() h: Record<string, string>, @Body() dto: any) {
-    return this.svc.upsertConfig(this.tenant(h), dto);
+  upsertConfig(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.svc.upsertConfig(req.tenantDb!, dto);
   }
 
   @Post(':formName/defaults')
-  getDefaults(@Headers() h: Record<string, string>, @Param('formName') formName: string, @Body() context: any) {
-    return this.svc.getDefaults(this.tenant(h), formName, context);
+  getDefaults(@Req() req: RequestWithTenant, @Param('formName') formName: string, @Body() context: any) {
+    return this.svc.getDefaults(req.tenantDb!, formName, context);
   }
 
   @Post(':formName/visibility')
-  getVisibility(@Headers() h: Record<string, string>, @Param('formName') formName: string, @Body() context: any) {
-    return this.svc.getVisibility(this.tenant(h), formName, context);
+  getVisibility(@Req() req: RequestWithTenant, @Param('formName') formName: string, @Body() context: any) {
+    return this.svc.getVisibility(req.tenantDb!, formName, context);
   }
 
   @Post('ai/suggest')
-  aiSuggestDefaults(@Headers() h: Record<string, string>, @Body() dto: any) {
-    return this.svc.aiSuggestDefaults(this.tenant(h), dto);
+  aiSuggestDefaults(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.svc.aiSuggestDefaults(req.tenantId!, req.tenantDb!, dto);
   }
 }

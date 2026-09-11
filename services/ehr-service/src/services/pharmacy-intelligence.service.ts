@@ -673,6 +673,7 @@ export class PharmacyIntelligenceService {
     for (const medication of medications) {
       const suggestion = await this.formularyOptimizationService.optimizeOnPrescription(
         tenantId,
+        tenantDb,
         medication.prescriptionId ?? null,
         patientId,
         medication.medicationName,
@@ -729,6 +730,7 @@ export class PharmacyIntelligenceService {
     const repo = tenantDb.getRepository(PharmacySubstitutionRecommendation);
     const suggestion = await this.formularyOptimizationService.optimizeOnPrescription(
       tenantId,
+      tenantDb,
       prescription.id,
       prescription.patient_id,
       prescription.medication_name,

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { AiRecommendationAudit } from '../entities/ai-recommendation-audit.entity';
 
@@ -52,29 +53,25 @@ export class AiExplainabilityService {
     return explained;
   }
 
-  async logOverride(subdomain: string, auditId: string, reason: string, overrideBy: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async logOverride(ds: DataSource, auditId: string, reason: string, overrideBy: string) {
     const repo = ds.getRepository(AiRecommendationAudit);
     await repo.update(auditId, { overrideLogged: true, overrideReason: reason, overrideBy });
     return repo.findOneBy({ id: auditId });
   }
 
-  async markDisplayed(subdomain: string, auditId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async markDisplayed(ds: DataSource, auditId: string) {
     const repo = ds.getRepository(AiRecommendationAudit);
     await repo.update(auditId, { displayedToUser: true, userReadAt: new Date() });
   }
 
-  async getAuditHistory(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getAuditHistory(ds: DataSource, patientId: string) {
     return ds.getRepository(AiRecommendationAudit).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async getOverrides(subdomain: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getOverrides(ds: DataSource) {
     return ds.getRepository(AiRecommendationAudit).find({
       where: { overrideLogged: true },
       order: { createdAt: 'DESC' },
