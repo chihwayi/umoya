@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { PatientEducationMaterial } from '../entities/patient-education-material.entity';
 import { CdssService } from './cdss.service';
@@ -15,8 +16,7 @@ export class MultilingualEducationService {
   /**
    * Generate AI patient education material. Called after diagnosis/prescription save.
    */
-  async generate(subdomain: string, patientId: string, topic: string, language: string, readingLevel = 6, encounterId?: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async generate(ds: DataSource, tenantId: string, patientId: string, topic: string, language: string, readingLevel = 6, encounterId?: string) {
     let content = '';
     try {
       const data = await this.cdssService.generatePatientEducation(
@@ -27,7 +27,7 @@ export class MultilingualEducationService {
           patient_id: patientId,
           encounterId,
         },
-        subdomain,
+        tenantId,
         ds,
       );
       content = data.content || '';
@@ -44,16 +44,14 @@ export class MultilingualEducationService {
     }));
   }
 
-  async getMaterials(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getMaterials(ds: DataSource, patientId: string) {
     return ds.getRepository(PatientEducationMaterial).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async markDelivered(subdomain: string, id: string, method: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async markDelivered(ds: DataSource, id: string, method: string) {
     const repo = ds.getRepository(PatientEducationMaterial);
     await repo.update(id, { deliveryMethod: method, deliveredAt: new Date() });
     return repo.findOneBy({ id });

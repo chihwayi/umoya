@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { DicomStudy } from '../entities/dicom-study.entity';
@@ -49,12 +50,11 @@ export class RadiologyAiService {
 
   // ── Study Upload & Registration ────────────────────────────────────────────
 
-  async registerStudy(subdomain: string, dto: {
+  async registerStudy(ds: DataSource, tenantId: string, dto: {
     patientId: string; imagingOrderId?: string; studyUid: string;
     modality: string; bodyPart?: string; storageKey: string;
     fileSizeBytes?: number; acquiredAt?: string;
   }): Promise<DicomStudy> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(DicomStudy);
     const study = await repo.save(repo.create({
       ...dto,
@@ -64,20 +64,18 @@ export class RadiologyAiService {
     }));
 
     // Trigger analysis fire-and-forget
-    this.analyzeStudy(subdomain, ds, study).catch(e =>
+    this.analyzeStudy(tenantId, ds, study).catch(e =>
       this.logger.warn(`Radiology AI analysis failed for study ${study.id}: ${e?.message}`));
 
     return this.decorateStudy(study) as DicomStudy;
   }
 
-  async getStudy(subdomain: string, studyId: string): Promise<DicomStudy | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getStudy(ds: DataSource, studyId: string): Promise<DicomStudy | null> {
     const study = await ds.getRepository(DicomStudy).findOneBy({ id: studyId });
     return this.decorateStudy(study) as DicomStudy | null;
   }
 
-  async getStudiesForPatient(subdomain: string, patientId: string): Promise<DicomStudy[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getStudiesForPatient(ds: DataSource, patientId: string): Promise<DicomStudy[]> {
     const studies = await ds.getRepository(DicomStudy).find({
       where: { patientId },
       order: { uploadedAt: 'DESC' },
@@ -85,14 +83,12 @@ export class RadiologyAiService {
     return studies.map((study) => this.decorateStudy(study) as DicomStudy);
   }
 
-  async getFindingsForStudy(subdomain: string, studyId: string): Promise<RadiologyAiFinding[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getFindingsForStudy(ds: DataSource, studyId: string): Promise<RadiologyAiFinding[]> {
     const findings = await ds.getRepository(RadiologyAiFinding).find({ where: { studyId } });
     return findings.map((finding) => this.decorateFinding(finding) as RadiologyAiFinding);
   }
 
-  async getFindingsForPatient(subdomain: string, patientId: string): Promise<RadiologyAiFinding[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getFindingsForPatient(ds: DataSource, patientId: string): Promise<RadiologyAiFinding[]> {
     const findings = await ds.getRepository(RadiologyAiFinding).find({
       where: { patientId },
       order: { analyzedAt: 'DESC' },
@@ -100,8 +96,7 @@ export class RadiologyAiService {
     return findings.map((finding) => this.decorateFinding(finding) as RadiologyAiFinding);
   }
 
-  async radiologistReview(subdomain: string, findingId: string, notes: string, reviewedBy: string): Promise<RadiologyAiFinding | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async radiologistReview(ds: DataSource, findingId: string, notes: string, reviewedBy: string): Promise<RadiologyAiFinding | null> {
     const repo = ds.getRepository(RadiologyAiFinding);
     await repo.update(findingId, { radiologistReviewed: true, radiologistNotes: notes });
     const finding = await repo.findOneBy({ id: findingId });
@@ -110,7 +105,7 @@ export class RadiologyAiService {
 
   // ── AI Analysis ────────────────────────────────────────────────────────────
 
-  private async analyzeStudy(subdomain: string, ds: any, study: DicomStudy): Promise<void> {
+  private async analyzeStudy(tenantId: string, ds: any, study: DicomStudy): Promise<void> {
     await ds.getRepository(DicomStudy).update(study.id, { aiAnalysisStatus: 'processing' });
 
     try {
@@ -122,7 +117,7 @@ export class RadiologyAiService {
           bodyPart: study.bodyPart,
           storageKey: study.storageKey,
         },
-        subdomain,
+        tenantId,
         ds,
       );
 
@@ -144,7 +139,7 @@ export class RadiologyAiService {
       // display-time metadata (decorateStudy/decorateFinding below only format it).
       await this.aiSurfaceContractService.recordExecution({
         tenantDb: ds,
-        tenantId: subdomain,
+        tenantId: tenantId,
         aiSurface: 'radiology_ai',
         useCase: 'radiology_analysis',
         source: 'radiology_ai_service.analyzeStudy',
@@ -160,7 +155,7 @@ export class RadiologyAiService {
       );
       if (criticalFindings.length > 0) {
         await ds.getRepository(RadiologyAiFinding).update(finding.id, { alerted: true });
-        this.alertDelivery.broadcastCriticalAlert(subdomain, {
+        this.alertDelivery.broadcastCriticalAlert(tenantId, {
           alertType: 'radiology_critical',
           sourceEntityId: finding.id,
           patientId: study.patientId,

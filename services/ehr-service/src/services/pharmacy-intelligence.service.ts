@@ -86,6 +86,7 @@ export class PharmacyIntelligenceService {
 
     const counselingTopic = this.buildCounselingTopic(activeCurrent, discrepancySummary, adherenceConcerns);
     const counselingMaterial = await this.multilingualEducationService.generate(
+      tenantDb,
       tenantId,
       payload.patientId,
       counselingTopic,

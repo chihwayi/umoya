@@ -1,6 +1,7 @@
-import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Body, Param, Req } from '@nestjs/common';
 import { MultilingualEducationService } from '../services/multilingual-education.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('education')
 @UseGuards(JwtAuthGuard)
@@ -9,30 +10,30 @@ export class MultilingualEducationController {
 
   @Post('generate')
   generate(
-    @Body('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Body('patientId') patientId: string,
     @Body('topic') topic: string,
     @Body('language') language: string,
     @Body('readingLevel') readingLevel?: number,
     @Body('encounterId') encounterId?: string,
   ) {
-    return this.svc.generate(subdomain, patientId, topic, language, readingLevel, encounterId);
+    return this.svc.generate(req.tenantDb!, req.tenantId!, patientId, topic, language, readingLevel, encounterId);
   }
 
   @Get('patient/:patientId')
   getMaterials(
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getMaterials(subdomain, patientId);
+    return this.svc.getMaterials(req.tenantDb!, patientId);
   }
 
   @Patch(':id/delivered')
   markDelivered(
+    @Req() req: RequestWithTenant,
     @Param('id') id: string,
-    @Query('subdomain') subdomain: string,
     @Body('method') method: string,
   ) {
-    return this.svc.markDelivered(subdomain, id, method);
+    return this.svc.markDelivered(req.tenantDb!, id, method);
   }
 }

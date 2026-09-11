@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { IotDeviceRegistration } from '../entities/iot-device-registration.entity';
 import { IotDataIngestion } from '../entities/iot-data-ingestion.entity';
@@ -24,20 +25,17 @@ export class IotService {
 
   // ── Device Registration ───────────────────────────────────────────────────
 
-  async registerDevice(subdomain: string, patientId: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async registerDevice(ds: DataSource, patientId: string, dto: any) {
     return ds.getRepository(IotDeviceRegistration).save(
       ds.getRepository(IotDeviceRegistration).create({ ...dto, patientId })
     );
   }
 
-  async getDevices(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getDevices(ds: DataSource, patientId: string) {
     return ds.getRepository(IotDeviceRegistration).find({ where: { patientId, status: 'active' } });
   }
 
-  async revokeDevice(subdomain: string, deviceId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async revokeDevice(ds: DataSource, deviceId: string) {
     const repo = ds.getRepository(IotDeviceRegistration);
     await repo.update(deviceId, { status: 'revoked' });
     return repo.findOneBy({ id: deviceId });
@@ -45,12 +43,11 @@ export class IotService {
 
   // ── Data Ingestion ────────────────────────────────────────────────────────
 
-  async ingestData(subdomain: string, patientId: string, deviceId: string, readings: IotReadingInput[]) {
+  async ingestData(ds: DataSource, tenantId: string, patientId: string, deviceId: string, readings: IotReadingInput[]) {
     if (!Array.isArray(readings) || readings.length === 0) {
       return { ingested: 0, aiAlertCount: 0, monitoringEventId: null, monitoringAlertCount: 0 };
     }
 
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(IotDataIngestion);
     const deviceRepo = ds.getRepository(IotDeviceRegistration);
     const saved: IotDataIngestion[] = [];
@@ -69,8 +66,8 @@ export class IotService {
     }
 
     const [analysisResult, monitoringSync] = await Promise.all([
-      this.analyzeReadings(subdomain, ds, patientId, saved),
-      this.syncReadingsIntoRemoteMonitoring(subdomain, patientId, device, saved),
+      this.analyzeReadings(tenantId, ds, patientId, saved),
+      this.syncReadingsIntoRemoteMonitoring(tenantId, patientId, device, saved),
     ]);
 
     // Update device last sync
@@ -84,8 +81,7 @@ export class IotService {
     };
   }
 
-  async getReadings(subdomain: string, patientId: string, measurementType?: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getReadings(ds: DataSource, patientId: string, measurementType?: string) {
     const qb = ds.getRepository(IotDataIngestion)
       .createQueryBuilder('r')
       .where('r.patient_id = :patientId', { patientId })
@@ -95,14 +91,14 @@ export class IotService {
     return qb.getMany();
   }
 
-  private async analyzeReadings(subdomain: string, ds: any, patientId: string, readings: IotDataIngestion[]) {
+  private async analyzeReadings(tenantId: string, ds: any, patientId: string, readings: IotDataIngestion[]) {
     try {
       const data = await this.cdssService.analyzeIotReadings(
         {
           patientId,
           readings: readings.map(r => ({ type: r.measurementType, value: r.value, unit: r.unit, at: r.measuredAt })),
         },
-        subdomain,
+        tenantId,
         ds,
       );
       if (data.alerts?.length) {
@@ -192,7 +188,7 @@ export class IotService {
   }
 
   private async syncReadingsIntoRemoteMonitoring(
-    subdomain: string,
+    tenantId: string,
     patientId: string,
     device: Partial<IotDeviceRegistration> | null,
     readings: IotDataIngestion[],
@@ -203,7 +199,7 @@ export class IotService {
     }
 
     try {
-      return await this.patientVitalsSubmissionService.submitPatientVitals(patientId, vitalsPayload, subdomain);
+      return await this.patientVitalsSubmissionService.submitPatientVitals(patientId, vitalsPayload, tenantId);
     } catch (error: any) {
       this.logger.warn(`IoT remote monitoring sync unavailable: ${error?.message}`);
       return null;

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { StockoutPrediction } from '../entities/stockout-prediction.entity';
@@ -16,9 +17,7 @@ export class SupplyChainAiService {
 
   // ── On-demand prediction ───────────────────────────────────────────────────
 
-  async predictStockouts(subdomain: string, drugName?: string): Promise<StockoutPrediction[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
-
+  async predictStockouts(ds: DataSource, drugName?: string): Promise<StockoutPrediction[]> {
     const drugs = await this.fetchDrugInventory(ds, drugName);
     if (!drugs.length) return [];
 
@@ -32,24 +31,21 @@ export class SupplyChainAiService {
     return results;
   }
 
-  async getPredictions(subdomain: string): Promise<StockoutPrediction[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getPredictions(ds: DataSource): Promise<StockoutPrediction[]> {
     return ds.getRepository(StockoutPrediction).find({
       order: { daysToStockout: 'ASC' },
       take: 100,
     });
   }
 
-  async getProcurementAlerts(subdomain: string): Promise<ProcurementAlert[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getProcurementAlerts(ds: DataSource): Promise<ProcurementAlert[]> {
     return ds.getRepository(ProcurementAlert).find({
       where: { status: 'open' },
       order: { daysToStockout: 'ASC' },
     });
   }
 
-  async acknowledgeProcurementAlert(subdomain: string, alertId: string, userId: string, orderRef?: string): Promise<ProcurementAlert | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async acknowledgeProcurementAlert(ds: DataSource, alertId: string, userId: string, orderRef?: string): Promise<ProcurementAlert | null> {
     const repo = ds.getRepository(ProcurementAlert);
     await repo.update(alertId, {
       status: orderRef ? 'ordered' : 'acknowledged',
@@ -72,7 +68,8 @@ export class SupplyChainAiService {
         if (!subdomain) {
           continue;
         }
-        await this.predictStockouts(subdomain).catch(e =>
+        const ds = await this.tenantService.getTenantDatabase(subdomain);
+        await this.predictStockouts(ds).catch(e =>
           this.logger.error(`Stockout sweep failed for ${subdomain}: ${e?.message}`));
       }
     } catch (e: any) {
