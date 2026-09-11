@@ -92,19 +92,20 @@ export class AppointmentAiService {
         [patientId],
       ),
       db.query(
-        `SELECT test_name, value, unit, flag, resulted_at FROM lab_results
-         WHERE patient_id = $1 AND status = 'resulted'
-         ORDER BY resulted_at DESC LIMIT 5`,
+        `SELECT test_name, result_value AS value, result_unit AS unit, NULL AS flag, completed_at AS resulted_at
+         FROM lab_results
+         WHERE patient_id = $1 AND status = 'completed'
+         ORDER BY completed_at DESC LIMIT 5`,
         [patientId],
       ),
       db.query(
-        `SELECT drug_name, dose, frequency, status FROM prescriptions
+        `SELECT medication_name AS drug_name, dosage AS dose, frequency, status FROM prescriptions
          WHERE patient_id = $1 AND status = 'active' LIMIT 10`,
         [patientId],
       ),
       db.query(
-        `SELECT title, priority, due_date FROM clinical_tasks
-         WHERE patient_id = $1 AND status = 'open' LIMIT 5`,
+        `SELECT title, priority, due_date FROM nurse_tasks
+         WHERE patient_id = $1 AND status = 'pending' LIMIT 5`,
         [patientId],
       ),
     ]);

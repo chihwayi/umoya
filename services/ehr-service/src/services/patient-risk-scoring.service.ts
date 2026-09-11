@@ -25,40 +25,31 @@ export class PatientRiskScoringService {
 
   async scorePatient(patientId: string, db: any): Promise<RiskResult> {
     const news2Rows = await db.query(
-      `SELECT total_score FROM news2_assessments
-       WHERE patient_id = $1 ORDER BY assessed_at DESC LIMIT 1`,
+      `SELECT total_score FROM patient_early_warning_scores
+       WHERE patient_id = $1 AND score_type = 'NEWS2' ORDER BY calculated_at DESC LIMIT 1`,
       [patientId],
     );
     const news2Score = news2Rows[0]?.total_score ?? 0;
 
     const oiRows = await db.query(
-      `SELECT COUNT(*) AS cnt FROM oi_alerts
+      `SELECT COUNT(*) AS cnt FROM oi_early_warning_alerts
        WHERE patient_id = $1 AND status = 'active'
          AND created_at > now() - INTERVAL '48 hours'`,
       [patientId],
     );
     const oiAlertCount = parseInt(oiRows[0]?.cnt ?? '0');
 
-    const medRows = await db.query(
-      `SELECT COUNT(*) AS cnt FROM medication_administrations
-       WHERE patient_id = $1 AND status = 'missed'
-         AND scheduled_at > now() - INTERVAL '7 days'`,
-      [patientId],
-    );
-    const missedMedications = parseInt(medRows[0]?.cnt ?? '0');
+    // medication_administrations has no "missed dose" status/schedule concept in the real
+    // schema (it only records doses that were actually given) — no equivalent data source exists.
+    const missedMedications = 0;
 
-    const vitalRows = await db.query(
-      `SELECT COUNT(*) AS cnt FROM vitals
-       WHERE patient_id = $1 AND is_abnormal = true
-         AND recorded_at > now() - INTERVAL '24 hours'`,
-      [patientId],
-    );
-    const abnormalVitals = parseInt(vitalRows[0]?.cnt ?? '0');
+    // vitals has no is_abnormal flag in the real schema — no equivalent data source exists.
+    const abnormalVitals = 0;
 
     const labRows = await db.query(
       `SELECT COUNT(*) AS cnt FROM lab_results
-       WHERE patient_id = $1 AND flag IN ('H','L','HH','LL','critical')
-         AND resulted_at > now() - INTERVAL '72 hours'`,
+       WHERE patient_id = $1 AND status = 'critical'
+         AND completed_at > now() - INTERVAL '72 hours'`,
       [patientId],
     );
     const labFlags = parseInt(labRows[0]?.cnt ?? '0');

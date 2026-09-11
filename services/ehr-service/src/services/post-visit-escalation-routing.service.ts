@@ -89,7 +89,7 @@ export class PostVisitEscalationRoutingService {
 
   async getOpenEscalations(db: any): Promise<any[]> {
     return db.query(
-      `SELECT pve.*, p.first_name, p.last_name, p.mrn
+      `SELECT pve.*, p.first_name, p.last_name, p.patient_number AS mrn
        FROM post_visit_escalations pve
        JOIN patients p ON p.id = pve.patient_id
        WHERE pve.status IN ('detected', 'routed')

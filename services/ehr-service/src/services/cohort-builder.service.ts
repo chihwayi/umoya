@@ -5,9 +5,8 @@ export class CohortBuilderService {
   private readonly ALLOWED_FIELDS: Record<string, string> = {
     'age_min':           `DATE_PART('year', AGE(p.date_of_birth)) >= :value`,
     'age_max':           `DATE_PART('year', AGE(p.date_of_birth)) <= :value`,
-    'sex':               `p.sex = :value`,
-    'district':          `p.district ILIKE :value`,
-    'province':          `p.province ILIKE :value`,
+    'sex':               `p.gender = :value`,
+    'district':          `p.city ILIKE :value`,
     'art_status':        `e.art_status = :value`,
     'regimen_line':      `e.current_regimen_line = :value`,
     'vl_max':            `EXISTS (SELECT 1 FROM hiv_clinical_visits v WHERE v.patient_id = p.id AND v.viral_load <= :value AND v.visit_date >= CURRENT_DATE - INTERVAL '12 months')`,
@@ -28,12 +27,13 @@ export class CohortBuilderService {
 
     const where = clauses.length > 0 ? clauses.join(` ${criteria.logic} `) : 'TRUE';
     const sql = `
-      SELECT p.id, p.full_name, p.date_of_birth, p.sex, p.district, p.province,
+      SELECT p.id, p.first_name || ' ' || p.last_name AS full_name, p.date_of_birth,
+             p.gender AS sex, p.city AS district,
              e.art_status, e.art_start_date, e.current_regimen
       FROM patients p
       JOIN hiv_enrollments e ON e.patient_id = p.id
       WHERE ${where}
-      ORDER BY p.full_name
+      ORDER BY p.first_name, p.last_name
     `;
     return { sql, params };
   }

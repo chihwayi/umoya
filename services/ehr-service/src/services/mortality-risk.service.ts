@@ -34,8 +34,8 @@ export class MortalityRiskService {
       : 50;
 
     const news2Rows = await db.query(
-      `SELECT total_score FROM news2_assessments
-       WHERE patient_id = $1 ORDER BY assessed_at DESC LIMIT 1`,
+      `SELECT total_score FROM patient_early_warning_scores
+       WHERE patient_id = $1 AND score_type = 'NEWS2' ORDER BY calculated_at DESC LIMIT 1`,
       [patientId],
     );
     const news2Score = news2Rows[0]?.total_score ?? 0;
@@ -49,8 +49,8 @@ export class MortalityRiskService {
 
     const labRows = await db.query(
       `SELECT COUNT(*) AS cnt FROM lab_results
-       WHERE patient_id = $1 AND flag IN ('HH','LL','critical')
-         AND resulted_at > now() - INTERVAL '7 days'`,
+       WHERE patient_id = $1 AND status = 'critical'
+         AND completed_at > now() - INTERVAL '7 days'`,
       [patientId],
     );
     const criticalLabFlags = parseInt(labRows[0]?.cnt ?? '0');
@@ -142,7 +142,7 @@ export class MortalityRiskService {
     return db.query(
       `SELECT DISTINCT ON (mrs.patient_id)
          mrs.patient_id, mrs.score, mrs.band, mrs.scored_at,
-         p.first_name, p.last_name, p.mrn
+         p.first_name, p.last_name, p.patient_number AS mrn
        FROM mortality_risk_scores mrs
        JOIN patients p ON p.id = mrs.patient_id
        WHERE mrs.band IN ('critical','high')

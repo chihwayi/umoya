@@ -1509,3 +1509,84 @@ Bug ref:       services/ehr-service/src/services/clinical-timeline.service.ts,
 |---|---|---|---|
 | 38 | `clinical-timeline.controller.ts`/`clinical-summary.controller.ts` route collision on `GET :patientId/ai-timeline`; winning handler always 500'd (6 wrong table/column names against the real schema) | **Functional** | Fixed |
 | 39 | `clinical-document.controller.ts`/`document.controller.ts` route collision on `@Controller('documents')` — AI-generated document "Sign" button in ehr-frontend always hit the wrong controller/table; document generation itself also always 500'd (4 wrong table/column names) | **Functional (user-facing)** | Fixed |
+
+### Test 29 — Codebase-wide sweep for phantom table/column references (backend)
+
+```
+Module:        ~35 service files across clinical summary/timeline/documents, mortality risk,
+               patient risk scoring, care gap detection, appointment AI briefs, discharge
+               documents, cascade analytics, DHIS2/MoHCC national reporting, pharmacy
+               intelligence, cohort builder, education personalization, drug substitution,
+               CSAT, telemedicine post-call, research portal, and more.
+Platform:      Backend
+Role:          Doctor / system-internal
+Test patient:  TEST_VerifyAnc MobileGaps (id 20ecbfb0-d6d1-4387-b897-17e0ff9c56e6)
+Context:       Discovered while fixing Test 28 (clinical-timeline.service.ts): the query
+               referenced a `patient_diagnoses` table and a `patients.sex` column that don't
+               exist anywhere in the real schema (real: `problems`, `patients.gender`). Grepped
+               the whole codebase for the same phantom references (`patient_diagnoses`,
+               `encounters`, `clinical_notes`, `patients.sex`) and found 15 more production
+               service files with the identical pattern — evidently written against an assumed
+               schema that was never actually provisioned. Dispatched 3 parallel background
+               agents to fix all 15 against the real schema (`problems` for diagnoses,
+               `medical_records` for generic encounters/notes, `patients.gender` for sex).
+               After merging, live-verification surfaced a SECOND wave the original grep missed
+               entirely (different phantom names): `patients.mrn` (real: `patient_number`),
+               `lab_results.value`/`.unit`/`.flag`/`.resulted_at`/status `'resulted'` (real:
+               `result_value`/`result_unit`/no flag column/`completed_at`/status `'completed'`),
+               `prescriptions.drug_name`/`.dose` (real: `medication_name`/`dosage`),
+               `news2_assessments` (real: `patient_early_warning_scores`), `oi_alerts` (real:
+               `oi_early_warning_alerts`), `vaccinations`/`clinical_tasks` (real:
+               `immunization_records`/`nurse_tasks`), `vitals.is_abnormal` and
+               `medication_administrations.status='missed'` (no real equivalent — dropped),
+               `lab_orders.status='resulted'` (real: `'completed'`), a `patients.tenant_id`
+               column used in `ai-performance.service.ts`'s JOIN and 6 of 7 metrics in
+               `dhis2-validation.service.ts`'s `computeLocalValues()` (per-tenant tables never
+               have a `tenant_id` column in this architecture — only `maternity_deliveries`
+               legitimately has one) — the latter is especially concerning because it used
+               `Promise.allSettled` with silent per-query fallback to 0, meaning DHIS2 national
+               validation counts have been silently wrong for 6 of 7 metrics with no visible
+               error, ever. `dhis2.service.ts` alone had a third, separate wave of ~20 more
+               phantom references (`resulted_at`, `value_text`, `value_numeric`, `category`,
+               `flag`, `loinc_code`, a nonexistent `lab_results.order_id` join) in its lab
+               intelligence metrics block and single-result DHIS2 push query — none related to
+               the `patient_diagnoses`/`encounters` pattern that triggered the original sweep.
+               `cohort-builder.service.ts` (used by the research cohort-query feature) also
+               referenced `patients.full_name`/`.district`/`.province`, none of which exist.
+               `pharmacy-intelligence.service.ts`'s formulary-adherence report referenced a
+               `formulary_drugs` table and `prescriptions.drug_code`/`.tenant_id`/`.prescriber_id`
+               that don't exist — fixed by joining the real `drugs` catalog table via
+               `rxnorm_code`. That same file's `getDrugWasteReport()` (and possibly further
+               methods) reference an equally nonexistent `pharmacy_stock_transactions` table
+               (real candidate: `pharmacy_waste_events`) — NOT fixed in this pass, flagged below.
+Fix:           Rewrote every discovered phantom table/column reference against the real schema,
+               using SQL `AS` aliases to preserve downstream field names wherever possible so
+               surrounding TypeScript didn't need to change. Where no real equivalent exists
+               (e.g. `vitals.is_abnormal`, medication "missed dose" tracking), dropped the
+               impossible filter/metric to a safe default (0 / empty) rather than inventing
+               schema, matching the precedent set in Tests 22/26/28. `full_name`/`district` in
+               cohort-builder were mapped to `first_name || ' ' || last_name` and `city`
+               respectively (closest honest equivalents); `province` was dropped (no
+               equivalent). Also fixed a stray `services/ehr-service/tsconfig.json`
+               `ignoreDeprecations` edit two of the agents made to their own environment — reverted
+               before merging since it was unrelated to the task and not something to carry into
+               main.
+Steps to test: Live-verified after each fix wave: GET .../mortality-risk, GET .../care-gaps, GET
+               .../ai-timeline (regression check), GET .../clinical-summary, GET
+               /pharmacy/reports/formulary-adherence. `npx tsc --noEmit` clean after every merge
+               and every manual follow-up fix. Checked server logs for "does not exist" errors
+               after each restart.
+Actual result: Pass on all live-tested endpoints — no more phantom-schema SQL errors. Full
+               `npx tsc --noEmit` clean.
+Status:        Fail (100% failure rate on every affected query, several silently — Promise.all/
+               allSettled/.catch swallowing the error and returning empty/zero) → Fixed → Pass
+               (verified live on a representative sample across ~20 files).
+Bug ref:       ~20 files under services/ehr-service/src/services/ — see commit for full list.
+```
+
+## Update to Step 4 Deliverables (cont. 4)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 40 | Codebase-wide phantom table/column references (`patient_diagnoses`, `encounters`, `clinical_notes`, `patients.sex`/`.mrn`, `lab_results` wrong column names, `prescriptions.drug_name`/`.dose`, `news2_assessments`, `oi_alerts`, `vaccinations`, `clinical_tasks`, a fabricated `patients.tenant_id`) across ~20 backend service files — every affected query has always failed, several silently via `Promise.allSettled`/`.catch` swallowing the error | **Functional / data integrity** | Fixed (~20 files); `pharmacy-intelligence.service.ts`'s `getDrugWasteReport()` (and possibly sibling methods below it) still reference a nonexistent `pharmacy_stock_transactions` table — not fixed, needs a follow-up pass |
+| 41 | `dhis2-validation.service.ts`'s `computeLocalValues()` filtered 6 of 7 local-count queries on a nonexistent `patients.tenant_id`/etc. column, silently returning 0 via `Promise.allSettled` for every metric except deliveries — Zimbabwe MoHCC DHIS2 validation has likely never shown a correct local count for these 6 data elements | **Clinical/national-reporting data integrity** | Fixed |

@@ -60,9 +60,9 @@ const METRICS: Record<string, MetricDef> = {
     label: 'Average Lab TAT (hours)',
     sql: (p) => `
       SELECT COALESCE(AVG(
-        EXTRACT(EPOCH FROM (resulted_at - ordered_at))/3600
+        EXTRACT(EPOCH FROM (result_reported_at - created_at))/3600
       ), 0)
-      FROM lab_orders WHERE TO_CHAR(ordered_at,'YYYYMM') = '${p}' AND resulted_at IS NOT NULL`,
+      FROM lab_orders WHERE TO_CHAR(created_at,'YYYYMM') = '${p}' AND result_reported_at IS NOT NULL`,
     higherIsBetter: false,
   },
   appointment_kept_rate: {

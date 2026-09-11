@@ -90,8 +90,8 @@ const KPI_QUERIES: Record<KpiName, {
     numeratorSql: (dim, period) =>
       `SELECT ${dim} AS dval, COUNT(DISTINCT patient_id) AS n
        FROM lab_results lr
-       WHERE TO_CHAR(lr.resulted_at,'YYYYMM') = '${period}'
-         AND lr.test_name ILIKE '%HbA1c%' AND lr.numeric_value < 7.0
+       WHERE TO_CHAR(lr.completed_at,'YYYYMM') = '${period}'
+         AND lr.test_name ILIKE '%HbA1c%' AND lr.result_value ~ '^[0-9.]+$' AND lr.result_value::numeric < 7.0
        GROUP BY 1`,
     denominatorSql: (dim, period) =>
       `SELECT ${dim} AS dval, COUNT(DISTINCT patient_id) AS d

@@ -252,18 +252,18 @@ export class AiPerformanceService {
     const [sexRows, ageRows] = await Promise.all([
       db.query(
         `SELECT
-           COALESCE(p.sex, 'Unknown') AS group_val,
+           COALESCE(p.gender, 'Unknown') AS group_val,
            COUNT(ai.id) AS total,
            COUNT(*) FILTER (WHERE ai.is_correct=true AND ai.predicted_class IN ('high_risk','positive','readmitted','relapsed','deteriorated','deceased')) AS tp,
            COUNT(*) FILTER (WHERE ai.is_correct=false AND ai.predicted_class IN ('high_risk','positive','readmitted','relapsed','deteriorated','deceased')) AS fp,
            COUNT(*) FILTER (WHERE ai.is_correct=true AND ai.predicted_class IN ('low_risk','negative','not_readmitted','no_relapse','stable','alive')) AS tn,
            COUNT(*) FILTER (WHERE ai.is_correct=false AND ai.predicted_class IN ('low_risk','negative','not_readmitted','no_relapse','stable','alive')) AS fn
          FROM ai_predictions ai
-         LEFT JOIN patients p ON p.id = ai.patient_id AND p.tenant_id = ai.tenant_id
+         LEFT JOIN patients p ON p.id = ai.patient_id
          WHERE ai.tenant_id=$1 AND ai.model_name=$2
            AND ai.actual_outcome IS NOT NULL
            AND TO_CHAR(ai.prediction_date,'YYYY-MM') = $3
-         GROUP BY p.sex`,
+         GROUP BY p.gender`,
         [tenantId, modelName, period],
       ),
       db.query(
@@ -279,7 +279,7 @@ export class AiPerformanceService {
            COUNT(*) FILTER (WHERE ai.is_correct=true AND ai.predicted_class IN ('low_risk','negative','not_readmitted','no_relapse','stable','alive')) AS tn,
            COUNT(*) FILTER (WHERE ai.is_correct=false AND ai.predicted_class IN ('low_risk','negative','not_readmitted','no_relapse','stable','alive')) AS fn
          FROM ai_predictions ai
-         LEFT JOIN patients p ON p.id = ai.patient_id AND p.tenant_id = ai.tenant_id
+         LEFT JOIN patients p ON p.id = ai.patient_id
          WHERE ai.tenant_id=$1 AND ai.model_name=$2
            AND ai.actual_outcome IS NOT NULL
            AND TO_CHAR(ai.prediction_date,'YYYY-MM') = $3

@@ -1232,39 +1232,39 @@ export class PharmacyIntelligenceService {
   async getFormularyAdherenceReport(tenantDb: DataSource, tenantId: string, period: string): Promise<any> {
     const [total, formulary, offFormulary, topOff, byPrescriber] = await Promise.allSettled([
       tenantDb.query(
-        `SELECT COUNT(*)::int AS n FROM prescriptions WHERE tenant_id=$1 AND TO_CHAR(created_at,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(*)::int AS n FROM prescriptions WHERE TO_CHAR(created_at,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
         `SELECT COUNT(*)::int AS n FROM prescriptions p
-         JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
-         WHERE p.tenant_id=$1 AND TO_CHAR(p.created_at,'YYYYMM')=$2`,
-        [tenantId, period],
+         JOIN drugs d ON d.rxnorm_code = p.medication_name_rxnorm_code
+         WHERE TO_CHAR(p.created_at,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT p.drug_name, COUNT(*)::int AS n FROM prescriptions p
-         LEFT JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
-         WHERE p.tenant_id=$1 AND TO_CHAR(p.created_at,'YYYYMM')=$2 AND fd.drug_code IS NULL
-         GROUP BY p.drug_name ORDER BY n DESC LIMIT 10`,
-        [tenantId, period],
+        `SELECT p.medication_name AS drug_name, COUNT(*)::int AS n FROM prescriptions p
+         LEFT JOIN drugs d ON d.rxnorm_code = p.medication_name_rxnorm_code
+         WHERE TO_CHAR(p.created_at,'YYYYMM')=$1 AND d.rxnorm_code IS NULL
+         GROUP BY p.medication_name ORDER BY n DESC LIMIT 10`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT p.drug_name, COUNT(*)::int AS n FROM prescriptions p
-         LEFT JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
-         WHERE p.tenant_id=$1 AND TO_CHAR(p.created_at,'YYYYMM')=$2 AND fd.drug_code IS NULL
-         GROUP BY p.drug_name ORDER BY n DESC LIMIT 5`,
-        [tenantId, period],
+        `SELECT p.medication_name AS drug_name, COUNT(*)::int AS n FROM prescriptions p
+         LEFT JOIN drugs d ON d.rxnorm_code = p.medication_name_rxnorm_code
+         WHERE TO_CHAR(p.created_at,'YYYYMM')=$1 AND d.rxnorm_code IS NULL
+         GROUP BY p.medication_name ORDER BY n DESC LIMIT 5`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT p.prescriber_id,
+        `SELECT p.doctor_id AS prescriber_id,
                 COUNT(*)::int AS total,
-                COUNT(*) FILTER (WHERE fd.drug_code IS NULL)::int AS off_formulary
+                COUNT(*) FILTER (WHERE d.rxnorm_code IS NULL)::int AS off_formulary
          FROM prescriptions p
-         LEFT JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
-         WHERE p.tenant_id=$1 AND TO_CHAR(p.created_at,'YYYYMM')=$2
-         GROUP BY p.prescriber_id
+         LEFT JOIN drugs d ON d.rxnorm_code = p.medication_name_rxnorm_code
+         WHERE TO_CHAR(p.created_at,'YYYYMM')=$1
+         GROUP BY p.doctor_id
          ORDER BY off_formulary DESC LIMIT 10`,
-        [tenantId, period],
+        [period],
       ),
     ]);
 

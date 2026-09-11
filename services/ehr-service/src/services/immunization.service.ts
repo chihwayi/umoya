@@ -355,7 +355,7 @@ export class ImmunizationService {
   async buildVxuMessage(immunizationId: string, tenantDb: DataSource): Promise<string> {
     const rows = await tenantDb.query(
       `SELECT i.*, p.first_name, p.last_name, p.date_of_birth, p.phone,
-              p.id_number, p.sex
+              p.id_number, p.gender AS sex
        FROM immunizations i
        JOIN patients p ON p.id = i.patient_id
        WHERE i.id = $1`,

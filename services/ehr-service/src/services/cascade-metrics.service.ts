@@ -35,7 +35,7 @@ export class CascadeMetricsService {
     const sCount = parseInt(suppressed.cnt);
 
     const bySexRows = await db.query(`
-      SELECT p.sex,
+      SELECT p.gender AS sex,
         COUNT(DISTINCT e.patient_id) AS diagnosed,
         COUNT(DISTINCT e.patient_id) FILTER (WHERE e.art_status = 'on_art') AS on_art,
         COUNT(DISTINCT cv.patient_id) FILTER (WHERE cv.viral_load < 1000 AND cv.viral_load IS NOT NULL AND cv.visit_date >= CURRENT_DATE - INTERVAL '12 months') AS suppressed
@@ -43,7 +43,7 @@ export class CascadeMetricsService {
       JOIN patients p ON p.id = e.patient_id
       LEFT JOIN hiv_clinical_visits cv ON cv.patient_id = e.patient_id
       WHERE e.enrollment_status NOT IN ('closed', 'transferred_out')
-      GROUP BY p.sex
+      GROUP BY p.gender
     `);
 
     const byAgeBandRows = await db.query(`

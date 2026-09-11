@@ -153,7 +153,7 @@ export class AdherenceEngineService {
     return db.query(
       `SELECT DISTINCT ON (ars.patient_id)
          ars.patient_id, ars.score, ars.risk_level, ars.scored_at,
-         p.first_name, p.last_name, p.mrn
+         p.first_name, p.last_name, p.patient_number AS mrn
        FROM adherence_risk_scores ars
        JOIN patients p ON p.id = ars.patient_id
        WHERE ars.risk_level IN ('at_risk','high_risk')

@@ -1671,9 +1671,9 @@ export class Dhis2Service {
            WHERE code LIKE 'E1%' AND status = 'active'`),
         this.safeMetricCount(tenantDb, 'dm_hba1c',
           `SELECT COUNT(DISTINCT lr.patient_id)::int AS total FROM lab_results lr
-           WHERE lr.resulted_at >= $1 AND lr.resulted_at < $2
+           WHERE lr.completed_at >= $1 AND lr.completed_at < $2
              AND LOWER(COALESCE(lr.test_name,'')) LIKE '%hba1c%'
-             AND CAST(NULLIF(REGEXP_REPLACE(lr.value_text,'[^0-9.]','','g'),'') AS numeric) < 7.0`,
+             AND CAST(NULLIF(REGEXP_REPLACE(lr.result_value,'[^0-9.]','','g'),'') AS numeric) < 7.0`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'dm_insulin',
           `SELECT COUNT(DISTINCT patient_id)::int AS total FROM prescriptions
@@ -1824,36 +1824,35 @@ export class Dhis2Service {
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_completed',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2`,
+           WHERE completed_at >= $1 AND completed_at < $2`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_haem',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2
-             AND LOWER(COALESCE(category,'')) IN ('haematology','hematology','cbc')`,
+           WHERE completed_at >= $1 AND completed_at < $2
+             AND LOWER(COALESCE(test_type,'')) IN ('haematology','hematology','cbc')`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_biochem',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2
-             AND LOWER(COALESCE(category,'')) IN ('biochemistry','chemistry','metabolic')`,
+           WHERE completed_at >= $1 AND completed_at < $2
+             AND LOWER(COALESCE(test_type,'')) IN ('biochemistry','chemistry','metabolic')`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_micro',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2
-             AND LOWER(COALESCE(category,'')) IN ('microbiology','culture','sensitivity')`,
+           WHERE completed_at >= $1 AND completed_at < $2
+             AND LOWER(COALESCE(test_type,'')) IN ('microbiology','culture','sensitivity')`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_critical',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2
-             AND flag IN ('HH','LL','critical')`,
+           WHERE completed_at >= $1 AND completed_at < $2
+             AND status = 'critical'`,
           [startDate, endDate]),
         this.safeMetricSum(tenantDb, 'lab_tat',
           `SELECT COALESCE(
-             AVG(EXTRACT(EPOCH FROM (resulted_at - ordered_at))/3600)
+             AVG(EXTRACT(EPOCH FROM (completed_at - ordered_at))/3600)
            , 0)::numeric AS total
            FROM lab_results lr
-           JOIN lab_orders lo ON lo.id = lr.order_id
-           WHERE lr.resulted_at >= $1 AND lr.resulted_at < $2
-             AND lo.created_at IS NOT NULL`,
+           WHERE lr.completed_at >= $1 AND lr.completed_at < $2
+             AND lr.ordered_at IS NOT NULL`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_rejection',
           `SELECT COUNT(*)::int AS total FROM lab_orders
@@ -1862,22 +1861,22 @@ export class Dhis2Service {
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_cd4',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2
+           WHERE completed_at >= $1 AND completed_at < $2
              AND LOWER(COALESCE(test_name,'')) LIKE '%cd4%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_vl',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2
+           WHERE completed_at >= $1 AND completed_at < $2
              AND LOWER(COALESCE(test_name,'')) LIKE '%viral load%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_malaria_rdt',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2
+           WHERE completed_at >= $1 AND completed_at < $2
              AND LOWER(COALESCE(test_name,'')) LIKE '%malaria%rdt%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'lab_sputum',
           `SELECT COUNT(*)::int AS total FROM lab_results
-           WHERE resulted_at >= $1 AND resulted_at < $2
+           WHERE completed_at >= $1 AND completed_at < $2
              AND LOWER(COALESCE(test_name,'')) LIKE '%sputum%smear%'`,
           [startDate, endDate]),
       ]);
@@ -3409,8 +3408,9 @@ export class Dhis2Service {
     await this.ensureTenantSyncTables(tenantDb);
 
     const [result] = await tenantDb.query(
-      `SELECT lr.id, lr.patient_id, lr.test_name, lr.loinc_code, lr.value_text,
-              lr.value_numeric, lr.unit, lr.flag, lr.resulted_at, lr.reference_range
+      `SELECT lr.id, lr.patient_id, lr.test_name, NULL AS loinc_code, lr.result_value AS value_text,
+              NULL AS value_numeric, lr.result_unit AS unit, NULL AS flag,
+              lr.completed_at AS resulted_at, lr.reference_range
        FROM lab_results lr WHERE lr.id = $1 LIMIT 1`,
       [labResultId],
     );

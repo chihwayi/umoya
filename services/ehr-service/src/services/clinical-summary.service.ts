@@ -32,14 +32,14 @@ export class ClinicalSummaryService {
         [patientId],
       ),
       db.query(
-        `SELECT drug_name, dose FROM prescriptions
+        `SELECT medication_name AS drug_name, dosage AS dose FROM prescriptions
          WHERE patient_id = $1 AND status = 'active' LIMIT 5`,
         [patientId],
       ),
       db.query(
-        `SELECT test_name, value, unit, flag FROM lab_results
-         WHERE patient_id = $1 AND status = 'resulted'
-         ORDER BY resulted_at DESC LIMIT 3`,
+        `SELECT test_name, result_value AS value, result_unit AS unit, NULL AS flag FROM lab_results
+         WHERE patient_id = $1 AND status = 'completed'
+         ORDER BY completed_at DESC LIMIT 3`,
         [patientId],
       ),
       db.query(

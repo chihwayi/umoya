@@ -32,12 +32,12 @@ export class CareGapEngineService {
         [patientId],
       ),
       db.query(
-        `SELECT test_name, resulted_at FROM lab_results
-         WHERE patient_id = $1 AND status = 'resulted' ORDER BY resulted_at DESC`,
+        `SELECT test_name, completed_at AS resulted_at FROM lab_results
+         WHERE patient_id = $1 AND status = 'completed' ORDER BY completed_at DESC`,
         [patientId],
       ),
       db.query(
-        `SELECT vaccine_name, administered_at FROM vaccinations WHERE patient_id = $1`,
+        `SELECT vaccine_name, administered_at FROM immunization_records WHERE patient_id = $1`,
         [patientId],
       ),
       db.query(

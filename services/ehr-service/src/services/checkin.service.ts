@@ -92,7 +92,7 @@ export class CheckinService {
     return tenantDb.query(
       `SELECT
          a.id, a.appointment_time, a.visit_type, a.actual_checkin_at, a.status,
-         p.first_name, p.last_name, p.mrn,
+         p.first_name, p.last_name, p.patient_number AS mrn,
          EXTRACT(EPOCH FROM (now() - a.actual_checkin_at)) / 60 AS wait_minutes
        FROM appointments a
        JOIN patients p ON p.id = a.patient_id

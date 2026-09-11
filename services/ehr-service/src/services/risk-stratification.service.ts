@@ -152,7 +152,7 @@ export class RiskStratificationService {
               jsonb_array_elements(lo.results) AS r
          WHERE lo.patient_id = $1
            AND lo.created_at > NOW() - INTERVAL '30 days'
-           AND lo.status = 'resulted'
+           AND lo.status = 'completed'
            AND r->>'flag' IN ('high', 'low', 'critical')`,
         [patientId],
       ),
