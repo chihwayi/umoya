@@ -334,15 +334,16 @@ describe('Guideline scope tagging', () => {
     const neurology = new neurologyModule.NeurologyService({} as any, cdssService as any);
     const mentalHealth = new mentalHealthModule.MentalHealthService({} as any, cdssService as any);
     const ntd = new ntdModule.NtdService({} as any, {} as any, cdssService as any);
+    const mockDs = {
+      getRepository: jest.fn().mockReturnValue({
+        findOneBy: jest.fn().mockResolvedValue(null),
+        create: jest.fn((payload) => payload),
+        save: jest.fn(async (payload) => ({ id: 'trial-match-1', ...payload })),
+      }),
+    };
     const trialService = new trialsModule.ClinicalTrialMatchingService(
       {
-        getTenantDatabase: jest.fn().mockResolvedValue({
-          getRepository: jest.fn().mockReturnValue({
-            findOneBy: jest.fn().mockResolvedValue(null),
-            create: jest.fn((payload) => payload),
-            save: jest.fn(async (payload) => ({ id: 'trial-match-1', ...payload })),
-          }),
-        }),
+        getTenantDatabase: jest.fn().mockResolvedValue(mockDs),
       } as any,
       cdssService as any,
     );
@@ -370,7 +371,7 @@ describe('Guideline scope tagging', () => {
     await neurology.diagnoseHeadache({ thunderclap: true });
     await mentalHealth.scoreScreening('PHQ-9', { q1: 2, q2: 3 });
     await ntd.screenNtd({ symptoms: ['blood in urine'] });
-    await trialService.matchTrials('kids-clinic', 'patient-1');
+    await trialService.matchTrials(mockDs as any, 'patient-1');
 
     expect(cdssService.diagnosisAssist).toHaveBeenCalledWith(
       expect.objectContaining({ context: 'stroke_triage', specialty: 'neurology', module: 'stroke_care' }),

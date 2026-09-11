@@ -1,6 +1,7 @@
-import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Patch, Body, Param, Query, Req } from '@nestjs/common';
 import { ClinicalTrialMatchingService } from '../services/clinical-trial-matching.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('trials')
 @UseGuards(JwtAuthGuard)
@@ -9,34 +10,34 @@ export class ClinicalTrialMatchingController {
 
   @Post('match')
   matchTrials(
-    @Body('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Body('patientId') patientId: string,
     @Body('condition') condition?: string,
   ) {
-    return this.svc.matchTrials(subdomain, patientId, condition);
+    return this.svc.matchTrials(req.tenantDb!, patientId, condition);
   }
 
   @Post('match/pactr')
   matchPACTRTrials(
-    @Body('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Body('patientId') patientId: string,
     @Body('condition') condition?: string,
   ) {
-    return this.svc.matchPACTRTrials(subdomain, patientId, condition);
+    return this.svc.matchPACTRTrials(req.tenantDb!, patientId, condition);
   }
 
   @Get('patient/:patientId')
-  getMatches(@Param('patientId') patientId: string, @Query('subdomain') subdomain: string) {
-    return this.svc.getMatches(subdomain, patientId);
+  getMatches(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getMatches(req.tenantDb!, patientId);
   }
 
   @Patch(':id/status')
   updateStatus(
+    @Req() req: RequestWithTenant,
     @Param('id') id: string,
-    @Query('subdomain') subdomain: string,
     @Body('status') status: string,
   ) {
-    return this.svc.updateStatus(subdomain, id, status);
+    return this.svc.updateStatus(req.tenantDb!, id, status);
   }
 
   @Get('pactr/search')

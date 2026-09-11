@@ -1229,3 +1229,49 @@ Bug ref:       services/ehr-service/src/services/prescription.service.ts (wired 
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 33 | Pharmacogenomics drug-gene safety check (e.g. abacavir/HLA-B*5701 hypersensitivity) documented as firing on every prescription but never actually called from anywhere | **Clinical safety** | Fixed |
+
+### Test 24 — Clinical trial matching: 4th variant of the tenant-resolution bug (backend)
+
+```
+Module:        Clinical Trial Matching (ClinicalTrials.gov + PACTR/WHO ICTRP eligibility matching)
+Platform:      Backend
+Role:          Doctor
+Test patient:  TEST_VerifyAnc MobileGaps (id 20ecbfb0-d6d1-4387-b897-17e0ff9c56e6)
+Context:       While continuing the systemic tenant-resolution sweep (Test 22), found
+               clinical-trial-matching.controller.ts used a different variant of the same bug
+               family: instead of reading a header, its endpoints read `subdomain` from
+               `@Body('subdomain')`/`@Query('subdomain')`. No client (mobile, ehr-frontend,
+               patient-portal) ever sends this field — grepped all three for any reference to
+               `/trials/match`, `/trials/patient`, or clinical-trial-matching and found zero
+               callers anywhere. This endpoint family (PACTR/ClinicalTrials.gov eligibility
+               matching, backed by the `TrialMatch` entity) has never been reachable from any
+               client, in addition to always resolving `subdomain` as `undefined`. The only
+               trial-related UI that exists (`OncologyClinicalTrials.tsx`) calls a completely
+               different, unrelated endpoint (`ehrApi.getOncologyClinicalTrials`).
+Fix:           Applied the standard antibiogram-template fix: controller now uses
+               `@Req() req: RequestWithTenant` and passes `req.tenantDb!` instead of a body/query
+               `subdomain` string; service methods (`matchTrials`, `getMatches`, `updateStatus`,
+               `matchPACTRTrials`) now take `ds: DataSource` directly instead of `subdomain: string`.
+               `weeklyTrialMatching()` (the `@Cron` sweep) and its private `sweepActivePatients()`
+               helper were left iterating all tenants internally via `getTenantDatabase(subdomain)`,
+               per the established rule, and `sweepActivePatients` now passes the resolved `ds` (not
+               `subdomain`) into `matchTrials`.
+Scope note:    Building a frontend for external trial-registry search/matching is a separate,
+               larger scope decision (same category as the original dialysis-mobile-UI gap) — not
+               built in this pass. Documenting the gap here rather than building it.
+Steps to test: 1) Login as doctor, resolve JWT + X-Tenant-Id: e2e-clinic.  2) GET
+               /api/trials/patient/:patientId for the TEST_ patient.
+Expected result: 200 with an array (empty or populated), no TypeError from a null DataSource.
+Actual result: Pass — returned `[]` cleanly, tenant DB resolved correctly
+               (clinic_e2e-clinic_db), no errors in server logs.
+Status:        Fail (subdomain always undefined, and no live caller) → Fixed (tenant resolution) →
+               Pass (verified live). Frontend/UI gap intentionally left undocumented-but-unbuilt.
+Bug ref:       services/ehr-service/src/controllers/clinical-trial-matching.controller.ts,
+               services/ehr-service/src/services/clinical-trial-matching.service.ts
+```
+
+## Update to Step 4 Deliverables (cont.)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 34 | Clinical trial matching endpoints resolved tenant via `@Body('subdomain')`/`@Query('subdomain')`, which no client ever sends — always `undefined`; also zero frontend callers exist for this endpoint family | **Functional (unreachable feature)** | Fixed (backend); frontend gap documented, not built |

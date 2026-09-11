@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { TrialMatch } from '../entities/trial-match.entity';
@@ -17,9 +18,7 @@ export class ClinicalTrialMatchingService {
 
   // ── Match patient to trials ────────────────────────────────────────────────
 
-  async matchTrials(subdomain: string, patientId: string, condition?: string): Promise<TrialMatch[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
-
+  async matchTrials(ds: DataSource, patientId: string, condition?: string): Promise<TrialMatch[]> {
     // Get patient clinical profile
     const profile = await this.buildPatientProfile(ds, patientId);
     const searchCondition = condition || profile.primaryDiagnosis;
@@ -83,23 +82,20 @@ export class ClinicalTrialMatchingService {
     return saved;
   }
 
-  async getMatches(subdomain: string, patientId: string): Promise<TrialMatch[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getMatches(ds: DataSource, patientId: string): Promise<TrialMatch[]> {
     return ds.getRepository(TrialMatch).find({
       where: { patientId },
       order: { eligibilityScore: 'DESC' },
     });
   }
 
-  async updateStatus(subdomain: string, matchId: string, status: string): Promise<TrialMatch | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async updateStatus(ds: DataSource, matchId: string, status: string): Promise<TrialMatch | null> {
     const repo = ds.getRepository(TrialMatch);
     await repo.update(matchId, { status });
     return repo.findOneBy({ id: matchId });
   }
 
-  async matchPACTRTrials(subdomain: string, patientId: string, condition?: string): Promise<TrialMatch[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async matchPACTRTrials(ds: DataSource, patientId: string, condition?: string): Promise<TrialMatch[]> {
     const profile = await this.buildPatientProfile(ds, patientId);
     const searchCondition = condition || profile.primaryDiagnosis;
     if (!searchCondition) return [];
@@ -260,7 +256,7 @@ export class ClinicalTrialMatchingService {
       LIMIT 50
     `).catch((e: any) => { this.logger.warn(`patients for trial sweep query failed: ${e?.message}`); return []; });
     for (const { id } of patients) {
-      await this.matchTrials(subdomain, id).catch((e: any) => this.logger.warn(`Trial matching sweep failed for patient ${id}: ${e?.message}`));
+      await this.matchTrials(ds, id).catch((e: any) => this.logger.warn(`Trial matching sweep failed for patient ${id}: ${e?.message}`));
     }
   }
 }
