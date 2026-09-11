@@ -63,7 +63,7 @@ export class PatientIntelligenceService {
         this.proactiveAiService.getActiveAlerts(patientId, tenantId),
         this.riskStratificationService.getPatientRiskTier(patientId, tenantId),
         this.encounterCopilotService.listPatientSessions(tenantDb, patientId, 1),
-        this.radiologyAiService.getFindingsForPatient(tenantId, patientId),
+        this.radiologyAiService.getFindingsForPatient(tenantDb, patientId),
         this.getOpenCareGaps(tenantDb, patientId),
         this.getPostVisitFollowups(tenantDb, patientId),
         this.getResultFollowups(tenantDb, patientId),
