@@ -1653,3 +1653,54 @@ Bug ref:       services/ehr-service/src/services/patient-messaging.service.ts,
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 42 | Sprint 177's AI message-triage feature duplicated Sprint 65's already-working `InboxTriageService`/`SmartInbox` system instead of using it, leaving both patient-message AI triage and the AI-draft-reply "Send" action completely non-functional | **Functional (dead feature) / product-quality** | Fixed — Sprint 177 retired, `sendMessage()` now feeds Sprint 65's inbox, reply-sending wired into the existing `SmartInbox` UI |
+
+### Test 31 — offline-sync.controller.ts: unauthenticated PHI read/write + phantom table (backend, security)
+
+```
+Module:        Offline Sync (mobile field-worker offline queue: HIV visits, GBV assessments,
+               vitals, medical records, prescriptions, lab orders)
+Platform:      Backend
+Role:          Unauthenticated attacker / any mobile client
+Context:       Flagged during the earlier tenant-resolution sweep (Test 25) but deliberately left
+               untouched at the time per scope. `OfflineSyncController`'s three main routes
+               (`POST /sync/batch`, `GET /sync/checkpoint`, `GET /sync/queue`) had NO
+               `@UseGuards(JwtAuthGuard)` anywhere — class-level or method-level — while the
+               fourth route (`PUT /sync/:entityType/:entityId`) did. Since `tenant.middleware.ts`
+               resolves `req.tenantDb` from the `X-Tenant-Id` header regardless of auth state,
+               all three were fully reachable by anyone who could guess/know a tenant slug, with
+               no credentials at all: `POST /sync/batch` applies arbitrary insert/update
+               operations against `vitals`, `medical_records`, `prescriptions`, and `lab_orders`;
+               `GET /sync/checkpoint` returns recent vitals and medical-record IDs (PHI); `GET
+               /sync/queue` returns queued sync payloads for any `clientId`. Grepped
+               mobile/ehr-frontend/patient-portal — no current client actually calls these three
+               routes, but that does not reduce the live exposure (an external attacker doesn't
+               need the frontend). While fixing this, live-testing surfaced a second bug in the
+               same file: `ENTITY_TO_TABLE['vitals']` mapped to `'patient_vitals'`, a table that
+               doesn't exist (real: `vitals`) — same phantom-schema pattern as Tests 22/26/28/29
+               — and `'hiv_counselling_sessions'` mapped to a table that also doesn't exist with
+               no real equivalent anywhere in the schema.
+Fix:           Moved `@UseGuards(JwtAuthGuard)` to the controller class level (removing the
+               now-redundant per-method one on `syncEntity`) so all four routes require
+               authentication. Fixed `vitals` to map to the real `vitals` table; removed the
+               `hiv_counselling_sessions` mapping entirely (no real table exists — this now
+               correctly throws "Unknown entity type" instead of a confusing SQL error, matching
+               the "drop the impossible" precedent from earlier tests).
+Steps to test: 1) `curl` all three routes with no Authorization header — expect 401.  2) Repeat
+               with a valid JWT — expect 200/201.  3) `PUT /sync/vitals/:id` with a valid JWT —
+               confirm it reaches the real `vitals` table (fails on an unrelated NOT-NULL
+               constraint from an intentionally incomplete test payload, confirming the table
+               resolution itself is now correct).
+Actual result: Pass — unauthenticated calls now 401 on all 3 previously-open routes;
+               authenticated calls succeed; `syncEntity` unaffected (regression-checked); the
+               vitals table fix confirmed live. `npx tsc --noEmit` clean.
+Status:        Fail (3 unauthenticated PHI read/write endpoints + 1 phantom table) → Fixed →
+               Pass (verified live).
+Bug ref:       services/ehr-service/src/controllers/offline-sync.controller.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 6)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 43 | `OfflineSyncController`: 3 of 4 routes (`POST /sync/batch`, `GET /sync/checkpoint`, `GET /sync/queue`) had no auth guard at all — unauthenticated PHI read/write, reachable by anyone who knows a tenant slug | **Security (critical)** | Fixed |
+| 44 | Same file: `ENTITY_TO_TABLE['vitals']` pointed at a nonexistent `patient_vitals` table; `hiv_counselling_sessions` mapped to a table that doesn't exist anywhere in the schema | **Functional** | Fixed |

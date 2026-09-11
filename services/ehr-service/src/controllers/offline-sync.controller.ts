@@ -6,15 +6,15 @@ import { ConflictResolverService } from '../services/conflict-resolver.service';
 
 const ENTITY_TO_TABLE: Record<string, string> = {
   hiv_clinical_visits: 'hiv_clinical_visits',
-  hiv_counselling_sessions: 'hiv_counselling_sessions',
   gbv_assessments: 'gbv_assessments',
   hiv_disclosure_records: 'hiv_disclosure_records',
   alhiv_transition_assessments: 'alhiv_transition_assessments',
   counsellor_sessions: 'counsellor_sessions',
-  vitals: 'patient_vitals',
+  vitals: 'vitals',
 };
 
 @Controller('sync')
+@UseGuards(JwtAuthGuard)
 export class OfflineSyncController {
   constructor(
     private readonly svc: OfflineSyncService,
@@ -47,7 +47,6 @@ export class OfflineSyncController {
   }
 
   @Put(':entityType/:entityId')
-  @UseGuards(JwtAuthGuard)
   async syncEntity(
     @Param('entityType') entityType: string,
     @Param('entityId') entityId: string,
