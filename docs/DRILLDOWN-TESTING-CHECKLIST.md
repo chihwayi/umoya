@@ -1187,3 +1187,45 @@ This closes out the drill-down testing pass's systemic-bug-hunting thread. Betwe
 RETURNING-tuple bug (bugs #19-22) and this tenant-resolution bug (bugs #28-32), roughly 20 clinical
 modules across the codebase had significant portions of their backend completely non-functional in
 production, entirely undetected because nothing had ever driven them end-to-end before this session.
+
+### Test 23 — Pharmacogenomics safety check, abacavir + HLA-B*5701 (backend, doctor role)
+
+```
+Module:        Pharmacogenomics (PGx) drug-gene interaction screening
+Platform:      Backend
+Role:          Doctor
+Test patient:  TEST_VerifyAnc MobileGaps
+Context:       While reading pgx.service.ts to verify the tenant-header fix (Test 22), found its
+               `checkDrug()` method — a real, correctly-implemented drug-gene interaction check —
+               documented in its own code comment as "Fire-and-forget from PrescriptionService,"
+               called on every new prescription. Grepped the codebase for actual call sites: zero.
+               PrescriptionService never called it, at all — the exact "wired but unreachable"
+               pattern found repeatedly this session, this time hiding a genuine drug-safety check
+               (abacavir hypersensitivity in HLA-B*5701-positive patients is a well-known, dangerous,
+               sometimes fatal reaction — this is a real-world standard-of-care pharmacogenomic
+               screen, not a hypothetical).
+Fix:           Injected PgxService into PrescriptionService and added a fire-and-forget call to
+               checkDrug() after prescription creation, matching the existing fire-and-forget
+               pattern already used for the storeroom stock-reservation soft-lock in the same
+               function.
+Steps to test: 1) Set patient PGx profile to HLA-B*5701 positive.  2) Create a new prescription for
+               abacavir.  3) Poll the patient's PGx alerts endpoint.
+Expected result: A critical-severity alert should be generated: "Hypersensitivity reaction risk,"
+               gene HLA-B*5701, recommending "do not prescribe."
+Actual result: Pass — alert generated correctly and immediately (severity: critical, drug: abacavir,
+               geneInvolved: HLA-B*5701, alternativeRecommended: "do not prescribe"). This
+               drug-safety check has never fired for a real patient before this fix, in the entire
+               history of this codebase.
+AI/CDSS check: The underlying rule (services/cdss-service/main.py's PGx check) is correct,
+               deterministic, and appropriately severity-graded — consistent with this session's
+               overall finding that clinical logic quality is high; the gap was purely in wiring.
+Status:        Fail (feature never reachable) → Fixed → Pass (verified live)
+Bug ref:       services/ehr-service/src/services/prescription.service.ts (wired PgxService.checkDrug
+               into prescription creation as a fire-and-forget call).
+```
+
+## Update to Step 4 Deliverables
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 33 | Pharmacogenomics drug-gene safety check (e.g. abacavir/HLA-B*5701 hypersensitivity) documented as firing on every prescription but never actually called from anywhere | **Clinical safety** | Fixed |

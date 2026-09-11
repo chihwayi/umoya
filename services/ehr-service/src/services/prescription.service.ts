@@ -7,6 +7,7 @@ import { ClinicalWorkflowService } from './clinical-workflow.service';
 import { CdssService } from './cdss.service';
 import { HipaaAuditService } from './hipaa-audit.service';
 import { StoreroomService } from './storeroom.service';
+import { PgxService } from './pgx.service';
 
 interface StoredConceptSummary {
   conceptId: string;
@@ -26,6 +27,7 @@ export class PrescriptionService {
     @Optional() @Inject(CdssService) private readonly cdssService?: CdssService,
     @Optional() @Inject(HipaaAuditService) private readonly hipaaAuditService?: HipaaAuditService,
     @Optional() private readonly storeroomService?: StoreroomService,
+    @Optional() private readonly pgxService?: PgxService,
   ) {}
   
   private extractConceptId(candidate: any): string | null {
@@ -272,6 +274,13 @@ export class PrescriptionService {
           this.logger.warn(`Soft lock failed for prescription ${createdPrescription.id}: ${err.message}`);
         }
       })();
+    }
+
+    // Fire-and-forget pharmacogenomics check — never blocks prescription creation
+    if (this.pgxService && tenantId && createDto.patientId) {
+      this.pgxService
+        .checkDrug(tenantId, tenantDb, createDto.patientId, createDto.medicationName)
+        .catch((err: any) => this.logger.warn(`PGx check failed for prescription ${createdPrescription.id}: ${err.message}`));
     }
 
     let cdssInsights: any = null;
