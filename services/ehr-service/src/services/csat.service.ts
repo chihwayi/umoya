@@ -54,9 +54,9 @@ export class CsatService {
   async getSurveyByToken(db: DataSource, rawToken: string): Promise<any> {
     const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const [row] = await db.query(
-      `SELECT cs.*, e.encounter_date, p.first_name
+      `SELECT cs.*, e.visit_date AS encounter_date, p.first_name
        FROM csat_surveys cs
-       JOIN encounters e ON e.id = cs.encounter_id
+       JOIN medical_records e ON e.id = cs.encounter_id
        JOIN patients p ON p.id = cs.patient_id
        WHERE cs.token_hash = $1`,
       [hash],

@@ -17,9 +17,9 @@ export class EducationPersonalizationService {
 
   async getPersonalizedCourses(patientId: string, db: any, limit = 10): Promise<RankedCourse[]> {
     const diagnoses = await db.query(
-      `SELECT d.icd10_code, d.snomed_code, d.status
-       FROM patient_diagnoses d
-       WHERE d.patient_id = $1 AND d.status IN ('active','chronic')`,
+      `SELECT d.code AS icd10_code, d.snomed_concept_id AS snomed_code, d.status
+       FROM problems d
+       WHERE d.patient_id = $1 AND d.status = 'active'`,
       [patientId],
     );
 

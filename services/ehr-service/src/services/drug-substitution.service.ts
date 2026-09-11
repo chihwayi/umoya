@@ -44,7 +44,7 @@ export class DrugSubstitutionService {
     // Enrich allergies from clinical notes via NLP
     if (this.nlp && db && patientId) {
       const notes = await db.query(
-        `SELECT content FROM clinical_notes
+        `SELECT assessment AS content FROM medical_records
           WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 2`,
         [patientId],
       );

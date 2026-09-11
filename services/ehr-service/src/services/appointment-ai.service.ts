@@ -73,7 +73,7 @@ export class AppointmentAiService {
 
   async generateBrief(appointmentId: string, db: any): Promise<unknown> {
     const apptRows = await db.query(
-      `SELECT a.*, p.first_name, p.last_name, p.date_of_birth, p.sex
+      `SELECT a.*, p.first_name, p.last_name, p.date_of_birth, p.gender AS sex
        FROM appointments a
        JOIN patients p ON p.id = a.patient_id
        WHERE a.id = $1`,
@@ -87,8 +87,8 @@ export class AppointmentAiService {
 
     const [diagnoses, labs, meds, tasks] = await Promise.all([
       db.query(
-        `SELECT icd10_code, description, status FROM patient_diagnoses
-         WHERE patient_id = $1 AND status IN ('active','chronic') LIMIT 10`,
+        `SELECT code AS icd10_code, description, status FROM problems
+         WHERE patient_id = $1 AND status = 'active' LIMIT 10`,
         [patientId],
       ),
       db.query(

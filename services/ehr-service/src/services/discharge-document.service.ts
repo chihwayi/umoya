@@ -30,7 +30,7 @@ export class DischargeDocumentService {
               u.first_name   AS doctor_first_name,
               u.last_name    AS doctor_last_name,
               u.specialization
-       FROM encounters e
+       FROM medical_records e
        JOIN patients p ON p.id = e.patient_id
        LEFT JOIN users u ON u.id = $2
        WHERE e.id = $1`,
@@ -87,11 +87,14 @@ export class DischargeDocumentService {
     await this.insertDocRecord(tenantDb, encounter.patient_id, encounterId, 'follow_up_plan', followupPath, 'Follow_Up_Plan.pdf', language, signedByUserId);
     docsCreated++;
 
-    await tenantDb.query(
-      `UPDATE encounters SET finalized_at = now(), finalized_by = $1, discharge_sent = TRUE, updated_at = now()
-       WHERE id = $2`,
-      [signedByUserId, encounterId],
-    );
+    // NOTE: Cannot update medical_records with finalized_at/discharge_sent columns as they don't exist in the real schema.
+    // These fields should be tracked separately in a discharge_metadata table or via audit logging.
+    // Commented out to prevent SQL errors; consider implementing proper discharge tracking.
+    // await tenantDb.query(
+    //   `UPDATE medical_records SET finalized_at = now(), finalized_by = $1, discharge_sent = TRUE, updated_at = now()
+    //    WHERE id = $2`,
+    //   [signedByUserId, encounterId],
+    // );
 
     if (encounter.phone) {
       const portalLink = `https://${subdomain}.umoya.app/my-health/discharge/${encounterId}`;
@@ -107,9 +110,9 @@ export class DischargeDocumentService {
 
   async listForPatient(tenantDb: DataSource, patientId: string): Promise<any[]> {
     return tenantDb.query(
-      `SELECT pdd.*, e.encounter_date, u.first_name || ' ' || u.last_name AS signed_by_name
+      `SELECT pdd.*, e.visit_date AS encounter_date, u.first_name || ' ' || u.last_name AS signed_by_name
        FROM patient_discharge_documents pdd
-       JOIN encounters e ON e.id = pdd.encounter_id
+       JOIN medical_records e ON e.id = pdd.encounter_id
        LEFT JOIN users u ON u.id = pdd.signed_by
        WHERE pdd.patient_id = $1
        ORDER BY pdd.created_at DESC`,
@@ -164,7 +167,7 @@ export class DischargeDocumentService {
         [encounter.patient_id],
       ),
       tenantDb.query(
-        `SELECT management_plan, assessment_notes FROM encounters WHERE id = $1`,
+        `SELECT plan AS management_plan, assessment AS assessment_notes FROM medical_records WHERE id = $1`,
         [encounterId],
       ),
     ]);

@@ -36,7 +36,7 @@ export class TelemedicinePostcallService {
     const sessions = await db.query(
       `SELECT ts.*, e.id AS encounter_id, e.patient_id, e.doctor_id
        FROM telemedicine_sessions ts
-       LEFT JOIN encounters e ON e.id = ts.encounter_id
+       LEFT JOIN medical_records e ON e.id = ts.encounter_id
        WHERE ts.room_name = $1 AND ts.status = 'active'
        ORDER BY ts.created_at DESC LIMIT 1`,
       [roomName],
@@ -95,7 +95,7 @@ export class TelemedicinePostcallService {
     try {
       const encounters = await db.query(
         `SELECT e.*, p.first_name, p.last_name, p.date_of_birth
-         FROM encounters e
+         FROM medical_records e
          JOIN patients p ON p.id = e.patient_id
          WHERE e.id = $1`,
         [session.encounter_id],
@@ -104,8 +104,8 @@ export class TelemedicinePostcallService {
       if (!encounter) throw new Error('Encounter not found');
 
       const notes = await db.query(
-        `SELECT content FROM clinical_notes
-         WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 5`,
+        `SELECT content FROM medical_records
+         WHERE patient_id = $1 AND content IS NOT NULL ORDER BY created_at DESC LIMIT 5`,
         [session.patient_id],
       );
       const context = notes.map((n: any) => n.content).join('\n---\n');

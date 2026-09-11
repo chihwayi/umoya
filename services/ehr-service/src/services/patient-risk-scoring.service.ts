@@ -122,8 +122,8 @@ export class PatientRiskScoringService {
   async runNightlySweep(db: any, subdomain: string): Promise<{ scored: number; alerts: number }> {
     const patients = await db.query(
       `SELECT DISTINCT p.id FROM patients p
-       JOIN encounters e ON e.patient_id = p.id
-       WHERE e.status = 'active' OR e.created_at > now() - INTERVAL '30 days'`,
+       JOIN medical_records e ON e.patient_id = p.id
+       WHERE e.created_at > now() - INTERVAL '30 days'`,
     );
 
     let scored = 0;
@@ -157,11 +157,11 @@ export class PatientRiskScoringService {
     return db.query(
       `SELECT DISTINCT ON (prs.patient_id)
          prs.patient_id, prs.score, prs.risk_level, prs.scored_at,
-         p.first_name, p.last_name, p.mrn,
+         p.first_name, p.last_name, p.patient_number AS mrn,
          e.ward, e.bed_number
        FROM patient_risk_scores prs
        JOIN patients p ON p.id = prs.patient_id
-       LEFT JOIN encounters e ON e.patient_id = prs.patient_id AND e.status = 'active'
+       LEFT JOIN medical_records e ON e.patient_id = prs.patient_id
        WHERE prs.risk_level IN ('high','critical')
          AND prs.scored_at > now() - INTERVAL '25 hours'
        ORDER BY prs.patient_id, prs.scored_at DESC, prs.score DESC

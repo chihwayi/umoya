@@ -248,19 +248,19 @@ export class ResearchPortalService {
     let idx = 1;
 
     if (def.period_start) {
-      conditions.push(`e.encounter_date >= $${idx++}`);
+      conditions.push(`e.visit_date >= $${idx++}`);
       params.push(def.period_start);
     }
     if (def.period_end) {
-      conditions.push(`e.encounter_date <= $${idx++}`);
+      conditions.push(`e.visit_date <= $${idx++}`);
       params.push(def.period_end);
     }
     if (def.sex) {
-      conditions.push(`p.sex = $${idx++}`);
+      conditions.push(`p.gender = $${idx++}`);
       params.push(def.sex);
     }
     if (def.encounter_type) {
-      conditions.push(`e.encounter_type = $${idx++}`);
+      conditions.push(`e.record_type = $${idx++}`);
       params.push(def.encounter_type);
     }
     if (def.conditions?.length) {
@@ -278,15 +278,15 @@ export class ResearchPortalService {
       `SELECT
          p.id           AS patient_id,
          p.date_of_birth,
-         p.sex,
+         p.gender       AS sex,
          p.district,
          p.province,
-         e.encounter_date,
-         e.encounter_type,
+         e.visit_date   AS encounter_date,
+         e.record_type  AS encounter_type,
          e.diagnoses    AS icd10_codes,
-         e.vitals       AS vital_signs,
-         e.prescriptions AS medications
-       FROM encounters e
+         e.vital_signs  AS vital_signs,
+         NULL           AS medications
+       FROM medical_records e
        JOIN patients p ON p.id = e.patient_id
        ${where}
        LIMIT 10000`,

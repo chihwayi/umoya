@@ -23,12 +23,12 @@ export class ClinicalSummaryService {
   async generateSummary(patientId: string, db: any): Promise<unknown> {
     const [patient, diagnoses, meds, labs, riskScore, timeline] = await Promise.all([
       db.query(
-        `SELECT first_name, last_name, date_of_birth, sex FROM patients WHERE id = $1`,
+        `SELECT first_name, last_name, date_of_birth, gender AS sex FROM patients WHERE id = $1`,
         [patientId],
       ),
       db.query(
-        `SELECT description, status, icd10_code FROM patient_diagnoses
-         WHERE patient_id = $1 AND status IN ('active','chronic') LIMIT 5`,
+        `SELECT description, status, code AS icd10_code FROM problems
+         WHERE patient_id = $1 AND status = 'active' LIMIT 5`,
         [patientId],
       ),
       db.query(

@@ -26,9 +26,9 @@ export class CareGapEngineService {
     const gaps: CareGap[] = [];
 
     const [patient, diagnoses, labs, vaccinations, encounters] = await Promise.all([
-      db.query(`SELECT date_of_birth, sex FROM patients WHERE id = $1`, [patientId]),
+      db.query(`SELECT date_of_birth, gender FROM patients WHERE id = $1`, [patientId]),
       db.query(
-        `SELECT icd10_code, description, status FROM patient_diagnoses WHERE patient_id = $1`,
+        `SELECT code AS icd10_code, description, status FROM problems WHERE patient_id = $1`,
         [patientId],
       ),
       db.query(
@@ -41,7 +41,7 @@ export class CareGapEngineService {
         [patientId],
       ),
       db.query(
-        `SELECT status, created_at FROM encounters
+        `SELECT created_at FROM medical_records
          WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1`,
         [patientId],
       ),
@@ -54,13 +54,13 @@ export class CareGapEngineService {
             (365.25 * 24 * 3600 * 1000),
         )
       : 0;
-    const sex = pt.sex?.toUpperCase() ?? '';
+    const sex = pt.gender?.toUpperCase() ?? '';
 
     // Enrich structured diagnoses with NLP-extracted diagnoses from recent notes
     if (this.nlp) {
       const recentNotes = await db.query(
-        `SELECT content FROM clinical_notes
-          WHERE patient_id = $1 AND note_type IN ('soap','progress','discharge')
+        `SELECT content FROM medical_records
+          WHERE patient_id = $1 AND content IS NOT NULL
           ORDER BY created_at DESC LIMIT 3`,
         [patientId],
       );
