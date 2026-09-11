@@ -130,7 +130,7 @@ export class TelemedicinePostcallService {
           escalationLevel = escalation?.severity ?? 'none';
 
           if (['critical', 'high'].includes(escalationLevel) && this.alertDelivery) {
-            await this.alertDelivery.broadcastCriticalAlert(subdomain, {
+            await this.alertDelivery.broadcastCriticalAlert(db, {
               alertType: 'telemedicine_escalation',
               sourceEntityId: eventId,
               patientId: session.patient_id,

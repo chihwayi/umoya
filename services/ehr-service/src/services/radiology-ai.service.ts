@@ -160,7 +160,7 @@ export class RadiologyAiService {
       );
       if (criticalFindings.length > 0) {
         await ds.getRepository(RadiologyAiFinding).update(finding.id, { alerted: true });
-        this.alertDelivery.broadcastCriticalAlert(subdomain, {
+        this.alertDelivery.broadcastCriticalAlert(ds, {
           alertType: 'radiology_critical',
           sourceEntityId: finding.id,
           patientId: study.patientId,
@@ -268,7 +268,7 @@ export class RadiologyAiService {
 
     if (['HIGH', 'CRITICAL'].includes(urgency)) {
       try {
-        await this.alertDelivery.broadcastCriticalAlert(tenantSubdomain, {
+        await this.alertDelivery.broadcastCriticalAlert(db, {
           alertType: 'radiology_urgent_finding',
           sourceEntityId: record.id,
           patientId,

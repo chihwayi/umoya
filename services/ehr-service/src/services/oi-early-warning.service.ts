@@ -132,7 +132,7 @@ export class OiEarlyWarningService {
         const insertedId = result[0].id;
 
         // Broadcast to on-call staff
-        await this.alertDeliveryService.broadcastCriticalAlert(subdomain, {
+        await this.alertDeliveryService.broadcastCriticalAlert(db, {
           alertType: 'OI_DETERIORATION',
           sourceEntityId: insertedId,
           patientId,

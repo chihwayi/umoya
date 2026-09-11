@@ -116,13 +116,12 @@ export class PredictiveRiskService {
     };
   }
 
-  async predictDeterioration(subdomain: string, patientId: string, admissionId?: string, vitals?: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async predictDeterioration(ds: DataSource, patientId: string, admissionId?: string, vitals?: any) {
     let predData: any = { score: 0, event_type: null, timeframe_hours: null, features: {}, model: 'MEWS' };
     try {
       predData = await this.cdssService.predictDeteriorationRisk(
         { patientId, admissionId, vitals },
-        subdomain,
+        'unknown',
         ds,
       );
     } catch (e: any) {
@@ -151,8 +150,7 @@ export class PredictiveRiskService {
     return saved;
   }
 
-  async getDeteriorationHistory(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getDeteriorationHistory(ds: DataSource, patientId: string) {
     return ds.getRepository(DeteriorationPrediction).find({
       where: { patientId },
       order: { predictionTime: 'DESC' },
@@ -161,8 +159,7 @@ export class PredictiveRiskService {
 
   /** Facility-wide watch list: each patient's latest prediction, where either the
    * current score triggered an alert or the trend is worsening (lookahead signal). */
-  async getActiveWorseningTrends(subdomain: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getActiveWorseningTrends(ds: DataSource) {
     return ds.query(
       `SELECT DISTINCT ON (dp.patient_id) dp.*, p.first_name, p.last_name
        FROM deterioration_predictions dp
@@ -175,13 +172,12 @@ export class PredictiveRiskService {
 
   // ── Readmission ───────────────────────────────────────────────────────────
 
-  async predictReadmission(subdomain: string, patientId: string, dischargeId?: string, clinicalData?: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async predictReadmission(ds: DataSource, patientId: string, dischargeId?: string, clinicalData?: any) {
     let predData: any = { risk: 0.1, category: 'low', factors: [], followup_days: 30, model: 'LACE+' };
     try {
       predData = await this.cdssService.predictReadmissionRisk(
         { patientId, dischargeId, clinicalData },
-        subdomain,
+        'unknown',
         ds,
       );
     } catch (e: any) {
@@ -209,8 +205,7 @@ export class PredictiveRiskService {
     return saved;
   }
 
-  async getReadmissionRisk(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getReadmissionRisk(ds: DataSource, patientId: string) {
     return ds.getRepository(ReadmissionPrediction).find({
       where: { patientId },
       order: { predictionDate: 'DESC' },
@@ -241,7 +236,7 @@ export class PredictiveRiskService {
       `SELECT id, patient_id FROM admissions WHERE discharge_date IS NULL LIMIT 100`
     ).catch((e: any) => { this.logger.warn(`active admissions query failed: ${e?.message}`); return []; });
     for (const adm of active) {
-      await this.predictDeterioration(subdomain, adm.patient_id, adm.id).catch((e: any) => this.logger.warn(`predictDeterioration failed: ${e?.message}`));
+      await this.predictDeterioration(ds, adm.patient_id, adm.id).catch((e: any) => this.logger.warn(`predictDeterioration failed: ${e?.message}`));
     }
   }
 }

@@ -105,7 +105,7 @@ export class MortalityRiskService {
       );
       if (lastAlert.length === 0) {
         try {
-          await this.alertDelivery.broadcastCriticalAlert(subdomain, {
+          await this.alertDelivery.broadcastCriticalAlert(db, {
             alertType: 'mortality_risk_critical',
             sourceEntityId: patientId,
             patientId,

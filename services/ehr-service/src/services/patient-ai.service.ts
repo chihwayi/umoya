@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { SymptomCheckerSession } from '../entities/symptom-checker-session.entity';
@@ -263,14 +264,13 @@ export class PatientAiService {
 
   // ── Symptom Checker ────────────────────────────────────────────────────────
 
-  async checkSymptoms(subdomain: string, dto: {
+  async checkSymptoms(ds: DataSource, dto: {
     patientId: string;
     symptoms: string[];
     durationDays?: number;
     severity?: string;
     context?: Record<string, any>;
   }): Promise<any> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
 
     let result: any = {
       differential: [],
@@ -301,7 +301,7 @@ export class PatientAiService {
         abstain_reason: routed.abstainReason,
         governance: routed.governance,
       };
-      await this.recordPatientAiPromptAudit(subdomain, ds, {
+      await this.recordPatientAiPromptAudit('unknown', ds, {
         useCase: 'patient_symptom_check',
         patientId: dto.patientId,
         model: routed.model,
@@ -411,8 +411,7 @@ export class PatientAiService {
     };
   }
 
-  async getSymptomHistory(subdomain: string, patientId: string): Promise<SymptomCheckerSession[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getSymptomHistory(ds: DataSource, patientId: string): Promise<SymptomCheckerSession[]> {
     return ds.getRepository(SymptomCheckerSession).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
@@ -420,8 +419,7 @@ export class PatientAiService {
     });
   }
 
-  async escalateToEncounter(subdomain: string, sessionId: string, encounterId: string): Promise<void> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async escalateToEncounter(ds: DataSource, sessionId: string, encounterId: string): Promise<void> {
     await ds.getRepository(SymptomCheckerSession).update(sessionId, {
       escalatedToEncounter: true, encounterId,
     });
@@ -429,7 +427,7 @@ export class PatientAiService {
 
   // ── Adherence Chatbot (Claude API) ─────────────────────────────────────────
 
-  async adherenceChat(subdomain: string, dto: {
+  async adherenceChat(ds: DataSource, dto: {
     patientId: string;
     sessionId?: string;
     message: string;
@@ -463,7 +461,6 @@ export class PatientAiService {
     escalation: PatientAiEscalation | null;
     followupOrchestration: PatientFollowupOrchestration;
   }> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const sessionId = dto.sessionId || uuidv4();
     const repo = ds.getRepository(AdherenceChatLog);
 
@@ -519,7 +516,7 @@ export class PatientAiService {
       abstained = response.abstained;
       abstainReason = response.abstainReason || null;
       governance = response.governance;
-      await this.recordPatientAiPromptAudit(subdomain, ds, {
+      await this.recordPatientAiPromptAudit('unknown', ds, {
         useCase: 'patient_adherence_chat',
         patientId: dto.patientId,
         model: response.model,
@@ -643,16 +640,14 @@ export class PatientAiService {
     };
   }
 
-  async getChatHistory(subdomain: string, patientId: string, sessionId?: string): Promise<AdherenceChatLog[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getChatHistory(ds: DataSource, patientId: string, sessionId?: string): Promise<AdherenceChatLog[]> {
     const where: any = sessionId ? { patientId, sessionId } : { patientId };
     return ds.getRepository(AdherenceChatLog).find({
       where, order: { createdAt: 'ASC' },
     });
   }
 
-  async getPatientAiSessions(subdomain: string, patientId: string): Promise<PatientAiSession[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getPatientAiSessions(ds: DataSource, patientId: string): Promise<PatientAiSession[]> {
     return ds.getRepository(PatientAiSession).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
@@ -660,8 +655,7 @@ export class PatientAiService {
     });
   }
 
-  async getPatientAiEscalations(subdomain: string, patientId: string): Promise<PatientAiEscalation[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getPatientAiEscalations(ds: DataSource, patientId: string): Promise<PatientAiEscalation[]> {
     return ds.getRepository(PatientAiEscalation).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
@@ -669,8 +663,7 @@ export class PatientAiService {
     });
   }
 
-  async getPatientFollowupOrchestrations(subdomain: string, patientId: string): Promise<PatientFollowupOrchestration[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getPatientFollowupOrchestrations(ds: DataSource, patientId: string): Promise<PatientFollowupOrchestration[]> {
     return ds.getRepository(PatientFollowupOrchestration).find({
       where: { patientId },
       order: { createdAt: 'DESC' },
@@ -679,11 +672,10 @@ export class PatientAiService {
   }
 
   async updateFollowupOrchestration(
-    subdomain: string,
+    ds: DataSource,
     orchestrationId: string,
     updates: { status?: string; reminderState?: string },
   ): Promise<PatientFollowupOrchestration | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(PatientFollowupOrchestration);
     const record = await repo.findOneBy({ id: orchestrationId });
     if (!record) return null;

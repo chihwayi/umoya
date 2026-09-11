@@ -175,7 +175,7 @@ export class FollowUpRecommendationService {
         if (!db) continue;
         const overdue = await this.getOverdueFollowUps(db);
         for (const row of overdue) {
-          await this.alertDelivery?.broadcastCriticalAlert(tenant.subdomain, {
+          await this.alertDelivery?.broadcastCriticalAlert(db, {
             alertType: 'overdue_followup',
             sourceEntityId: String(row.id),
             patientId: String(row.patient_id),

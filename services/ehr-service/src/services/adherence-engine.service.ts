@@ -102,7 +102,7 @@ export class AdherenceEngineService {
 
     if (this.alertDelivery) {
       try {
-        await this.alertDelivery.broadcastCriticalAlert(subdomain, {
+        await this.alertDelivery.broadcastCriticalAlert(db, {
           alertType: 'adherence_nudge',
           sourceEntityId: patientId,
           patientId,

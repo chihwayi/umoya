@@ -428,7 +428,7 @@ export class EarlyWarningService {
     if (!this.alertDeliveryService) return;
     const severity = this.deriveEscalationSeverity(score.riskLevel || 'medium');
 
-    await this.alertDeliveryService.broadcastCriticalAlert(subdomain, {
+    await this.alertDeliveryService.broadcastCriticalAlert(db, {
       alertType: 'NEWS2_CRITICAL',
       sourceEntityId: score.id,
       patientId: score.patientId,

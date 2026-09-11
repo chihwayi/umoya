@@ -173,7 +173,7 @@ export class PostVisitEscalationRoutingService {
         },
       };
       try {
-        const result = await this.alertDelivery.broadcastCriticalAlert(subdomain, alertPayload);
+        const result = await this.alertDelivery.broadcastCriticalAlert(db, alertPayload);
         if (!result.delivered) {
           failureReason = 'No on-call staff found to receive the alert';
         }

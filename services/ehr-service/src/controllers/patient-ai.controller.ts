@@ -1,6 +1,7 @@
-import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { PatientAiService } from '../services/patient-ai.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 // Used by both staff (mobile clinician view) and patients (self-service symptom
 // checker/adherence chat) under the same JWT issuer, so this intentionally accepts
@@ -13,70 +14,70 @@ export class PatientAiController {
   // ── Symptom Checker ─────────────────────────────────────────────────────
 
   @Post('symptoms/check')
-  checkSymptoms(@Body() dto: any, @Query('subdomain') subdomain: string) {
-    return this.svc.checkSymptoms(subdomain, dto);
+  checkSymptoms(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.svc.checkSymptoms(req.tenantDb!, dto);
   }
 
   @Get('symptoms/patient/:patientId')
-  getSymptomHistory(@Param('patientId') patientId: string, @Query('subdomain') subdomain: string) {
-    return this.svc.getSymptomHistory(subdomain, patientId);
+  getSymptomHistory(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getSymptomHistory(req.tenantDb!, patientId);
   }
 
   @Patch('symptoms/:id/escalate')
   escalate(
+    @Req() req: RequestWithTenant,
     @Param('id') id: string,
-    @Query('subdomain') subdomain: string,
     @Body('encounterId') encounterId: string,
   ) {
-    return this.svc.escalateToEncounter(subdomain, id, encounterId);
+    return this.svc.escalateToEncounter(req.tenantDb!, id, encounterId);
   }
 
   // ── Adherence Chatbot ───────────────────────────────────────────────────
 
   @Post('adherence/chat')
-  adherenceChat(@Body() dto: any, @Query('subdomain') subdomain: string) {
-    return this.svc.adherenceChat(subdomain, dto);
+  adherenceChat(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.svc.adherenceChat(req.tenantDb!, dto);
   }
 
   @Get('adherence/patient/:patientId')
   getChatHistory(
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
-    @Query('subdomain') subdomain: string,
     @Query('sessionId') sessionId?: string,
   ) {
-    return this.svc.getChatHistory(subdomain, patientId, sessionId);
+    return this.svc.getChatHistory(req.tenantDb!, patientId, sessionId);
   }
 
   @Get('sessions/patient/:patientId')
   getPatientAiSessions(
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getPatientAiSessions(subdomain, patientId);
+    return this.svc.getPatientAiSessions(req.tenantDb!, patientId);
   }
 
   @Get('escalations/patient/:patientId')
   getPatientAiEscalations(
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getPatientAiEscalations(subdomain, patientId);
+    return this.svc.getPatientAiEscalations(req.tenantDb!, patientId);
   }
 
   @Get('followups/patient/:patientId')
   getPatientFollowups(
+    @Req() req: RequestWithTenant,
     @Param('patientId') patientId: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getPatientFollowupOrchestrations(subdomain, patientId);
+    return this.svc.getPatientFollowupOrchestrations(req.tenantDb!, patientId);
   }
 
   @Patch('followups/:id')
   updateFollowupOrchestration(
+    @Req() req: RequestWithTenant,
     @Param('id') id: string,
-    @Query('subdomain') subdomain: string,
     @Body() body: { status?: string; reminderState?: string },
   ) {
-    return this.svc.updateFollowupOrchestration(subdomain, id, body);
+    return this.svc.updateFollowupOrchestration(req.tenantDb!, id, body);
   }
 }

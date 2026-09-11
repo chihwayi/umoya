@@ -98,7 +98,7 @@ export class PatientRiskScoringService {
 
     if (['high', 'critical'].includes(result.level) && this.alertDelivery) {
       try {
-        await this.alertDelivery.broadcastCriticalAlert(subdomain, {
+        await this.alertDelivery.broadcastCriticalAlert(db, {
           alertType: 'proactive_risk_alert',
           sourceEntityId: patientId,
           patientId,
