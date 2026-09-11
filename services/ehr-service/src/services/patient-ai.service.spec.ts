@@ -110,7 +110,8 @@ describe('PatientAiService adherence chat governance', () => {
       aiSurfaceContractService as any,
     );
 
-    const result = await service.adherenceChat('kids-clinic', {
+    const mockDs = await tenantService.getTenantDatabase();
+    const result = await service.adherenceChat(mockDs as any, 'kids-clinic', {
       patientId: 'patient-1',
       sessionId: 'session-1',
       message: 'I forgot two doses',
@@ -230,7 +231,7 @@ describe('PatientAiService adherence chat governance', () => {
       aiSurfaceContractService as any,
     );
 
-    const result = await service.checkSymptoms('kids-clinic', {
+    const result = await service.checkSymptoms(tenantDb as any, 'kids-clinic', {
       patientId: 'patient-1',
       symptoms: ['fever', 'headache'],
       durationDays: 3,
@@ -307,8 +308,9 @@ describe('PatientAiService adherence chat governance', () => {
       aiSurfaceContractService as any,
     );
 
-    const listed = await service.getPatientFollowupOrchestrations('kids-clinic', 'patient-1');
-    const updated = await service.updateFollowupOrchestration('kids-clinic', 'followup-1', {
+    const mockDs = await tenantService.getTenantDatabase();
+    const listed = await service.getPatientFollowupOrchestrations(mockDs as any, 'patient-1');
+    const updated = await service.updateFollowupOrchestration(mockDs as any, 'followup-1', {
       status: 'completed',
       reminderState: 'sent',
     });

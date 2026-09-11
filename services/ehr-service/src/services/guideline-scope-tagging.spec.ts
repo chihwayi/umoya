@@ -639,11 +639,12 @@ describe('Guideline scope tagging', () => {
       create: jest.fn((payload) => payload),
       save: jest.fn(async (payload) => ({ id: 'contact-1', ...payload })),
     };
+    const malariaDs = {
+      getRepository: jest.fn().mockReturnValue(malariaRepo),
+    };
     const malaria = new malariaModule.MalariaService(
       {
-        getTenantDatabase: jest.fn().mockResolvedValue({
-          getRepository: jest.fn().mockReturnValue(malariaRepo),
-        }),
+        getTenantDatabase: jest.fn().mockResolvedValue(malariaDs),
       } as any,
       cdssService as any,
     );
@@ -654,7 +655,7 @@ describe('Guideline scope tagging', () => {
     const mentalHealth = new mentalHealthModule.MentalHealthService({} as any, cdssService as any);
     const ntd = new ntdModule.NtdService({} as any, {} as any, cdssService as any);
 
-    await malaria.addContact('kids-clinic', { contactPatientId: 'patient-2', exposureType: 'household' } as any);
+    await malaria.addContact(malariaDs as any, { contactPatientId: 'patient-2', exposureType: 'household' } as any);
     await malaria.scoreSeverity({ age: 5, severe: true });
     await nephrology.stageCkd({ egfr: 28, acr: 340 });
     await tb.assessContactRisk({ contactId: 'patient-3', contactAge: 4, gender: 'female' });

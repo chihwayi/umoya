@@ -1275,3 +1275,154 @@ Bug ref:       services/ehr-service/src/controllers/clinical-trial-matching.cont
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 34 | Clinical trial matching endpoints resolved tenant via `@Body('subdomain')`/`@Query('subdomain')`, which no client ever sends — always `undefined`; also zero frontend callers exist for this endpoint family | **Functional (unreachable feature)** | Fixed (backend); frontend gap documented, not built |
+
+### Test 25 — Full sweep of remaining subdomain-param controllers (13 controllers, backend)
+
+```
+Module:        alert-delivery, offline-sync, patient-ai, predictive-risk, radiology-ai, iot,
+               multilingual-education, supply-chain-ai, federated-learning, model-registry,
+               model-monitoring, fhir-inbound, himis-reporting
+Platform:      Backend
+Role:          Doctor / system-internal
+Test patient:  TEST_VerifyAnc MobileGaps (id 20ecbfb0-d6d1-4387-b897-17e0ff9c56e6)
+Context:       Grepped the entire controllers/ directory for the same `@Body('subdomain')` /
+               `@Query('subdomain')` bug family found in Tests 22 and 24, and found 13 more
+               controllers with it — the full systemic sweep is now complete (18 + 1 + 13 = 32
+               controllers fixed this session). Ran a caller audit first: 5 of the 13
+               (model-monitoring, model-registry, multilingual-education, patient-ai,
+               predictive-risk) have real frontend/mobile callers and were actively broken in
+               production; 8 (alert-delivery, offline-sync, radiology-ai, iot, supply-chain-ai,
+               federated-learning, fhir-inbound, himis-reporting) had no direct frontend caller
+               for their OWN routes — but the audit undersold alert-delivery: its
+               `broadcastCriticalAlert()` method is called internally, server-to-server, by 10
+               other clinical safety services (early-warning, mortality-risk,
+               patient-risk-scoring, oi-early-warning, adherence-engine, lab-ai-narrative,
+               post-visit-escalation-routing, followup-recommendation, telemedicine-postcall,
+               radiology-ai) — meaning critical-alert delivery for deterioration, mortality risk,
+               OI early warning, and radiology findings was silently broken tenant-wide, not
+               merely "unreachable."
+Fix:           Applied the standard antibiogram-template fix to all 13 controller+service pairs
+               via 4 parallel background agents, each preserving internal `@Cron` all-tenant
+               sweep logic (federated-learning weekly round, himis-reporting monthly submission,
+               predictive-risk 4-hourly deterioration sweep, supply-chain-ai daily stockout
+               sweep, model-monitoring monthly evaluation) while converting request-triggered
+               methods to accept `DataSource` directly. fhir-inbound's external-system webhook
+               endpoint (`ingestBundle`, guarded by an API-key guard with no `req.tenantDb`) was
+               deliberately left on `@Query('subdomain')` since external senders have no way to
+               produce the `X-Tenant-Id` header — this is a legitimate different mechanism, not a
+               bug. Fixed 10 downstream `broadcastCriticalAlert()` call-site regressions and 2
+               more (`getFindingsForPatient`, `multilingual-education.generate`) after merging
+               the 4 batches. Also fixed 2 pre-existing (older, unrelated-to-today) broken jest
+               specs discovered while re-running the suite: guideline-scope-tagging.spec.ts's
+               `malaria.addContact` call (stale from an earlier batch this session) and
+               patient-ai.service.spec.ts's `getPatientFollowupOrchestrations`/
+               `updateFollowupOrchestration`/`adherenceChat`/`checkSymptoms` calls.
+Steps to test: 1) `npx tsc --noEmit` clean.  2) Live-verify a sample: GET
+               /api/model-monitoring/surfaces, GET /api/model-registry/cards, GET
+               /api/patient-ai/symptoms/patient/:id, GET /api/risk/deterioration-watch/list, GET
+               /api/alerts/unacknowledged, GET /api/education/patient/:id.
+Actual result: Pass — all 6 resolved the correct tenant DB and returned clean responses (data or
+               empty arrays), no null-DataSource crashes. One NEW bug surfaced once tenant
+               resolution started reaching the real query (see Test 26).
+Status:        Fail (32 controllers total across Tests 22/24/25 always resolved `subdomain` as
+               `undefined`) → Fixed → Pass (verified live on a representative sample).
+Bug ref:       13 controller+service pairs under services/ehr-service/src/controllers/ and
+               src/services/, plus 10 broadcastCriticalAlert call sites, plus 2 pre-existing spec
+               fixes (unrelated regressions surfaced by re-running the suite).
+```
+
+### Test 26 — Patient education materials: schema drift unmasked by the Test 25 fix (backend)
+
+```
+Module:        Multilingual Patient Education
+Platform:      Backend
+Role:          Doctor
+Test patient:  TEST_VerifyAnc MobileGaps (id 20ecbfb0-d6d1-4387-b897-17e0ff9c56e6)
+Context:       GET /api/education/patient/:patientId (previously always failed with a null-
+               DataSource error, masking any deeper bug) started throwing a NEW, different error
+               once Test 25's fix let the query actually reach the tenant DB: "column
+               PatientEducationMaterial.template_id does not exist". The entity declares
+               `template_id` (nullable UUID) and `updated_at` (TypeORM @UpdateDateColumn) — the
+               live `patient_education_materials` table, provisioned by
+               getSprint*EducationStatements() in database-provisioning.service.ts, has neither
+               column. Same schema-drift pattern as the ImmunizationSchedule bug (Test 22).
+Fix:           Added `ALTER TABLE patient_education_materials ADD COLUMN IF NOT EXISTS
+               template_id UUID` and `... updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` to the
+               provisioning bundle source, and applied both directly to the live
+               clinic_e2e-clinic_db tenant DB.
+Steps to test: 1) GET /api/education/patient/:patientId.  2) POST /api/education/generate with a
+               real patient/topic.  3) GET again to confirm the new record round-trips.
+Expected result: No column-does-not-exist errors; generated material persists and is returned.
+Actual result: Pass — GET returned `[]` cleanly before generation, POST created a record with all
+               fields including the newly-added `templateId: null` and `updatedAt` populated, and
+               the follow-up GET returned it correctly.
+Status:        Fail (SQL error) → Fixed → Pass (verified live, full generate→persist→read cycle).
+Bug ref:       services/tenant-service/src/services/database-provisioning.service.ts
+               (patient_education_materials ALTER TABLE additions).
+```
+
+### Test 27 — AI message-triage feature (S177) found completely non-functional at 3 layers (backend + frontend, documented, not fixed)
+
+```
+Module:        AI Patient Communication Hub (message urgency triage + AI-drafted replies)
+Platform:      Backend + ehr-frontend
+Role:          Doctor
+Context:       While investigating other "wired but unreachable" AI features this session (the
+               same pattern as the PGx check in Test 23), found `message-ai.controller.ts` +
+               `message-ai.service.ts` (Sprint 177, "AI Patient Communication Hub" — urgency
+               classification and AI-drafted replies for patient messages) is broken at THREE
+               independent layers simultaneously:
+               1. Route collision: both `MessageAiController` and `ProviderMessagingController`
+                  declare `@Controller('messages')` with an identical `@Get('inbox')` route.
+                  `ProviderMessagingController` is registered first in ehr.module.ts, so Express
+                  matches it first — `MessageAiController`'s enriched-inbox endpoint (which would
+                  return `urgency`/`reply_draft`/`translated_content` fields) is permanently
+                  shadowed and unreachable. Confirmed live: `GET /api/messages/inbox` returns raw
+                  `provider_messages` rows with none of the AI-enrichment fields.
+               2. Wrong/nonexistent table: `message-ai.service.ts` queries a `messages` table and
+                  a `message_thread_participants` table in its `getEnrichedInbox` and
+                  `approveDraft` methods — NEITHER table exists anywhere in
+                  database-provisioning.service.ts. Only `message_ai_enrichment` (its own
+                  Sprint-177 table) exists. Confirmed live:
+                  `clinic_e2e-clinic_db` has no `messages` or `message_thread_participants`
+                  relation. The two real patient-messaging systems in this codebase are
+                  `patient_messages` (patient ↔ staff, Feb 2026) and `provider_messages` +
+                  `message_threads` (staff ↔ staff, `ProviderMessagingController`) — the
+                  migration's own description says `message_ai_enrichment` "stores AI urgency
+                  classification... for patient messages," strongly suggesting it was meant to
+                  sit on top of `patient_messages` but was implemented against a table name that
+                  was never created.
+               3. Never triggered: even if the schema were correct, nothing in the codebase calls
+                  `POST /messages/:messageId/enrich` (zero grep hits across mobile/ehr-frontend/
+                  patient-portal) — so `message_ai_enrichment` would never be populated even for
+                  a valid message id.
+               4. Frontend orphan: `ehr-frontend/src/components/MessageInboxItem.tsx` — a
+                  fully-built component expecting exactly the enriched shape (`urgency`,
+                  `reply_draft`, `translated_content`, `detected_language`) — is never imported or
+                  rendered anywhere in the frontend (`grep -rl MessageInboxItem` matches only its
+                  own file). `ehr-frontend/src/components/MessageComposer.tsx`'s
+                  `POST /messages/:id/approve-draft` call is the ONLY reachable code path into
+                  this feature, and it always resolves an empty/missing draft since nothing ever
+                  populated one.
+Scope note:    Unlike Tests 22/24/25 (a pure mechanical tenant-resolution fix), this requires an
+               architecture decision — which real table (`patient_messages` vs. a new bridge) the
+               AI enrichment should actually attach to, how staff replies should be modeled
+               without a `thread_id` concept in `patient_messages`, and where in the UI the
+               enriched inbox/AI-draft-approval flow should be mounted. Documenting this as a
+               scoped finding rather than attempting the redesign in this pass, matching how the
+               clinical-trial-matching frontend gap (Test 24) was handled.
+Status:        Fail (broken at 3 backend layers + 1 frontend layer, confirmed live) → Documented,
+               not fixed — candidate for a dedicated follow-up task.
+Bug ref:       services/ehr-service/src/controllers/message-ai.controller.ts,
+               services/ehr-service/src/services/message-ai.service.ts,
+               services/ehr-service/src/ehr.module.ts (controller registration order),
+               ehr-frontend/src/components/MessageInboxItem.tsx (orphaned component).
+```
+
+## Update to Step 4 Deliverables (cont. 2)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 35 | 13 more controllers with the subdomain-param tenant-resolution bug, including `AlertDeliveryService.broadcastCriticalAlert()` — called internally by 10 clinical safety services (deterioration, mortality risk, OI early warning, radiology findings, etc.) — silently failing tenant-wide | **Clinical safety** | Fixed |
+| 36 | Patient education materials: entity references `template_id`/`updated_at` columns that don't exist in the live table (schema drift) | **Functional** | Fixed |
+| 37 | AI message-triage feature (Sprint 177) non-functional at 3 backend layers (route collision, phantom table, never-triggered enrichment) plus an orphaned frontend component | **Functional (dead feature)** | Documented, not fixed — needs a scoped follow-up |

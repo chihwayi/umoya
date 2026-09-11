@@ -182,7 +182,7 @@ export class ModelMonitoringController {
 
     let versions: Record<string, any> = {};
     try {
-      versions = await this.cdssService.getModelVersions(tenantId);
+      versions = await this.cdssService.getModelVersions(req.tenantId!);
     } catch {
       versions = {};
     }

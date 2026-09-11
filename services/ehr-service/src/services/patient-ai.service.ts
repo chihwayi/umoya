@@ -264,7 +264,7 @@ export class PatientAiService {
 
   // ── Symptom Checker ────────────────────────────────────────────────────────
 
-  async checkSymptoms(ds: DataSource, dto: {
+  async checkSymptoms(ds: DataSource, tenantId: string, dto: {
     patientId: string;
     symptoms: string[];
     durationDays?: number;
@@ -289,7 +289,7 @@ export class PatientAiService {
           severity: dto.severity,
           patientContext: dto.context || {},
         },
-        subdomain,
+        tenantId,
       );
       result = {
         differential: routed.differential,
@@ -427,7 +427,7 @@ export class PatientAiService {
 
   // ── Adherence Chatbot (Claude API) ─────────────────────────────────────────
 
-  async adherenceChat(ds: DataSource, dto: {
+  async adherenceChat(ds: DataSource, tenantId: string, dto: {
     patientId: string;
     sessionId?: string;
     message: string;
@@ -503,7 +503,7 @@ export class PatientAiService {
           history: messages,
           visitContext: dto.context?.visitContext,
         },
-        subdomain,
+        tenantId,
       );
 
       reply = response.reply || reply;

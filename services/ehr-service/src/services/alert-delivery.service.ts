@@ -53,7 +53,7 @@ export class AlertDeliveryService {
       );
 
       // 1. WebSocket (immediate)
-      const wsSent = this.sendWebSocket(subdomain, member.id, alert, record.id);
+      const wsSent = this.sendWebSocket(member.id, alert, record.id);
 
       // 2. FCM push (if device token available)
       const fcmSent = member.fcmToken
@@ -102,7 +102,7 @@ export class AlertDeliveryService {
 
   // ── Delivery helpers ───────────────────────────────────────────────────────
 
-  private sendWebSocket(subdomain: string, userId: string, alert: AlertPayload, alertId: string): boolean {
+  private sendWebSocket(userId: string, alert: AlertPayload, alertId: string): boolean {
     try {
       if (this.wsGateway) {
         this.wsGateway.sendToUser(userId, {

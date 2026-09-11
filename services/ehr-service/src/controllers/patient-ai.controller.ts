@@ -15,7 +15,7 @@ export class PatientAiController {
 
   @Post('symptoms/check')
   checkSymptoms(@Req() req: RequestWithTenant, @Body() dto: any) {
-    return this.svc.checkSymptoms(req.tenantDb!, dto);
+    return this.svc.checkSymptoms(req.tenantDb!, req.tenantId!, dto);
   }
 
   @Get('symptoms/patient/:patientId')
@@ -36,7 +36,7 @@ export class PatientAiController {
 
   @Post('adherence/chat')
   adherenceChat(@Req() req: RequestWithTenant, @Body() dto: any) {
-    return this.svc.adherenceChat(req.tenantDb!, dto);
+    return this.svc.adherenceChat(req.tenantDb!, req.tenantId!, dto);
   }
 
   @Get('adherence/patient/:patientId')

@@ -23710,6 +23710,8 @@ RECOMMENDATIONS:
       )`,
       `CREATE INDEX IF NOT EXISTS idx_edu_patient ON patient_education_materials(patient_id)`,
       `CREATE INDEX IF NOT EXISTS idx_edu_language ON patient_education_materials(language)`,
+      `ALTER TABLE patient_education_materials ADD COLUMN IF NOT EXISTS template_id UUID`,
+      `ALTER TABLE patient_education_materials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
     ];
   }
 
