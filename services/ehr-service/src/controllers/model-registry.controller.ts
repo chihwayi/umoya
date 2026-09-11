@@ -1,9 +1,10 @@
-import { UseGuards, Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Query, Req } from '@nestjs/common';
 import { ModelRegistryService, ShadowEvaluationReviewRequest } from '../services/model-registry.service';
 import { FederatedLearningService } from '../services/federated-learning.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 // Read endpoints (production status/history/cards) stay open to any
 // authenticated role — clinical staff reviewing AI model transparency cards
@@ -19,62 +20,62 @@ export class ModelRegistryController {
   ) {}
 
   @Get('production')
-  getAllProduction(@Query('subdomain') subdomain: string) {
-    return this.registry.getAllProduction(subdomain);
+  getAllProduction(@Req() req: RequestWithTenant) {
+    return this.registry.getAllProduction(req.tenantDb!);
   }
 
   @Get(':modelName/production')
   getProduction(
+    @Req() req: RequestWithTenant,
     @Param('modelName') modelName: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.registry.getCurrentProduction(subdomain, modelName);
+    return this.registry.getCurrentProduction(req.tenantDb!, modelName);
   }
 
   @Get(':modelName/history')
   getHistory(
+    @Req() req: RequestWithTenant,
     @Param('modelName') modelName: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.registry.getHistory(subdomain, modelName);
+    return this.registry.getHistory(req.tenantDb!, modelName);
   }
 
   @Get('cards')
-  getModelCards(@Query('subdomain') subdomain: string) {
-    return this.registry.getModelCards(subdomain);
+  getModelCards(@Req() req: RequestWithTenant) {
+    return this.registry.getModelCards(req.tenantDb!);
   }
 
   @Get(':modelName/card')
   getModelCard(
+    @Req() req: RequestWithTenant,
     @Param('modelName') modelName: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.registry.getModelCard(subdomain, modelName);
+    return this.registry.getModelCard(req.tenantDb!, modelName);
   }
 
   @Get('shadow-evaluations')
   getShadowEvaluations(
-    @Query('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Query('modelName') modelName?: string,
   ) {
-    return this.registry.getShadowEvaluations(subdomain, modelName);
+    return this.registry.getShadowEvaluations(req.tenantDb!, modelName);
   }
 
   @Post('shadow-evaluations/:id/review')
   @Roles('admin', 'super_admin')
   reviewShadowEvaluation(
+    @Req() req: RequestWithTenant,
     @Param('id') id: string,
-    @Query('subdomain') subdomain: string,
     @Body() review: ShadowEvaluationReviewRequest,
   ) {
-    return this.registry.reviewShadowEvaluation(subdomain, id, review);
+    return this.registry.reviewShadowEvaluation(req.tenantDb!, id, review);
   }
 
   @Post(':id/promote')
   @Roles('admin', 'super_admin')
   promote(
+    @Req() req: RequestWithTenant,
     @Param('id') id: string,
-    @Query('subdomain') subdomain: string,
     @Body() review: {
       requestedStage?: 'shadow' | 'canary' | 'production';
       requestedBy?: string;
@@ -85,24 +86,24 @@ export class ModelRegistryController {
       clinicalApproval?: boolean;
     } = {},
   ) {
-    return this.registry.evaluateAndPromote(subdomain, id, review);
+    return this.registry.evaluateAndPromote(req.tenantDb!, id, review);
   }
 
   @Post(':modelName/rollback')
   @Roles('admin', 'super_admin')
   rollback(
+    @Req() req: RequestWithTenant,
     @Param('modelName') modelName: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.registry.rollback(subdomain, modelName);
+    return this.registry.rollback(req.tenantDb!, modelName);
   }
 
   @Post('train/:modelName')
   @Roles('admin', 'super_admin')
   triggerTraining(
+    @Req() req: RequestWithTenant,
     @Param('modelName') modelName: string,
-    @Body('subdomain') subdomain: string,
   ) {
-    return this.fl.initiateRound(subdomain, modelName);
+    return this.fl.initiateRound(req.tenantDb!, modelName);
   }
 }

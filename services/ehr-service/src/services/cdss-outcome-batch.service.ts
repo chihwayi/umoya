@@ -324,7 +324,7 @@ export class CdssOutcomeBatchService {
 
       let orchestrationNotes = 'Attached governed learning jobs to an existing federated round';
       if (!round && this.federatedLearningService) {
-        round = await this.federatedLearningService.initiateRound(subdomain, modelName);
+        round = await this.federatedLearningService.initiateRound(tenantDb, modelName);
         orchestrationNotes = 'Requested a new federated retraining round from governed learning jobs';
       }
 

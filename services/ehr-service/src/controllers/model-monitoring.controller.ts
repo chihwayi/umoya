@@ -1,10 +1,11 @@
-import { UseGuards, Controller, Post, Get, Body, Param, Query, Request, Headers } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Query, Request, Headers, Req } from '@nestjs/common';
 import { ModelMonitoringService } from '../services/model-monitoring.service';
 import { RiskStratificationService } from '../services/risk-stratification.service';
 import { OutcomeCollectionService } from '../services/outcome-collection.service';
 import { CdssService } from '../services/cdss.service';
 import { AiSurfaceContractService } from '../services/ai-surface-contract.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('model-monitoring')
 @UseGuards(JwtAuthGuard)
@@ -24,15 +25,15 @@ export class ModelMonitoringController {
 
   @Get('surfaces/:aiSurface/contract')
   async getAiSurfaceContract(
+    @Req() req: RequestWithTenant,
     @Param('aiSurface') aiSurface: string,
-    @Query('subdomain') subdomain?: string,
   ) {
     const contract = this.aiSurfaceContractService.getContract(aiSurface);
-    const latestRun = subdomain && contract.monitoring.offlineEvalSupported
-      ? (await this.svc.getOfflineEvalRuns(subdomain, aiSurface))[0] || null
+    const latestRun = req.tenantDb && contract.monitoring.offlineEvalSupported
+      ? (await this.svc.getOfflineEvalRuns(req.tenantDb, aiSurface))[0] || null
       : null;
-    const releaseReadiness = subdomain && contract.monitoring.releaseGateSupported
-      ? await this.svc.getReleaseReadiness(subdomain, aiSurface)
+    const releaseReadiness = req.tenantDb && contract.monitoring.releaseGateSupported
+      ? await this.svc.getReleaseReadiness(req.tenantDb, aiSurface)
       : null;
 
     return {
@@ -44,35 +45,35 @@ export class ModelMonitoringController {
 
   @Post('evaluate')
   evaluate(
-    @Body('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Body('modelName') modelName: string,
     @Body('period') period?: string,
   ) {
-    return this.svc.evaluateModel(subdomain, modelName, period);
+    return this.svc.evaluateModel(req.tenantDb!, modelName, period);
   }
 
   @Get('metrics/:modelName')
   getMetrics(
+    @Req() req: RequestWithTenant,
     @Param('modelName') modelName: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getMetrics(subdomain, modelName);
+    return this.svc.getMetrics(req.tenantDb!, modelName);
   }
 
   @Get('fairness/:modelName')
   getFairness(
+    @Req() req: RequestWithTenant,
     @Param('modelName') modelName: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getFairnessReports(subdomain, modelName);
+    return this.svc.getFairnessReports(req.tenantDb!, modelName);
   }
 
   @Post('offline-eval')
   recordOfflineEval(
-    @Body('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Body() body: Record<string, any>,
   ) {
-    return this.svc.recordOfflineEvalRun(subdomain, {
+    return this.svc.recordOfflineEvalRun(req.tenantDb!, {
       aiSurface: body.aiSurface,
       modelName: body.modelName,
       caseSetName: body.caseSetName,
@@ -88,26 +89,26 @@ export class ModelMonitoringController {
 
   @Get('offline-eval/:aiSurface')
   getOfflineEvalRuns(
+    @Req() req: RequestWithTenant,
     @Param('aiSurface') aiSurface: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getOfflineEvalRuns(subdomain, aiSurface);
+    return this.svc.getOfflineEvalRuns(req.tenantDb!, aiSurface);
   }
 
   @Get('release-gates/:aiSurface')
   getReleaseGates(
+    @Req() req: RequestWithTenant,
     @Param('aiSurface') aiSurface: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getReleaseGateResults(subdomain, aiSurface);
+    return this.svc.getReleaseGateResults(req.tenantDb!, aiSurface);
   }
 
   @Get('release-readiness/:aiSurface')
   getReleaseReadiness(
+    @Req() req: RequestWithTenant,
     @Param('aiSurface') aiSurface: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getReleaseReadiness(subdomain, aiSurface);
+    return this.svc.getReleaseReadiness(req.tenantDb!, aiSurface);
   }
 
   @Get('patients/:patientId/risk-tier')
@@ -138,11 +139,9 @@ export class ModelMonitoringController {
   }
 
   @Get('ai-ops/metrics')
-  async getAiOpsMetrics(@Query('subdomain') subdomain: string, @Request() req: any) {
-    const tenantId = subdomain ?? req.headers['x-tenant-id'];
-    const tenantDb = await (this.riskStratService as any).tenantService.getTenantDatabase(tenantId);
-    if (!tenantDb) return { metrics: [] };
-    const rows = await tenantDb.query(`
+  async getAiOpsMetrics(@Req() req: RequestWithTenant) {
+    if (!req.tenantDb) return { metrics: [] };
+    const rows = await req.tenantDb.query(`
       SELECT surface, metric_date, total_calls, abstention_count,
              circuit_breaker_trips, avg_latency_ms, accuracy,
              fairness_age_parity, fairness_gender_parity, fairness_sdoh_parity
@@ -154,13 +153,11 @@ export class ModelMonitoringController {
   }
 
   @Get('ai-ops/control-tower')
-  async getAiOpsControlTower(@Query('subdomain') subdomain: string, @Request() req: any) {
-    const tenantId = subdomain ?? req.headers['x-tenant-id'] ?? req.headers['x-tenant-slug'];
-    const tenantDb = await (this.riskStratService as any).tenantService.getTenantDatabase(tenantId);
-    if (!tenantDb) return { surfaces: [] };
+  async getAiOpsControlTower(@Req() req: RequestWithTenant) {
+    if (!req.tenantDb) return { surfaces: [] };
 
     const contracts = this.aiSurfaceContractService.listContracts();
-    const metricsRows = await tenantDb.query(`
+    const metricsRows = await req.tenantDb.query(`
       SELECT surface, metric_date, total_calls, abstention_count,
              circuit_breaker_trips, avg_latency_ms, accuracy,
              fairness_age_parity, fairness_gender_parity, fairness_sdoh_parity
@@ -179,7 +176,7 @@ export class ModelMonitoringController {
         if (!contract.monitoring.releaseGateSupported) {
           return [contract.aiSurface, null] as const;
         }
-        return [contract.aiSurface, await this.svc.getReleaseReadiness(tenantId, contract.aiSurface)] as const;
+        return [contract.aiSurface, await this.svc.getReleaseReadiness(req.tenantDb!, contract.aiSurface)] as const;
       }),
     );
 

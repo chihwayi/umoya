@@ -3,6 +3,7 @@ import { ModelMonitoringController } from './model-monitoring.controller';
 describe('ModelMonitoringController', () => {
   it('records offline eval runs through the monitoring service', async () => {
     const response = { blocked: false, run: { id: 'eval-1' }, releaseGates: [] };
+    const mockTenantDb = {} as any;
     const svc = {
       recordOfflineEvalRun: jest.fn().mockResolvedValue(response),
     } as any;
@@ -14,7 +15,8 @@ describe('ModelMonitoringController', () => {
       {} as any,
       { listContracts: jest.fn().mockReturnValue([]), getContract: jest.fn() } as any,
     );
-    const result = await controller.recordOfflineEval('kids-clinic', {
+    const req = { tenantDb: mockTenantDb } as any;
+    const result = await controller.recordOfflineEval(req, {
       subdomain: 'kids-clinic',
       aiSurface: 'patient_ai',
       caseSetName: 'suite',
@@ -24,13 +26,14 @@ describe('ModelMonitoringController', () => {
     });
 
     expect(result).toEqual(response);
-    expect(svc.recordOfflineEvalRun).toHaveBeenCalledWith('kids-clinic', expect.objectContaining({
+    expect(svc.recordOfflineEvalRun).toHaveBeenCalledWith(mockTenantDb, expect.objectContaining({
       aiSurface: 'patient_ai',
       caseSetName: 'suite',
     }));
   });
 
   it('returns the AI surface contract with latest readiness details', async () => {
+    const mockTenantDb = {} as any;
     const svc = {
       getOfflineEvalRuns: jest.fn().mockResolvedValue([{ id: 'eval-1' }]),
       getReleaseReadiness: jest.fn().mockResolvedValue({ aiSurface: 'patient_ai', releaseStatus: 'ready' }),
@@ -52,11 +55,12 @@ describe('ModelMonitoringController', () => {
       aiSurfaceContractService,
     );
 
-    const result = await controller.getAiSurfaceContract('patient_ai', 'kids-clinic');
+    const req = { tenantDb: mockTenantDb } as any;
+    const result = await controller.getAiSurfaceContract(req, 'patient_ai');
 
     expect(aiSurfaceContractService.getContract).toHaveBeenCalledWith('patient_ai');
-    expect(svc.getOfflineEvalRuns).toHaveBeenCalledWith('kids-clinic', 'patient_ai');
-    expect(svc.getReleaseReadiness).toHaveBeenCalledWith('kids-clinic', 'patient_ai');
+    expect(svc.getOfflineEvalRuns).toHaveBeenCalledWith(mockTenantDb, 'patient_ai');
+    expect(svc.getReleaseReadiness).toHaveBeenCalledWith(mockTenantDb, 'patient_ai');
     expect(result).toEqual(expect.objectContaining({
       aiSurface: 'patient_ai',
       latestRun: { id: 'eval-1' },
@@ -162,7 +166,36 @@ describe('ModelMonitoringController', () => {
       aiSurfaceContractService,
     );
 
-    const result = await controller.getAiOpsControlTower('kids-clinic', { headers: {} });
+    const mockTenantDb = {
+      query: jest.fn().mockResolvedValue([
+        {
+          surface: 'patient_ai',
+          metric_date: '2026-04-06',
+          total_calls: 100,
+          abstention_count: 12,
+          circuit_breaker_trips: 0,
+          avg_latency_ms: 820,
+          accuracy: 0.91,
+          fairness_age_parity: 0.03,
+          fairness_gender_parity: 0.04,
+          fairness_sdoh_parity: 0.05,
+        },
+        {
+          surface: 'claims_ai',
+          metric_date: '2026-04-06',
+          total_calls: 40,
+          abstention_count: 11,
+          circuit_breaker_trips: 2,
+          avg_latency_ms: 4100,
+          accuracy: 0.69,
+          fairness_age_parity: 0.08,
+          fairness_gender_parity: 0.09,
+          fairness_sdoh_parity: 0.14,
+        },
+      ]),
+    };
+    const req = { tenantDb: mockTenantDb } as any;
+    const result = await controller.getAiOpsControlTower(req);
 
     expect(result.surfaces).toEqual(
       expect.arrayContaining([

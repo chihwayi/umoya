@@ -1,8 +1,9 @@
-import { UseGuards, Controller, Post, Get, Body, Param, Query } from '@nestjs/common';
+import { UseGuards, Controller, Post, Get, Body, Param, Query, Req } from '@nestjs/common';
 import { FederatedLearningService } from '../services/federated-learning.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 // Initiating/aggregating FL rounds triggers real compute (sklearn training
 // across every active tenant) and writes model artifacts that later feed
@@ -16,42 +17,42 @@ export class FederatedLearningController {
 
   @Post('round')
   initiateRound(
-    @Body('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Body('modelType') modelType: string,
   ) {
-    return this.svc.initiateRound(subdomain, modelType);
+    return this.svc.initiateRound(req.tenantDb!, modelType);
   }
 
   @Get('rounds')
   getRounds(
-    @Query('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Query('modelType') modelType?: string,
   ) {
-    return this.svc.getRounds(subdomain, modelType);
+    return this.svc.getRounds(req.tenantDb!, modelType);
   }
 
   @Get('round/:id')
   getRound(
+    @Req() req: RequestWithTenant,
     @Param('id') id: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getRound(subdomain, id);
+    return this.svc.getRound(req.tenantDb!, id);
   }
 
   @Post('round/:id/submit')
   submitLocalMetrics(
+    @Req() req: RequestWithTenant,
     @Param('id') roundId: string,
-    @Query('subdomain') subdomain: string,
     @Body() metrics: { localModelMetrics: any; sampleCount: number; gradientNorm?: number; privacyEpsilon?: number },
   ) {
-    return this.svc.submitLocalMetrics(subdomain, roundId, metrics);
+    return this.svc.submitLocalMetrics(req.tenantDb!, roundId, metrics);
   }
 
   @Get('round/:id/logs')
   getParticipationLogs(
+    @Req() req: RequestWithTenant,
     @Param('id') roundId: string,
-    @Query('subdomain') subdomain: string,
   ) {
-    return this.svc.getParticipationLogs(subdomain, roundId);
+    return this.svc.getParticipationLogs(req.tenantDb!, roundId);
   }
 }
