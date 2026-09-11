@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { FhirInboundService } from '../services/fhir-inbound.service';
 import { FhirInboundKeyGuard } from '../guards/fhir-inbound-key.guard';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 import type * as fhir from 'fhir/r4';
 
 @Controller('fhir/inbound')
@@ -20,7 +21,7 @@ export class FhirInboundController {
 
   @Get('logs')
   @UseGuards(JwtAuthGuard)
-  getIngestionLogs(@Query('subdomain') subdomain: string) {
-    return this.svc.getIngestionLogs(subdomain);
+  getIngestionLogs(@Req() req: RequestWithTenant) {
+    return this.svc.getIngestionLogs(req.tenantDb!);
   }
 }

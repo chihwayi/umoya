@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { FhirIngestionLog } from '../entities/fhir-ingestion-log.entity';
 import type * as fhir from 'fhir/r4';
@@ -48,8 +49,7 @@ export class FhirInboundService {
     return { logId: savedLog.id, imported, conflicts, resolved, errors: errors.length };
   }
 
-  async getIngestionLogs(subdomain: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getIngestionLogs(ds: DataSource) {
     return ds.getRepository(FhirIngestionLog).find({ order: { receivedAt: 'DESC' } });
   }
 

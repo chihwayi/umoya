@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { MohccReportSubmission } from '../entities/mohcc-report-submission.entity';
 import { OpenMrsMigrationLog } from '../entities/openmrs-migration-log.entity';
@@ -14,8 +15,7 @@ export class HimisReportingService {
 
   // ── MOHCC HIMIS Submission ─────────────────────────────────────────────────
 
-  async submitHimisMonthly(subdomain: string, periodLabel: string, submittedBy?: string): Promise<MohccReportSubmission> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async submitHimisMonthly(ds: DataSource, periodLabel: string, submittedBy?: string): Promise<MohccReportSubmission> {
 
     // Aggregate monthly indicators from DB
     const [opd, ipd, labs] = await Promise.all([
@@ -50,18 +50,16 @@ export class HimisReportingService {
     return record;
   }
 
-  async getSubmissions(subdomain: string, reportType?: string): Promise<MohccReportSubmission[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getSubmissions(ds: DataSource, reportType?: string): Promise<MohccReportSubmission[]> {
     const where: any = reportType ? { reportType } : {};
     return ds.getRepository(MohccReportSubmission).find({ where, order: { createdAt: 'DESC' } });
   }
 
   // ── OpenMRS Migration ──────────────────────────────────────────────────────
 
-  async migrateFromOpenMrs(subdomain: string, batchId: string, records: Array<{
+  async migrateFromOpenMrs(ds: DataSource, batchId: string, records: Array<{
     resourceType: string; openmrsUuid: string; data: any;
   }>): Promise<{ migrated: number; failed: number }> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const logRepo = ds.getRepository(OpenMrsMigrationLog);
     let migrated = 0;
     let failed = 0;
@@ -92,8 +90,7 @@ export class HimisReportingService {
     return { migrated, failed };
   }
 
-  async getMigrationLogs(subdomain: string, batchId?: string): Promise<OpenMrsMigrationLog[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getMigrationLogs(ds: DataSource, batchId?: string): Promise<OpenMrsMigrationLog[]> {
     const where: any = batchId ? { batchId } : {};
     return ds.getRepository(OpenMrsMigrationLog).find({ where, order: { migratedAt: 'DESC' } });
   }
@@ -156,8 +153,12 @@ export class HimisReportingService {
         if (!subdomain) {
           continue;
         }
-        await this.submitHimisMonthly(subdomain, periodLabel, 'auto').catch(e =>
-          this.logger.error(`HIMIS auto-submit failed for ${subdomain}: ${e?.message}`));
+        try {
+          const ds = await this.tenantService.getTenantDatabase(subdomain);
+          await this.submitHimisMonthly(ds, periodLabel, 'auto');
+        } catch (e: any) {
+          this.logger.error(`HIMIS auto-submit failed for ${subdomain}: ${e?.message}`);
+        }
       }
     } catch (e: any) {
       this.logger.error(`HIMIS monthly sweep error: ${e?.message}`);
