@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { ClinicalAlertDelivery } from '../entities/clinical-alert-delivery.entity';
 import axios from 'axios';
@@ -28,8 +29,7 @@ export class AlertDeliveryService {
 
   // ── Main broadcast ─────────────────────────────────────────────────────────
 
-  async broadcastCriticalAlert(subdomain: string, alert: AlertPayload): Promise<{ delivered: boolean; recipientCount: number }> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async broadcastCriticalAlert(ds: DataSource, alert: AlertPayload): Promise<{ delivered: boolean; recipientCount: number }> {
 
     // Find on-call staff for this patient
     const staff = await this.getOnCallStaff(ds, alert.patientId);
@@ -75,8 +75,7 @@ export class AlertDeliveryService {
     return { delivered: true, recipientCount: staff.length };
   }
 
-  async acknowledge(subdomain: string, alertId: string, userId: string): Promise<ClinicalAlertDelivery | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async acknowledge(ds: DataSource, alertId: string, userId: string): Promise<ClinicalAlertDelivery | null> {
     const repo = ds.getRepository(ClinicalAlertDelivery);
     await repo.update(alertId, {
       acknowledged: true,
@@ -86,16 +85,14 @@ export class AlertDeliveryService {
     return repo.findOneBy({ id: alertId });
   }
 
-  async getUnacknowledged(subdomain: string, userId: string): Promise<ClinicalAlertDelivery[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getUnacknowledged(ds: DataSource, userId: string): Promise<ClinicalAlertDelivery[]> {
     return ds.getRepository(ClinicalAlertDelivery).find({
       where: { recipientUserId: userId, acknowledged: false },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async getAlertHistory(subdomain: string, patientId: string): Promise<ClinicalAlertDelivery[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getAlertHistory(ds: DataSource, patientId: string): Promise<ClinicalAlertDelivery[]> {
     return ds.getRepository(ClinicalAlertDelivery).find({
       where: { patientId },
       order: { createdAt: 'DESC' },

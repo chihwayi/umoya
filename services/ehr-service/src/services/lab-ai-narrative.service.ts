@@ -126,7 +126,7 @@ export class LabAiNarrativeService {
 
     if (hasCritical && !result.alert_sent && this.alertDelivery) {
       try {
-        await this.alertDelivery.broadcastCriticalAlert(subdomain, {
+        await this.alertDelivery.broadcastCriticalAlert(db, {
           alertType: 'critical_lab_value',
           sourceEntityId: resultId,
           patientId,

@@ -1,5 +1,6 @@
 import { Controller, Post, Put, Get, Query, Body, Param, Req, UseGuards, ConflictException } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { OfflineSyncService } from '../services/offline-sync.service';
 import { ConflictResolverService } from '../services/conflict-resolver.service';
 
@@ -22,27 +23,27 @@ export class OfflineSyncController {
 
   @Post('batch')
   processBatch(
-    @Body('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Body('operations') operations: any[],
   ) {
-    return this.svc.processBatch(subdomain, operations);
+    return this.svc.processBatch(req.tenantDb!, operations);
   }
 
   @Get('checkpoint')
   getCheckpoint(
-    @Query('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Query('userId') userId: string,
     @Query('since') since: string,
   ) {
-    return this.svc.getCheckpoint(subdomain, userId, since);
+    return this.svc.getCheckpoint(req.tenantDb!, userId, since);
   }
 
   @Get('queue')
   getPendingQueue(
-    @Query('subdomain') subdomain: string,
+    @Req() req: RequestWithTenant,
     @Query('clientId') clientId: string,
   ) {
-    return this.svc.getPendingQueue(subdomain, clientId);
+    return this.svc.getPendingQueue(req.tenantDb!, clientId);
   }
 
   @Put(':entityType/:entityId')

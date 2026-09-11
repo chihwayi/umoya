@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { SyncQueueLog } from '../entities/sync-queue-log.entity';
 import { ConflictResolverService } from './conflict-resolver.service';
@@ -26,8 +27,7 @@ export class OfflineSyncService {
     @Optional() private readonly conflictResolver?: ConflictResolverService,
   ) {}
 
-  async processBatch(subdomain: string, operations: SyncOperation[]) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async processBatch(ds: DataSource, operations: SyncOperation[]) {
     const results: any[] = [];
 
     for (const op of operations) {
@@ -110,8 +110,7 @@ export class OfflineSyncService {
     }
   }
 
-  async getCheckpoint(subdomain: string, userId: string, since: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getCheckpoint(ds: DataSource, userId: string, since: string) {
     const sinceDate = new Date(since);
     // Return entities modified since last sync — vitals, notes, prescriptions
     const [vitals, notes] = await Promise.all([
@@ -124,8 +123,7 @@ export class OfflineSyncService {
     };
   }
 
-  async getPendingQueue(subdomain: string, clientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getPendingQueue(ds: DataSource, clientId: string) {
     return ds.getRepository(SyncQueueLog).find({
       where: { clientId, syncStatus: 'pending' },
       order: { clientTimestamp: 'ASC' },
