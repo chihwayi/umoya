@@ -15,25 +15,27 @@ export class ClinicalTimelineService {
 
   async generateTimeline(patientId: string, db: any): Promise<unknown> {
     const [demographics, diagnoses, labHistory, medications, encounters, vitals] = await Promise.all([
-      db.query(`SELECT first_name, last_name, date_of_birth, sex FROM patients WHERE id = $1`, [patientId]),
+      db.query(`SELECT first_name, last_name, date_of_birth, gender AS sex FROM patients WHERE id = $1`, [patientId]),
       db.query(
-        `SELECT icd10_code, description, status, diagnosed_at FROM patient_diagnoses
-         WHERE patient_id = $1 ORDER BY diagnosed_at ASC`,
+        `SELECT code AS icd10_code, description, status, onset_date AS diagnosed_at FROM problems
+         WHERE patient_id = $1 ORDER BY onset_date ASC`,
         [patientId],
       ),
       db.query(
-        `SELECT test_name, value, unit, flag, resulted_at FROM lab_results
-         WHERE patient_id = $1 AND status = 'resulted'
-         ORDER BY resulted_at ASC`,
+        `SELECT test_name, result_value AS value, result_unit AS unit, NULL AS flag, completed_at AS resulted_at
+         FROM lab_results
+         WHERE patient_id = $1 AND status = 'completed'
+         ORDER BY completed_at ASC`,
         [patientId],
       ),
       db.query(
-        `SELECT drug_name, dose, frequency, start_date, end_date, status, discontinuation_reason
-         FROM prescriptions WHERE patient_id = $1 ORDER BY start_date ASC`,
+        `SELECT medication_name AS drug_name, dosage AS dose, frequency, prescribed_date AS start_date,
+                NULL::timestamptz AS end_date, status, NULL AS discontinuation_reason
+         FROM prescriptions WHERE patient_id = $1 ORDER BY prescribed_date ASC`,
         [patientId],
       ),
       db.query(
-        `SELECT encounter_type, chief_complaint, created_at FROM encounters
+        `SELECT record_type AS encounter_type, chief_complaint, created_at FROM medical_records
          WHERE patient_id = $1 ORDER BY created_at ASC LIMIT 20`,
         [patientId],
       ),

@@ -30,7 +30,7 @@ export const DocumentGeneratorModal: React.FC<Props> = ({ patientId, onClose, on
     setGenerating(true);
     setError(null);
     try {
-      const doc = await api.post('/documents/generate', {
+      const doc = await api.post('/clinical-documents/generate', {
         patientId,
         documentType,
         recipient: recipient || undefined,
@@ -50,7 +50,7 @@ export const DocumentGeneratorModal: React.FC<Props> = ({ patientId, onClose, on
     setSigning(true);
     setError(null);
     try {
-      const signed = await api.post(`/documents/${generated.id}/sign`, {});
+      const signed = await api.post(`/clinical-documents/${generated.id}/sign`, {});
       setGenerated(signed);
     } catch (e: any) {
       setError(e?.message ?? 'Failed to sign document');

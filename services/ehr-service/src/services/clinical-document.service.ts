@@ -27,28 +27,29 @@ export class ClinicalDocumentService {
   ): Promise<unknown> {
     const [patient, diagnoses, meds, labs, notes, vitals] = await Promise.all([
       db.query(
-        `SELECT first_name, last_name, date_of_birth, sex, mrn, phone, address
+        `SELECT first_name, last_name, date_of_birth, gender AS sex, patient_number AS mrn, phone, address
          FROM patients WHERE id = $1`,
         [patientId],
       ),
       db.query(
-        `SELECT icd10_code, description, status FROM patient_diagnoses
-         WHERE patient_id = $1 AND status IN ('active','chronic') LIMIT 10`,
-        [patientId],
-      ),
-      db.query(
-        `SELECT drug_name, dose, frequency FROM prescriptions
+        `SELECT code AS icd10_code, description, status FROM problems
          WHERE patient_id = $1 AND status = 'active' LIMIT 10`,
         [patientId],
       ),
       db.query(
-        `SELECT test_name, value, unit, flag, resulted_at FROM lab_results
-         WHERE patient_id = $1 AND status = 'resulted'
-         ORDER BY resulted_at DESC LIMIT 5`,
+        `SELECT medication_name AS drug_name, dosage AS dose, frequency FROM prescriptions
+         WHERE patient_id = $1 AND status = 'active' LIMIT 10`,
         [patientId],
       ),
       db.query(
-        `SELECT content, note_type FROM clinical_notes
+        `SELECT test_name, result_value AS value, result_unit AS unit, NULL AS flag, completed_at AS resulted_at
+         FROM lab_results
+         WHERE patient_id = $1 AND status = 'completed'
+         ORDER BY completed_at DESC LIMIT 5`,
+        [patientId],
+      ),
+      db.query(
+        `SELECT content, record_type AS note_type FROM medical_records
          WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 3`,
         [patientId],
       ),

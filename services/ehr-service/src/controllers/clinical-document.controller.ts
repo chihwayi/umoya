@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PatientJwtAuthGuard } from '../guards/patient-jwt-auth.guard';
 import { ClinicalDocumentService } from '../services/clinical-document.service';
 
-@Controller('documents')
+@Controller('clinical-documents')
 export class ClinicalDocumentController {
   constructor(private readonly docService: ClinicalDocumentService) {}
 

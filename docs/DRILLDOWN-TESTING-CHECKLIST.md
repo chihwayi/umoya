@@ -1426,3 +1426,86 @@ Bug ref:       services/ehr-service/src/controllers/message-ai.controller.ts,
 | 35 | 13 more controllers with the subdomain-param tenant-resolution bug, including `AlertDeliveryService.broadcastCriticalAlert()` — called internally by 10 clinical safety services (deterioration, mortality risk, OI early warning, radiology findings, etc.) — silently failing tenant-wide | **Clinical safety** | Fixed |
 | 36 | Patient education materials: entity references `template_id`/`updated_at` columns that don't exist in the live table (schema drift) | **Functional** | Fixed |
 | 37 | AI message-triage feature (Sprint 177) non-functional at 3 backend layers (route collision, phantom table, never-triggered enrichment) plus an orphaned frontend component | **Functional (dead feature)** | Documented, not fixed — needs a scoped follow-up |
+
+### Test 28 — Systematic route-collision + schema-drift sweep across all controllers (backend)
+
+```
+Module:        Clinical Timeline (AI patient summary bar), Clinical Documents (AI-generated
+                referral/discharge/pre-auth documents)
+Platform:      Backend + ehr-frontend
+Role:          Doctor
+Test patient:  TEST_VerifyAnc MobileGaps (id 20ecbfb0-d6d1-4387-b897-17e0ff9c56e6)
+Context:       After finding the message-ai route collision (Test 27), grepped every
+                `@Controller(...)` prefix in services/ehr-service/src/controllers for duplicates
+                (13 prefixes are shared by 2+ controllers) and cross-compared every route string
+                within each group for exact method+path collisions. Found two more real, live
+                collisions:
+                1. `clinical-timeline.controller.ts` and `clinical-summary.controller.ts` both
+                   declared `GET patients/:patientId/ai-timeline`. ClinicalTimelineController wins
+                   (registered first) — happened to be the functionally-correct one for its only
+                   caller (`PatientAiSummaryBar.tsx`, which expects `one_line_summary`/
+                   `full_narrative`/`detected_patterns`, exactly ClinicalTimelineService's shape) —
+                   so no live user-facing break from the collision itself, but the WINNING handler
+                   turned out to be broken anyway: `generateTimeline()` queried a nonexistent
+                   `sex` column on `patients` (real column: `gender`) and a nonexistent
+                   `patient_diagnoses` table (real table: `problems`), plus wrong column names on
+                   `lab_results` (`value`/`unit`/`flag`/`resulted_at` vs real `result_value`/
+                   `result_unit`/no-flag-column/`completed_at`), `prescriptions`
+                   (`drug_name`/`dose`/`start_date` vs real `medication_name`/`dosage`/
+                   `prescribed_date`), and a nonexistent generic `encounters` table (closest real
+                   equivalent: `medical_records`). This has thrown a 500 for every single call
+                   since the feature was built — `PatientAiSummaryBar` silently swallows the error
+                   (`.catch(() => null)`) and just never renders, so it looked like "the component
+                   doesn't show up sometimes" rather than "this always 500s."
+                2. `clinical-document.controller.ts` and `document.controller.ts` both declared
+                   `@Controller('documents')` with colliding `GET :id`/`:documentId` and
+                   `POST :id/sign`/`:documentId/sign`. `DocumentController` (generic uploaded
+                   files, table `documents`) wins both — `DocumentGeneratorModal.tsx`'s "Sign"
+                   button (AI-generated referral letters / discharge summaries / pre-auth
+                   requests, table `clinical_documents`) was calling into the WRONG controller
+                   entirely. Confirmed live: `POST /api/documents/:id/sign` for a
+                   `clinical_documents` row threw `insert or update on table
+                   "document_signatures" violates foreign key constraint` because the id doesn't
+                   exist in the `documents` table `DocumentController` actually operates on.
+                   `ClinicalDocumentService.generateDocument()` itself was ALSO broken by the same
+                   `patient_diagnoses`/`sex`/wrong-column-name pattern as (1), plus a nonexistent
+                   `clinical_notes` table (closest real equivalent: `medical_records`) and a
+                   nonexistent `mrn` column (real column: `patient_number`) — so document
+                   generation itself always 500'd before a user could even reach the broken sign
+                   button.
+Fix:           (1) Rewrote all 6 `clinical-timeline.service.ts` queries against the real schema
+                (patients.gender, problems, lab_results, prescriptions, medical_records columns),
+                keeping the same downstream field names via SQL aliases so
+                `detectPatterns`/`buildRawNarrative` needed no changes. Removed the now-dead-and-
+                misleadingly-commented duplicate `ai-timeline` route from
+                `clinical-summary.controller.ts` (it was already fully shadowed, so removing it
+                changes no live behavior). (2) Rewrote `clinical-document.service.ts`'s
+                `generateDocument()` queries against the real schema the same way. Renamed
+                `ClinicalDocumentController`'s prefix from `documents` to `clinical-documents` to
+                eliminate the collision entirely (rather than renaming just the 2 colliding
+                routes, for consistency and to remove latent collision risk on the controller's
+                other routes too), and updated `DocumentGeneratorModal.tsx`'s two call sites
+                (`generate`, `:id/sign`) to the new prefix — confirmed via grep this is the only
+                frontend caller of any `ClinicalDocumentController` route.
+Steps to test: 1) GET /api/patients/:patientId/ai-timeline.  2) POST
+                /api/clinical-documents/generate (referral_letter, sick_note).  3) GET
+                /api/clinical-documents/:id.  4) POST /api/clinical-documents/:id/sign.  5) GET
+                /api/documents (generic DocumentController) still works unaffected.
+Actual result: Pass on all 5 — ai-timeline now returns a full narrative with real patient data;
+                document generate/get/sign now round-trip correctly against `clinical_documents`;
+                the generic documents list is unaffected.
+Status:        Fail (both routes always 500'd or hit the wrong table, silently) → Fixed → Pass
+                (verified live end-to-end for both features).
+Bug ref:       services/ehr-service/src/services/clinical-timeline.service.ts,
+                services/ehr-service/src/controllers/clinical-summary.controller.ts,
+                services/ehr-service/src/services/clinical-document.service.ts,
+                services/ehr-service/src/controllers/clinical-document.controller.ts,
+                ehr-frontend/src/components/DocumentGeneratorModal.tsx.
+```
+
+## Update to Step 4 Deliverables (cont. 3)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 38 | `clinical-timeline.controller.ts`/`clinical-summary.controller.ts` route collision on `GET :patientId/ai-timeline`; winning handler always 500'd (6 wrong table/column names against the real schema) | **Functional** | Fixed |
+| 39 | `clinical-document.controller.ts`/`document.controller.ts` route collision on `@Controller('documents')` — AI-generated document "Sign" button in ehr-frontend always hit the wrong controller/table; document generation itself also always 500'd (4 wrong table/column names) | **Functional (user-facing)** | Fixed |
