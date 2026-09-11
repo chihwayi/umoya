@@ -62,7 +62,7 @@ describe('ModelMonitoringService', () => {
       cdssService as any,
     );
 
-    const result = await service.evaluateModel('kids-clinic', 'readmission', '2026-03');
+    const result = await service.evaluateModel(tenantDb, 'readmission', '2026-03');
 
     expect(cdssService.evaluateModelPerformance).toHaveBeenCalledWith(
       {
@@ -70,7 +70,7 @@ describe('ModelMonitoringService', () => {
         period: '2026-03',
         outcomes: expect.any(Array),
       },
-      'kids-clinic',
+      undefined,
       tenantDb,
     );
     expect(result.aucRoc).toBe(0.82);
@@ -127,7 +127,7 @@ describe('ModelMonitoringService', () => {
       { evaluateModelPerformance: jest.fn() } as any,
     );
 
-    const result = await service.recordOfflineEvalRun('kids-clinic', {
+    const result = await service.recordOfflineEvalRun(tenantDb, {
       aiSurface: 'patient_ai',
       modelName: 'readmission',
       caseSetName: 'moas12.patient_ai.v1',

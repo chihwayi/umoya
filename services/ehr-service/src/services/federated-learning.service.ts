@@ -1,5 +1,6 @@
 import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { FlRound } from '../entities/fl-round.entity';
 import { FlParticipationLog } from '../entities/fl-participation-log.entity';
@@ -24,8 +25,7 @@ export class FederatedLearningService {
 
   // ── Round Management ───────────────────────────────────────────────────────
 
-  async initiateRound(subdomain: string, modelType: string): Promise<FlRound> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async initiateRound(ds: DataSource, modelType: string): Promise<FlRound> {
     const repo = ds.getRepository(FlRound);
 
     const lastRound = await repo.findOne({ where: { modelType }, order: { roundNumber: 'DESC' } });
@@ -41,47 +41,44 @@ export class FederatedLearningService {
     this.logger.log(`Initiated FL round ${nextRound} for model ${modelType}`);
 
     // Kick off local training across all tenants
-    this.runLocalTrainingAcrossAllTenants(subdomain, round.id, modelType).catch(e =>
+    this.runLocalTrainingAcrossAllTenants(round.id, modelType).catch(e =>
       this.logger.error(`Local training kickoff failed: ${e?.message}`));
 
     return round;
   }
 
   async submitLocalMetrics(
-    subdomain: string,
+    ds: DataSource,
     roundId: string,
     metrics: { localModelMetrics: any; sampleCount: number; gradientNorm?: number; privacyEpsilon?: number },
+    tenantSubdomain?: string,
   ): Promise<FlParticipationLog> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const log = await ds.getRepository(FlParticipationLog).save(
       ds.getRepository(FlParticipationLog).create({
         roundId,
-        tenantSubdomain: subdomain,
+        tenantSubdomain: tenantSubdomain || 'unknown',
         ...metrics,
         status: 'submitted',
       }),
     );
 
     // Try to aggregate whenever a new submission arrives
-    this.aggregateRound(subdomain, roundId).catch(e =>
+    this.aggregateRound(ds, roundId).catch(e =>
       this.logger.warn(`FL aggregation failed for round ${roundId}: ${e?.message}`));
 
     return log;
   }
 
-  async getRound(subdomain: string, roundId: string): Promise<FlRound | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getRound(ds: DataSource, roundId: string): Promise<FlRound | null> {
     return ds.getRepository(FlRound).findOneBy({ id: roundId });
   }
 
-  async getRounds(subdomain: string, modelType?: string): Promise<FlRound[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getRounds(ds: DataSource, modelType?: string): Promise<FlRound[]> {
     const where: any = modelType ? { modelType } : {};
     return ds.getRepository(FlRound).find({ where, order: { roundNumber: 'DESC' } });
   }
 
-  async getParticipationLogs(subdomain: string, roundId: string): Promise<FlParticipationLog[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getParticipationLogs(ds: DataSource, roundId: string): Promise<FlParticipationLog[]> {
     return ds.getRepository(FlParticipationLog).find({ where: { roundId } });
   }
 
@@ -91,7 +88,7 @@ export class FederatedLearningService {
    * For each active tenant: fetch local outcomes → send to CDSS /fl/train-local
    * → submit metrics back → aggregation fires automatically.
    */
-  async runLocalTrainingAcrossAllTenants(coordinatorSubdomain: string, roundId: string, modelType: string): Promise<void> {
+  async runLocalTrainingAcrossAllTenants(roundId: string, modelType: string): Promise<void> {
     const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
     this.logger.log(`Running local training for ${tenants.length} tenants (round ${roundId}, model ${modelType})`);
 
@@ -99,7 +96,8 @@ export class FederatedLearningService {
     for (const tenant of tenants) {
       const subdomain = tenant.subdomain;
       try {
-        await this.trainLocalModel(subdomain, roundId, modelType);
+        const ds = await this.tenantService.getTenantDatabase(subdomain);
+        await this.trainLocalModel(ds, subdomain, roundId, modelType);
         submitted++;
       } catch (e: any) {
         this.logger.warn(`Local training failed for ${subdomain}: ${e?.message}`);
@@ -108,19 +106,17 @@ export class FederatedLearningService {
     this.logger.log(`Local training complete: ${submitted}/${tenants.length} tenants submitted`);
   }
 
-  async trainLocalModel(subdomain: string, roundId: string, modelType: string): Promise<FlParticipationLog> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
-
+  async trainLocalModel(ds: DataSource, subdomain: string, roundId: string, modelType: string): Promise<FlParticipationLog> {
     // Fetch training outcomes from this tenant's DB
     const outcomes = await this.fetchTrainingOutcomes(ds, modelType);
 
     if (outcomes.length < this.MIN_OUTCOMES) {
       this.logger.debug(`${subdomain} has only ${outcomes.length} outcomes for ${modelType} — skipping`);
       // Submit empty contribution so round isn't blocked
-      return this.submitLocalMetrics(subdomain, roundId, {
+      return this.submitLocalMetrics(ds, roundId, {
         localModelMetrics: { skipped: true, reason: 'insufficient_data' },
         sampleCount: outcomes.length,
-      });
+      }, subdomain);
     }
 
     // Send to CDSS for sklearn training
@@ -131,7 +127,7 @@ export class FederatedLearningService {
       privacyEpsilon: 1.0, // differential privacy budget
     }, subdomain); // training can take a while
 
-    return this.submitLocalMetrics(subdomain, roundId, {
+    return this.submitLocalMetrics(ds, roundId, {
       localModelMetrics: {
         auc: data.auc,
         brier: data.brier,
@@ -144,13 +140,12 @@ export class FederatedLearningService {
       sampleCount: data.sample_count,
       gradientNorm: data.gradient_norm,
       privacyEpsilon: 1.0,
-    });
+    }, subdomain);
   }
 
   // ── Aggregation + Auto-Promote ─────────────────────────────────────────────
 
-  private async aggregateRound(subdomain: string, roundId: string): Promise<void> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  private async aggregateRound(ds: DataSource, roundId: string): Promise<void> {
     const roundRepo = ds.getRepository(FlRound);
     const logRepo = ds.getRepository(FlParticipationLog);
 
@@ -175,6 +170,8 @@ export class FederatedLearningService {
     }
 
     try {
+      // Use the first participating tenant's subdomain for CDSS communication
+      const coordinatorSubdomain = realContributions[0]?.tenantSubdomain || 'unknown';
       const data = await this.cdssService.aggregateFederatedRound({
         roundId,
         modelType: round.modelType,
@@ -185,7 +182,7 @@ export class FederatedLearningService {
           gradientNorm: l.gradientNorm,
           privacyEpsilon: l.privacyEpsilon,
         })),
-      }, subdomain);
+      }, coordinatorSubdomain);
 
       await roundRepo.update(roundId, {
         aggregatedMetrics: data.aggregatedMetrics || {},
@@ -198,7 +195,7 @@ export class FederatedLearningService {
       this.logger.log(`FL round ${round.roundNumber} aggregated — ${realContributions.length} tenants, weights at ${data.modelWeightsRef}`);
 
       // Register + evaluate + auto-promote
-      await this.registerAndPromote(subdomain, round, data).catch(e =>
+      await this.registerAndPromote(ds, coordinatorSubdomain, round, data).catch(e =>
         this.logger.error(`Post-aggregation promote failed: ${e?.message}`));
 
     } catch (e: any) {
@@ -207,7 +204,7 @@ export class FederatedLearningService {
     }
   }
 
-  private async registerAndPromote(subdomain: string, round: FlRound, aggregateData: any): Promise<void> {
+  private async registerAndPromote(ds: DataSource, subdomain: string, round: FlRound, aggregateData: any): Promise<void> {
     if (!aggregateData.modelWeightsRef) return;
 
     // Evaluate the aggregated model first
@@ -216,7 +213,6 @@ export class FederatedLearningService {
     let sampleCount = aggregateData.totalSamples || 0;
 
     try {
-      const ds = await this.tenantService.getTenantDatabase(subdomain);
       const holdout = await this.fetchTrainingOutcomes(ds, round.modelType, true);
       if (holdout.length >= 20) {
         const evalData = await this.cdssService.evaluateFederatedModel({
@@ -234,7 +230,7 @@ export class FederatedLearningService {
     }
 
     // Register in model registry
-    const registered = await this.modelRegistry.register(subdomain, {
+    const registered = await this.modelRegistry.register(ds, {
       modelName: round.modelType,
       roundId: round.id,
       minioPath: aggregateData.modelWeightsRef,
@@ -247,7 +243,7 @@ export class FederatedLearningService {
     });
 
     // Never auto-promote FL candidates to production. Stage them for governed shadow review first.
-    const result = await this.modelRegistry.evaluateAndPromote(subdomain, registered.id, {
+    const result = await this.modelRegistry.evaluateAndPromote(ds, registered.id, {
       requestedStage: 'shadow',
       requestedBy: 'federated-learning',
       decisionNotes: 'Federated aggregation completed. Candidate staged for governed shadow evaluation before canary or production.',
@@ -381,10 +377,11 @@ export class FederatedLearningService {
     try {
       const tenants = await this.tenantService.getAllActiveTenants?.() ?? [];
       if (!tenants.length) return;
-      const coordinator = tenants[0]?.subdomain;
-      if (!coordinator) return;
+      const coordinatorSubdomain = tenants[0]?.subdomain;
+      if (!coordinatorSubdomain) return;
+      const coordinatorDs = await this.tenantService.getTenantDatabase(coordinatorSubdomain);
       for (const modelType of MODEL_TYPES) {
-        await this.initiateRound(coordinator, modelType).catch(e =>
+        await this.initiateRound(coordinatorDs, modelType).catch(e =>
           this.logger.error(`Weekly FL round failed for ${modelType}: ${e?.message}`));
       }
     } catch (e: any) {

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { In } from 'typeorm';
+import { In, DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { ModelRegistry } from '../entities/model-registry.entity';
 import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
@@ -48,7 +48,7 @@ export class ModelRegistryService {
 
   // ── Registration ───────────────────────────────────────────────────────────
 
-  async register(subdomain: string, dto: {
+  async register(ds: DataSource, dto: {
     modelName: string;
     roundId?: string;
     minioPath: string;
@@ -60,7 +60,6 @@ export class ModelRegistryService {
     featureNames?: string[];
     framework?: string;
   }): Promise<ModelRegistry> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(ModelRegistry);
     const cardRepo = ds.getRepository(ModelCard);
 
@@ -114,7 +113,7 @@ export class ModelRegistryService {
   // ── Promotion ──────────────────────────────────────────────────────────────
 
   async evaluateAndPromote(
-    subdomain: string,
+    ds: DataSource,
     registryId: string,
     reviewRequest?: PromotionReviewRequest,
   ): Promise<{
@@ -124,7 +123,6 @@ export class ModelRegistryService {
     review?: ModelPromotionReview;
     gates?: PromotionGateSummary;
   }> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const repo = ds.getRepository(ModelRegistry);
     const performanceRepo = ds.getRepository(ModelPerformanceMetric);
     const fairnessRepo = ds.getRepository(ModelFairnessReport);
@@ -134,7 +132,7 @@ export class ModelRegistryService {
     if (!candidate) return { promoted: false, reason: 'Model not found' };
 
     const requestedStage = reviewRequest?.requestedStage || 'production';
-    const current = await this.getCurrentProduction(subdomain, candidate.modelName);
+    const current = await this.getCurrentProduction(ds, candidate.modelName);
     const currentAuc = current?.aucRoc ?? 0;
     const candidateAuc = candidate.aucRoc ?? null;
     const improvement = candidateAuc === null ? null : candidateAuc - currentAuc;
@@ -208,7 +206,7 @@ export class ModelRegistryService {
         promotionBlockedReason: reviewRequest?.decisionNotes || 'Shadow evaluation required before canary or production',
       });
       const staged = await repo.findOneBy({ id: registryId });
-      await this.syncModelCard(subdomain, staged!, review, gateSummary);
+      await this.syncModelCard(ds, staged!, review, gateSummary);
       return {
         promoted: false,
         reason: 'Model staged for governed shadow evaluation',
@@ -226,7 +224,7 @@ export class ModelRegistryService {
           promotionBlockedReason: blockedReason,
         });
         const staged = await repo.findOneBy({ id: registryId });
-        await this.syncModelCard(subdomain, staged!, review, gateSummary);
+        await this.syncModelCard(ds, staged!, review, gateSummary);
         return { promoted: false, reason: blockedReason!, model: staged!, review, gates: gateSummary };
       }
 
@@ -236,7 +234,7 @@ export class ModelRegistryService {
         promotionBlockedReason: null,
       });
       const canary = await repo.findOneBy({ id: registryId });
-      await this.syncModelCard(subdomain, canary!, review, gateSummary);
+      await this.syncModelCard(ds, canary!, review, gateSummary);
       return {
         promoted: false,
         reason: 'Model approved for governed canary stage; production promotion still requires an explicit production approval request',
@@ -253,7 +251,7 @@ export class ModelRegistryService {
         promotionBlockedReason: blockedReason,
       });
       const staged = await repo.findOneBy({ id: registryId });
-      await this.syncModelCard(subdomain, staged!, review, gateSummary);
+      await this.syncModelCard(ds, staged!, review, gateSummary);
       return { promoted: false, reason: blockedReason!, model: staged!, review, gates: gateSummary };
     }
 
@@ -281,7 +279,7 @@ export class ModelRegistryService {
     );
 
     const promoted = await repo.findOneBy({ id: registryId });
-    await this.syncModelCard(subdomain, promoted!, review, gateSummary);
+    await this.syncModelCard(ds, promoted!, review, gateSummary);
     return {
       promoted: true,
       reason: 'Promoted via governed review with calibration, fairness, shadow validation, rollback readiness, and clinical approval gates satisfied',
@@ -293,15 +291,13 @@ export class ModelRegistryService {
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  async getCurrentProduction(subdomain: string, modelName: string): Promise<ModelRegistry | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getCurrentProduction(ds: DataSource, modelName: string): Promise<ModelRegistry | null> {
     return ds.getRepository(ModelRegistry).findOne({
       where: { modelName, status: 'production' },
     });
   }
 
-  async getHistory(subdomain: string, modelName: string): Promise<ModelRegistry[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getHistory(ds: DataSource, modelName: string): Promise<ModelRegistry[]> {
     return ds.getRepository(ModelRegistry).find({
       where: { modelName },
       order: { createdAt: 'DESC' },
@@ -309,28 +305,24 @@ export class ModelRegistryService {
     });
   }
 
-  async getAllProduction(subdomain: string): Promise<ModelRegistry[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getAllProduction(ds: DataSource): Promise<ModelRegistry[]> {
     return ds.getRepository(ModelRegistry).find({ where: { status: 'production' } });
   }
 
-  async getModelCards(subdomain: string): Promise<ModelCard[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getModelCards(ds: DataSource): Promise<ModelCard[]> {
     return ds.getRepository(ModelCard).find({
       order: { updatedAt: 'DESC' },
       take: 50,
     });
   }
 
-  async getModelCard(subdomain: string, modelName: string): Promise<ModelCard | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getModelCard(ds: DataSource, modelName: string): Promise<ModelCard | null> {
     return ds.getRepository(ModelCard).findOne({
       where: { modelName },
     });
   }
 
-  async getShadowEvaluations(subdomain: string, modelName?: string): Promise<ModelShadowEvaluation[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getShadowEvaluations(ds: DataSource, modelName?: string): Promise<ModelShadowEvaluation[]> {
     return ds.getRepository(ModelShadowEvaluation).find({
       where: modelName ? { modelName } : {},
       order: { createdAt: 'DESC' },
@@ -339,7 +331,7 @@ export class ModelRegistryService {
   }
 
   async reviewShadowEvaluation(
-    subdomain: string,
+    ds: DataSource,
     evaluationId: string,
     review: ShadowEvaluationReviewRequest,
   ): Promise<{
@@ -353,7 +345,6 @@ export class ModelRegistryService {
       reviewId?: string | null;
     };
   }> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const shadowRepo = ds.getRepository(ModelShadowEvaluation);
     const jobRepo = ds.getRepository(OutcomeLearningJob);
     const evaluation = await shadowRepo.findOneBy({ id: evaluationId });
@@ -412,7 +403,7 @@ export class ModelRegistryService {
       };
     }
 
-    const promotion = await this.evaluateAndPromote(subdomain, evaluation.candidateRegistryId, {
+    const promotion = await this.evaluateAndPromote(ds, evaluation.candidateRegistryId, {
       requestedStage: review.requestedStage || 'canary',
       requestedBy: 'shadow-evaluation-review',
       decisionBy: review.decisionBy,
@@ -474,8 +465,7 @@ export class ModelRegistryService {
 
   // ── Manual rollback ────────────────────────────────────────────────────────
 
-  async rollback(subdomain: string, modelName: string): Promise<ModelRegistry | null> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async rollback(ds: DataSource, modelName: string): Promise<ModelRegistry | null> {
     const repo = ds.getRepository(ModelRegistry);
 
     const current = await repo.findOne({ where: { modelName, status: 'production' } });
@@ -503,7 +493,7 @@ export class ModelRegistryService {
     });
 
     await this.notifyCdssPromote(modelName, previous.minioPath).catch((e: any) => { this.logger.warn(`CDSS model promotion notification failed: ${e?.message}`); });
-    await this.syncModelCard(subdomain, await repo.findOneBy({ id: previous.id }), null, {
+    await this.syncModelCard(ds, await repo.findOneBy({ id: previous.id }), null, {
       requestedStage: 'production',
       candidateAuc: previous.aucRoc ?? null,
       currentAuc: previous.aucRoc ?? null,
@@ -576,13 +566,12 @@ export class ModelRegistryService {
   }
 
   private async syncModelCard(
-    subdomain: string,
+    ds: DataSource,
     registry: ModelRegistry | null,
     review: ModelPromotionReview | null,
     gateSummary: PromotionGateSummary,
   ): Promise<void> {
     if (!registry) return;
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const cardRepo = ds.getRepository(ModelCard);
     await this.upsertModelCard(cardRepo, registry, {
       deploymentStage: registry.deploymentStage,

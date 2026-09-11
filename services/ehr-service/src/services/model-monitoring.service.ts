@@ -1,5 +1,6 @@
 import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { CdssService } from './cdss.service';
 import { ModelPerformanceMetric } from '../entities/model-performance-metric.entity';
@@ -55,8 +56,7 @@ export class ModelMonitoringService {
 
   // ── Manual / on-demand evaluation ─────────────────────────────────────────
 
-  async evaluateModel(subdomain: string, modelName: string, period?: string): Promise<ModelPerformanceMetric> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async evaluateModel(ds: DataSource, modelName: string, period?: string): Promise<ModelPerformanceMetric> {
     const evalPeriod = period || new Date().toISOString().slice(0, 7); // YYYY-MM
 
     const outcomes = await this.fetchOutcomes(ds, modelName, evalPeriod);
@@ -65,7 +65,7 @@ export class ModelMonitoringService {
     try {
       const result = await this.cdssService.evaluateModelPerformance(
         { modelName, period: evalPeriod, outcomes },
-        subdomain,
+        undefined, // subdomain not needed here for CDSS call - it's already in the outcomes
         ds,
       );
       if ((result as any)?.auc_roc !== undefined) {
@@ -78,7 +78,7 @@ export class ModelMonitoringService {
       metrics = this.computeLocalMetrics(outcomes);
     }
 
-    const baselineKey = `${subdomain}:${modelName}`;
+    const baselineKey = `model:${modelName}`;
     const driftDetected = this.baselines[baselineKey]
       ? metrics.auc_roc !== null && (this.baselines[baselineKey] - metrics.auc_roc) > 0.05
       : false;
@@ -103,39 +103,36 @@ export class ModelMonitoringService {
     }));
 
     if (driftDetected) {
-      this.logger.warn(`Model drift detected for ${modelName} in ${subdomain}: AUC dropped from ${this.baselines[baselineKey].toFixed(3)} to ${metrics.auc_roc?.toFixed(3)}`);
+      this.logger.warn(`Model drift detected for ${modelName}: AUC dropped from ${this.baselines[baselineKey].toFixed(3)} to ${metrics.auc_roc?.toFixed(3)}`);
       // Auto-trigger retraining when drift is detected
-      this.federatedLearning.initiateRound(subdomain, modelName).catch(e =>
+      this.federatedLearning.initiateRound(ds, modelName).catch(e =>
         this.logger.error(`Drift-triggered retrain failed for ${modelName}: ${e?.message}`));
     }
 
     // Compute fairness
-    await this.computeFairness(subdomain, ds, modelName, evalPeriod, outcomes).catch((e: any) => this.logger.warn(`model fairness computation failed: ${e?.message}`));
+    await this.computeFairness(ds, modelName, evalPeriod, outcomes).catch((e: any) => this.logger.warn(`model fairness computation failed: ${e?.message}`));
 
     return saved;
   }
 
-  async getMetrics(subdomain: string, modelName: string): Promise<ModelPerformanceMetric[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getMetrics(ds: DataSource, modelName: string): Promise<ModelPerformanceMetric[]> {
     const where: any = modelName ? { modelName } : {};
     return ds.getRepository(ModelPerformanceMetric).find({
       where, order: { computedAt: 'DESC' }, take: 24,
     });
   }
 
-  async getFairnessReports(subdomain: string, modelName: string): Promise<ModelFairnessReport[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getFairnessReports(ds: DataSource, modelName: string): Promise<ModelFairnessReport[]> {
     return ds.getRepository(ModelFairnessReport).find({
       where: { modelName }, order: { computedAt: 'DESC' }, take: 24,
     });
   }
 
-  async recordOfflineEvalRun(subdomain: string, payload: OfflineAiEvalRunInput): Promise<{
+  async recordOfflineEvalRun(ds: DataSource, payload: OfflineAiEvalRunInput): Promise<{
     run: AiEvalRun;
     releaseGates: AiReleaseGateResult[];
     blocked: boolean;
   }> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const runRepo = ds.getRepository(AiEvalRun);
     const gateRepo = ds.getRepository(AiReleaseGateResult);
 
@@ -186,8 +183,7 @@ export class ModelMonitoringService {
     };
   }
 
-  async getOfflineEvalRuns(subdomain: string, aiSurface?: string): Promise<AiEvalRun[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getOfflineEvalRuns(ds: DataSource, aiSurface?: string): Promise<AiEvalRun[]> {
     const where: Record<string, any> = aiSurface ? { aiSurface } : {};
     return ds.getRepository(AiEvalRun).find({
       where,
@@ -196,8 +192,7 @@ export class ModelMonitoringService {
     });
   }
 
-  async getReleaseGateResults(subdomain: string, aiSurface?: string): Promise<AiReleaseGateResult[]> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getReleaseGateResults(ds: DataSource, aiSurface?: string): Promise<AiReleaseGateResult[]> {
     const where: Record<string, any> = aiSurface ? { aiSurface } : {};
     return ds.getRepository(AiReleaseGateResult).find({
       where,
@@ -206,13 +201,12 @@ export class ModelMonitoringService {
     });
   }
 
-  async getReleaseReadiness(subdomain: string, aiSurface: string): Promise<{
+  async getReleaseReadiness(ds: DataSource, aiSurface: string): Promise<{
     aiSurface: string;
     releaseStatus: 'ready' | 'blocked' | 'unknown';
     latestRun: AiEvalRun | null;
     latestGateResults: AiReleaseGateResult[];
   }> {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const runRepo = ds.getRepository(AiEvalRun);
     const gateRepo = ds.getRepository(AiReleaseGateResult);
     const latestRun = await runRepo.findOne({
@@ -259,9 +253,14 @@ export class ModelMonitoringService {
         if (!subdomain) {
           continue;
         }
-        for (const model of models) {
-          await this.evaluateModel(subdomain, model, period).catch(e =>
-            this.logger.error(`Model eval failed ${model}@${subdomain}: ${e?.message}`));
+        try {
+          const ds = await this.tenantService.getTenantDatabase(subdomain);
+          for (const model of models) {
+            await this.evaluateModel(ds, model, period).catch(e =>
+              this.logger.error(`Model eval failed ${model}@${subdomain}: ${e?.message}`));
+          }
+        } catch (e: any) {
+          this.logger.error(`Failed to get database for tenant ${subdomain}: ${e?.message}`);
         }
       }
     } catch (e: any) {
@@ -470,7 +469,7 @@ export class ModelMonitoringService {
     return Number.isFinite(normalized) ? normalized : null;
   }
 
-  private async computeFairness(subdomain: string, ds: any, modelName: string, period: string, outcomes: any[]): Promise<void> {
+  private async computeFairness(ds: DataSource, modelName: string, period: string, outcomes: any[]): Promise<void> {
     if (outcomes.length < 50) return;
     const repo = ds.getRepository(ModelFairnessReport);
 
