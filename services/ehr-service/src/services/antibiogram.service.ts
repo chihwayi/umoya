@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { AntibiogramEntry } from '../entities/antibiogram-entry.entity';
 import { AntibiogramSummary } from '../entities/antibiogram-summary.entity';
@@ -17,13 +18,11 @@ export class AntibiogramService {
 
   // ── Antibiogram Entries ───────────────────────────────────────────────────
 
-  async addEntry(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addEntry(ds: DataSource, dto: any) {
     return ds.getRepository(AntibiogramEntry).save(ds.getRepository(AntibiogramEntry).create(dto));
   }
 
-  async getEntries(subdomain: string, organism?: string, specimenType?: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getEntries(ds: DataSource, organism?: string, specimenType?: string) {
     const qb = ds.getRepository(AntibiogramEntry).createQueryBuilder('e').orderBy('e.year', 'DESC');
     if (organism) qb.andWhere('e.organism = :organism', { organism });
     if (specimenType) qb.andWhere('e.specimen_type = :specimenType', { specimenType });
@@ -32,20 +31,18 @@ export class AntibiogramService {
 
   // ── Culture Sensitivity Results ───────────────────────────────────────────
 
-  async addCultureResult(subdomain: string, dto: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async addCultureResult(tenantId: string, ds: DataSource, dto: any) {
     const repo = ds.getRepository(CultureSensitivityResult);
     const saved = await repo.save(
       repo.create(dto) as unknown as CultureSensitivityResult
     );
     // Ingest into antibiogram entries (fire-and-forget)
-    this.ingestCultureIntoAntibiogram(subdomain, saved).catch(e =>
+    this.ingestCultureIntoAntibiogram(ds, saved).catch(e =>
       this.logger.warn(`Antibiogram ingest failed: ${e?.message}`));
     return saved;
   }
 
-  async getCultureResults(subdomain: string, patientId: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getCultureResults(ds: DataSource, patientId: string) {
     return ds.getRepository(CultureSensitivityResult).find({
       where: { patientId },
       order: { collectionDate: 'DESC' },
@@ -54,8 +51,7 @@ export class AntibiogramService {
 
   // ── Summaries ─────────────────────────────────────────────────────────────
 
-  async getLatestSummary(subdomain: string, specimenType?: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async getLatestSummary(ds: DataSource, specimenType?: string) {
     const qb = ds.getRepository(AntibiogramSummary).createQueryBuilder('s').orderBy('s.generated_at', 'DESC').limit(1);
     if (specimenType) qb.where('s.specimen_type = :specimenType', { specimenType });
     return qb.getOne();
@@ -63,14 +59,12 @@ export class AntibiogramService {
 
   // ── CDSS ──────────────────────────────────────────────────────────────────
 
-  async empiricalRecommendation(subdomain: string, payload: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return this.cdssService.recommendEmpiricalAntimicrobial(payload, subdomain, ds);
+  async empiricalRecommendation(tenantId: string, ds: DataSource, payload: any) {
+    return this.cdssService.recommendEmpiricalAntimicrobial(payload, tenantId, ds);
   }
 
-  async deescalateRecommendation(subdomain: string, payload: any) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
-    return this.cdssService.recommendAntimicrobialDeescalation(payload, subdomain, ds);
+  async deescalateRecommendation(tenantId: string, ds: DataSource, payload: any) {
+    return this.cdssService.recommendAntimicrobialDeescalation(payload, tenantId, ds);
   }
 
   // ── Monthly recalculation (background job) ────────────────────────────────
@@ -85,16 +79,20 @@ export class AntibiogramService {
         if (!subdomain) {
           continue;
         }
-        await this.recalculate(subdomain).catch(e =>
-          this.logger.error(`Antibiogram recalc failed for ${subdomain}: ${e?.message}`));
+        try {
+          const ds = await this.tenantService.getTenantDatabase(subdomain);
+          if (!ds) continue;
+          await this.recalculate(ds);
+        } catch (e: any) {
+          this.logger.error(`Antibiogram recalc failed for ${subdomain}: ${e?.message}`);
+        }
       }
     } catch (e: any) {
       this.logger.error(`Antibiogram recalc error: ${e?.message}`);
     }
   }
 
-  async recalculate(subdomain: string) {
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
+  async recalculate(ds: DataSource) {
     const specimenTypes = ['blood', 'urine', 'wound', 'sputum', 'stool'];
     const now = new Date();
     const periodLabel = `${now.getFullYear()}-Q${Math.ceil((now.getMonth() + 1) / 3)}`;
@@ -120,12 +118,11 @@ export class AntibiogramService {
       if (existing) await repo.update(existing.id, summary);
       else await repo.save(repo.create(summary));
     }
-    this.logger.log(`[${subdomain}] Antibiogram recalculated for ${periodLabel}`);
+    this.logger.log(`Antibiogram recalculated for ${periodLabel}`);
   }
 
-  private async ingestCultureIntoAntibiogram(subdomain: string, result: CultureSensitivityResult) {
+  private async ingestCultureIntoAntibiogram(ds: DataSource, result: CultureSensitivityResult) {
     if (!result.organismIsolated || result.noGrowth) return;
-    const ds = await this.tenantService.getTenantDatabase(subdomain);
     const now = new Date();
     const year = now.getFullYear();
     const quarter = Math.ceil((now.getMonth() + 1) / 3);

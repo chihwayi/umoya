@@ -1,57 +1,54 @@
-import { UseGuards, Controller, Get, Post, Body, Param, Headers, Query } from '@nestjs/common';
+import { UseGuards, Controller, Get, Post, Body, Param, Req, Query } from '@nestjs/common';
 import { AntibiogramService } from '../services/antibiogram.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('antibiogram')
 @UseGuards(JwtAuthGuard)
 export class AntibiogramController {
   constructor(private readonly svc: AntibiogramService) {}
 
-  private tenant(h: Record<string, string>): string {
-    return h['x-tenant-subdomain'] || 'default';
-  }
-
   @Post('entry')
-  addEntry(@Headers() h: Record<string, string>, @Body() dto: any) {
-    return this.svc.addEntry(this.tenant(h), dto);
+  addEntry(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.svc.addEntry(req.tenantDb!, dto);
   }
 
   @Get('entry')
   getEntries(
-    @Headers() h: Record<string, string>,
+    @Req() req: RequestWithTenant,
     @Query('organism') organism?: string,
     @Query('specimenType') specimenType?: string,
   ) {
-    return this.svc.getEntries(this.tenant(h), organism, specimenType);
+    return this.svc.getEntries(req.tenantDb!, organism, specimenType);
   }
 
   @Post('patient/:patientId/culture')
-  addCultureResult(@Headers() h: Record<string, string>, @Param('patientId') patientId: string, @Body() dto: any) {
-    return this.svc.addCultureResult(this.tenant(h), { ...dto, patientId });
+  addCultureResult(@Req() req: RequestWithTenant, @Param('patientId') patientId: string, @Body() dto: any) {
+    return this.svc.addCultureResult(req.tenantId!, req.tenantDb!, { ...dto, patientId });
   }
 
   @Get('patient/:patientId/culture')
-  getCultureResults(@Headers() h: Record<string, string>, @Param('patientId') patientId: string) {
-    return this.svc.getCultureResults(this.tenant(h), patientId);
+  getCultureResults(@Req() req: RequestWithTenant, @Param('patientId') patientId: string) {
+    return this.svc.getCultureResults(req.tenantDb!, patientId);
   }
 
   @Get('summary')
-  getLatestSummary(@Headers() h: Record<string, string>, @Query('specimenType') specimenType?: string) {
-    return this.svc.getLatestSummary(this.tenant(h), specimenType);
+  getLatestSummary(@Req() req: RequestWithTenant, @Query('specimenType') specimenType?: string) {
+    return this.svc.getLatestSummary(req.tenantDb!, specimenType);
   }
 
   @Post('recalculate')
-  recalculate(@Headers() h: Record<string, string>) {
-    return this.svc.recalculate(this.tenant(h));
+  recalculate(@Req() req: RequestWithTenant) {
+    return this.svc.recalculate(req.tenantDb!);
   }
 
   @Post('cdss/empirical')
-  empirical(@Headers() h: Record<string, string>, @Body() dto: any) {
-    return this.svc.empiricalRecommendation(this.tenant(h), dto);
+  empirical(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.svc.empiricalRecommendation(req.tenantId!, req.tenantDb!, dto);
   }
 
   @Post('cdss/deescalate')
-  deescalate(@Headers() h: Record<string, string>, @Body() dto: any) {
-    return this.svc.deescalateRecommendation(this.tenant(h), dto);
+  deescalate(@Req() req: RequestWithTenant, @Body() dto: any) {
+    return this.svc.deescalateRecommendation(req.tenantId!, req.tenantDb!, dto);
   }
 }

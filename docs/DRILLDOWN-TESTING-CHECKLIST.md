@@ -1035,3 +1035,70 @@ codebase-wide ORM result-shape mismatch.
 SecurityCheck) plus a new TEST_Newborn DrilldownInfant (created this pass for pediatric/newborn
 testing) remain in the system, unmodified in identity, with all test data intact. No test data was
 deleted at any point across the full session.
+
+### Test 21 — Antibiogram module: build missing frontend, discover it never worked at all (backend + mobile)
+
+```
+Module:        Antibiogram / Culture & Sensitivity (antimicrobial resistance surveillance)
+Platform:      Backend (previously zero frontend anywhere) + new mobile screens
+Role:          Doctor / Nurse (culture recording), Doctor (facility-wide antibiogram + empirical
+               antibiotic recommendation)
+Test patient:  TEST_VerifyAnc MobileGaps
+Context:       A codebase-wide scan for "next work" found antibiogram.controller.ts/service.ts —
+               full CRUD (culture entry, resistance summary, empirical/de-escalation CDSS) — had
+               zero references anywhere in mobile/, ehr-frontend/, or patient-portal/. Before
+               building UI on top of it, investigated why it had never been wired up.
+Findings:      TWO separate, previously-undiscovered bugs meant this feature had never worked at
+               any layer, ever — explaining why no frontend was ever built for it:
+               1. The controller read a nonstandard `x-tenant-subdomain` header instead of the
+                  `X-Tenant-Id` header every other endpoint and the mobile/web client actually send
+                  — it would always silently fall through to a nonexistent 'default' tenant.
+               2. AntibiogramEntry, AntibiogramSummary, and CultureSensitivityResult were never
+                  registered in the tenant DataSource's entities array (tenant.service.ts) — the
+                  exact "entity declared but never wired up" pattern found earlier this session for
+                  PatientMessage. Every call would have thrown "No metadata for X was found" even if
+                  the tenant-header bug were fixed.
+Fix:           Rewrote antibiogram.controller.ts to use the standard @Req() req: RequestWithTenant
+               / req.tenantDb pattern (matching every other controller in the codebase) instead of
+               manual header parsing; updated antibiogram.service.ts's method signatures to accept
+               a DataSource directly instead of re-resolving it from a subdomain string internally;
+               registered all three entities in tenant.service.ts.
+Built:         Two new mobile screens (both doctor + nurse stacks where relevant), wired into
+               SpecialtyModulesScreen's launcher under a new "Microbiology" group:
+               - CultureSensitivityScreen.tsx (needsPatient): record + view culture/sensitivity
+                 results per patient, disk-diffusion S/I/R panel for a common antibiotic set,
+                 ESBL/carbapenem-resistant flags surfaced as a red contact-precaution banner.
+               - AntibiogramSummaryScreen.tsx: facility-wide resistance-pattern bar chart by
+                 organism/antibiotic, plus an empirical-antibiotic-recommendation tool.
+Verified live: Recorded a multi-resistant E. coli urine culture (Ampicillin R, Ciprofloxacin R,
+               Meropenem S, ESBL-positive) — saved correctly, retrievable via GET, and the
+               fire-and-forget auto-ingest into antibiogram_entries correctly computed per-antibiotic
+               S/I/R percentages (0% S / 100% R for both resistant drugs, 100% S for Meropenem).
+               Triggered the recalculation job — generated a correct quarterly summary matching the
+               ingested data exactly. Tested the empirical-antibiotic CDSS endpoint for a UTI
+               syndrome — correctly returned ceftriaxone with syndrome-appropriate rationale.
+AI/CDSS check: The empirical/de-escalation recommendation logic (services/cdss-service/main.py) is a
+               deterministic rules engine, not an LLM call — same "static, safe, syndrome-specific"
+               pattern already seen elsewhere this session (NCD crisis protocols). Correctly shifts
+               recommendation on penicillin-allergy input; not exercised further given the low-risk,
+               well-scoped nature of the rule set.
+Status:        Fail (feature never reachable at any layer) → Fixed (2 backend bugs) → Built (mobile
+               UI, both screens) → Pass (full record → auto-ingest → summary → recommendation
+               pipeline verified live end-to-end)
+Bug ref:       services/ehr-service/src/controllers/antibiogram.controller.ts (tenant-resolution
+               rewrite), services/ehr-service/src/services/antibiogram.service.ts (DataSource-based
+               signatures), services/ehr-service/src/services/tenant.service.ts (entity
+               registration). New files: mobile/src/screens/CultureSensitivityScreen.tsx,
+               mobile/src/screens/AntibiogramSummaryScreen.tsx.
+```
+
+## Update to Step 4 Deliverables — Antibiogram
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 26 | Antibiogram controller read a nonstandard tenant header, always resolving to a nonexistent tenant | Clinical safety (antimicrobial-resistance surveillance completely non-functional) | Fixed |
+| 27 | AntibiogramEntry/AntibiogramSummary/CultureSensitivityResult entities never registered in tenant DataSource — every call would 500 | Clinical safety | Fixed |
+
+**New feature built (not a bug fix):** Culture & Sensitivity recording + facility-wide Antibiogram
+summary/empirical-recommendation, previously unreachable from any platform, now available on
+mobile (doctor + nurse).

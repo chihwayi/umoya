@@ -67,6 +67,13 @@ const DOCTOR_GROUPS: ModuleGroup[] = [
     ],
   },
   {
+    title: 'Microbiology',
+    items: [
+      { route: 'CultureSensitivity', label: 'Culture & Sensitivity', icon: 'virus', needsPatient: true },
+      { route: 'Antibiogram',        label: 'Antibiogram',           icon: 'flask' },
+    ],
+  },
+  {
     title: 'Specialty & Occupational',
     items: [
       { route: 'AviationCert',        label: 'Aviation Certificates', icon: 'sign', needsPatient: true, idParam: 'applicantId', nameParam: 'applicantName' },
@@ -108,6 +115,12 @@ const NURSE_GROUPS: ModuleGroup[] = [
     title: 'HIV Care',
     items: [
       { route: 'HivCare',           label: 'HIV Care & ART',    icon: 'shield', needsPatient: true },
+    ],
+  },
+  {
+    title: 'Microbiology',
+    items: [
+      { route: 'CultureSensitivity', label: 'Culture & Sensitivity', icon: 'virus', needsPatient: true },
     ],
   },
   {

@@ -125,6 +125,9 @@ import { PostVisitRuleCitation } from '../entities/post-visit-rule-citation.enti
 import { PostVisitActionExecution } from '../entities/post-visit-action-execution.entity';
 import { PostVisitCompanionThread } from '../entities/post-visit-companion-thread.entity';
 import { PostVisitCompanionMessage } from '../entities/post-visit-companion-message.entity';
+import { AntibiogramEntry } from '../entities/antibiogram-entry.entity';
+import { AntibiogramSummary } from '../entities/antibiogram-summary.entity';
+import { CultureSensitivityResult } from '../entities/culture-sensitivity-result.entity';
 import { PostVisitEscalationEvent } from '../entities/post-visit-escalation-event.entity';
 import { PostVisitCompanionAcknowledgement } from '../entities/post-visit-companion-acknowledgement.entity';
 import { PatientMessage } from '../entities/patient-message.entity';
@@ -802,6 +805,9 @@ export class TenantService {
         PostVisitCompanionThread,
         PostVisitCompanionMessage,
         PatientMessage,
+        AntibiogramEntry,
+        AntibiogramSummary,
+        CultureSensitivityResult,
         PostVisitEscalationEvent,
         PostVisitCompanionAcknowledgement,
         SymptomCheckerSession,

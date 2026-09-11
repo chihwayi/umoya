@@ -39,6 +39,8 @@ import NicuFollowupScreen from "../screens/NicuFollowupScreen";
 import TransportDispatchScreen from "../screens/TransportDispatchScreen";
 import AestheticsTreatmentScreen from "../screens/AestheticsTreatmentScreen";
 import PaedCardiologyScreen from "../screens/PaedCardiologyScreen";
+import CultureSensitivityScreen from "../screens/CultureSensitivityScreen";
+import AntibiogramSummaryScreen from "../screens/AntibiogramSummaryScreen";
 import OccupationalMedicineScreen from "../screens/OccupationalMedicineScreen";
 import OemRtwScreen from "../screens/OemRtwScreen";
 import SpecialtyModulesScreen from "../screens/SpecialtyModulesScreen";
@@ -129,6 +131,8 @@ const DoctorNavigator = () => (
     <DoctorStack.Screen name="TransportDispatch" component={TransportDispatchScreen} options={{ title: 'Transport Dispatch', headerShown: true }} />
     <DoctorStack.Screen name="AestheticsTreatment" component={AestheticsTreatmentScreen} options={{ title: 'Aesthetics Treatment', headerShown: true }} />
     <DoctorStack.Screen name="PaedCardiology" component={PaedCardiologyScreen} options={{ title: 'Paediatric Cardiology', headerShown: true }} />
+    <DoctorStack.Screen name="CultureSensitivity" component={CultureSensitivityScreen} options={{ title: 'Culture & Sensitivity', headerShown: true }} />
+    <DoctorStack.Screen name="Antibiogram" component={AntibiogramSummaryScreen} options={{ title: 'Antibiogram', headerShown: true }} />
     <DoctorStack.Screen name="OccupationalMedicine" component={OccupationalMedicineScreen} options={{ title: 'Occ. Medicine', headerShown: true }} />
     <DoctorStack.Screen name="OemRtw" component={OemRtwScreen} options={{ title: 'Return to Work', headerShown: true }} />
     <DoctorStack.Screen name="SpecialtyModules">
@@ -175,6 +179,7 @@ const NurseNavigator = () => (
     <NurseStack.Screen name="VaccinationCard" component={VaccinationCardScreen} options={{ title: 'Vaccination Card', headerShown: true }} />
     <NurseStack.Screen name="NeonatalScreening" component={NeonatalScreeningScreen} options={{ title: 'Newborn Screening', headerShown: true }} />
     <NurseStack.Screen name="DialysisSession" component={DialysisSessionScreen} options={{ title: 'Dialysis Sessions', headerShown: true }} />
+    <NurseStack.Screen name="CultureSensitivity" component={CultureSensitivityScreen} options={{ title: 'Culture & Sensitivity', headerShown: true }} />
     <NurseStack.Screen name="TransportDispatch" component={TransportDispatchScreen} options={{ title: 'Transport Dispatch', headerShown: true }} />
     <NurseStack.Screen name="SpecialtyModules">
       {() => <SpecialtyModulesScreen role="nurse" />}
