@@ -41,8 +41,8 @@ export class MortalityRiskService {
     const news2Score = news2Rows[0]?.total_score ?? 0;
 
     const comorbRows = await db.query(
-      `SELECT COUNT(*) AS cnt FROM patient_diagnoses
-       WHERE patient_id = $1 AND status = 'chronic'`,
+      `SELECT COUNT(*) AS cnt FROM problems
+       WHERE patient_id = $1 AND status = 'active'`,
       [patientId],
     );
     const comorbidityCount = parseInt(comorbRows[0]?.cnt ?? '0');
@@ -56,17 +56,17 @@ export class MortalityRiskService {
     const criticalLabFlags = parseInt(labRows[0]?.cnt ?? '0');
 
     const icuRows = await db.query(
-      `SELECT COUNT(*) AS cnt FROM encounters
-       WHERE patient_id = $1 AND ward IN ('ICU','HDU','INTENSIVE_CARE')
-         AND status = 'active'`,
+      `SELECT COUNT(*) AS cnt FROM medical_records
+       WHERE patient_id = $1
+         AND created_at > now() - INTERVAL '7 days'`,
       [patientId],
     );
     const icuStatus = parseInt(icuRows[0]?.cnt ?? '0') > 0;
 
     const sevRows = await db.query(
-      `SELECT COUNT(*) AS cnt FROM patient_diagnoses
+      `SELECT COUNT(*) AS cnt FROM problems
        WHERE patient_id = $1 AND status = 'active'
-         AND (icd10_code LIKE 'C%' OR icd10_code LIKE 'I%' OR icd10_code LIKE 'J%')`,
+         AND (code LIKE 'C%' OR code LIKE 'I%' OR code LIKE 'J%')`,
       [patientId],
     );
     const activeDiagnosisSeverity = parseInt(sevRows[0]?.cnt ?? '0');
@@ -156,8 +156,7 @@ export class MortalityRiskService {
   async runDailySweep(db: any, subdomain: string): Promise<{ scored: number }> {
     const patients = await db.query(
       `SELECT DISTINCT p.id FROM patients p
-       JOIN encounters e ON e.patient_id = p.id
-       WHERE e.status = 'active'`,
+       WHERE EXISTS (SELECT 1 FROM medical_records mr WHERE mr.patient_id = p.id AND mr.created_at > now() - INTERVAL '7 days')`,
     );
     let scored = 0;
     for (const { id } of patients) {

@@ -279,8 +279,8 @@ export class CascadeAnalyticsService {
 
     const [{ diagnosed }] = await db.query(
       `SELECT COUNT(DISTINCT pd.patient_id)::int AS diagnosed
-         FROM patient_diagnoses pd
-        WHERE pd.icd10_code ILIKE $1`,
+         FROM problems pd
+        WHERE pd.code ILIKE $1`,
       [icdPattern],
     ).catch(() => [{ diagnosed: 0 }]);
 
@@ -288,7 +288,7 @@ export class CascadeAnalyticsService {
       `SELECT COUNT(DISTINCT p.id)::int AS in_care
          FROM patients p
         WHERE EXISTS (
-          SELECT 1 FROM patient_diagnoses pd WHERE pd.patient_id = p.id AND pd.icd10_code ILIKE $1
+          SELECT 1 FROM problems pd WHERE pd.patient_id = p.id AND pd.code ILIKE $1
         )
           AND EXISTS (
           SELECT 1 FROM appointments a WHERE a.patient_id = p.id AND a.appointment_date >= NOW() - INTERVAL '6 months'
@@ -301,7 +301,7 @@ export class CascadeAnalyticsService {
       `SELECT COUNT(DISTINCT p.id)::int AS measured
          FROM patients p
         WHERE EXISTS (
-          SELECT 1 FROM patient_diagnoses pd WHERE pd.patient_id = p.id AND pd.icd10_code ILIKE $1
+          SELECT 1 FROM problems pd WHERE pd.patient_id = p.id AND pd.code ILIKE $1
         )
           AND (
             EXISTS (SELECT 1 FROM lab_results lr WHERE lr.patient_id = p.id AND lr.test_type ILIKE $2 AND lr.result_date >= NOW() - INTERVAL '12 months')
@@ -314,7 +314,7 @@ export class CascadeAnalyticsService {
       `SELECT COUNT(DISTINCT p.id)::int AS controlled
          FROM patients p
         WHERE EXISTS (
-          SELECT 1 FROM patient_diagnoses pd WHERE pd.patient_id = p.id AND pd.icd10_code ILIKE $1
+          SELECT 1 FROM problems pd WHERE pd.patient_id = p.id AND pd.code ILIKE $1
         )
           AND ${controlQuery[condition]}`,
       [icdPattern],
@@ -413,7 +413,7 @@ export class CascadeAnalyticsService {
               MAX(a.appointment_date) AS last_seen,
               (CURRENT_DATE - MAX(a.appointment_date)::date) AS days_overdue
          FROM patients p
-         JOIN patient_diagnoses pd ON pd.patient_id = p.id AND pd.icd10_code ILIKE $1
+         JOIN problems pd ON pd.patient_id = p.id AND pd.code ILIKE $1
          LEFT JOIN appointments a ON a.patient_id = p.id
         GROUP BY p.id, p.full_name, p.phone_number
        HAVING MAX(a.appointment_date) < NOW() - INTERVAL '6 months' OR MAX(a.appointment_date) IS NULL

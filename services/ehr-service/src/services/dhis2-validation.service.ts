@@ -169,13 +169,13 @@ export class Dhis2ValidationService {
   private async computeLocalValues(db: any, tenantId: string, period: string): Promise<Record<string, number>> {
     // Map commonly pushed data elements to local counts
     const [newPatients, outpatient, hivVl, tbCases, anc, delivery, immuniz] = await Promise.allSettled([
-      db.query(`SELECT COUNT(*)::int AS n FROM patients WHERE tenant_id=$1 AND TO_CHAR(created_at,'YYYYMM')=$2`, [tenantId, period]),
-      db.query(`SELECT COUNT(*)::int AS n FROM encounters WHERE tenant_id=$1 AND encounter_type='outpatient' AND TO_CHAR(encounter_date,'YYYYMM')=$2`, [tenantId, period]),
-      db.query(`SELECT COUNT(*)::int AS n FROM hiv_viral_loads WHERE tenant_id=$1 AND TO_CHAR(collection_date,'YYYYMM')=$2`, [tenantId, period]),
-      db.query(`SELECT COUNT(*)::int AS n FROM tb_cases WHERE tenant_id=$1 AND TO_CHAR(notification_date,'YYYYMM')=$2`, [tenantId, period]),
-      db.query(`SELECT COUNT(*)::int AS n FROM anc_visits WHERE tenant_id=$1 AND TO_CHAR(visit_date,'YYYYMM')=$2`, [tenantId, period]),
+      db.query(`SELECT COUNT(*)::int AS n FROM patients WHERE TO_CHAR(created_at,'YYYYMM')=$1`, [period]),
+      db.query(`SELECT COUNT(*)::int AS n FROM medical_records WHERE record_type='outpatient' AND TO_CHAR(COALESCE(visit_date, created_at),'YYYYMM')=$1`, [period]),
+      db.query(`SELECT COUNT(*)::int AS n FROM lab_results WHERE test_name ILIKE '%viral load%' AND TO_CHAR(completed_at,'YYYYMM')=$1`, [period]),
+      db.query(`SELECT COUNT(*)::int AS n FROM tb_cases WHERE TO_CHAR(registration_date,'YYYYMM')=$1`, [period]),
+      db.query(`SELECT COUNT(*)::int AS n FROM anc_visits WHERE TO_CHAR(visit_date,'YYYYMM')=$1`, [period]),
       db.query(`SELECT COUNT(*)::int AS n FROM maternity_deliveries WHERE tenant_id=$1 AND TO_CHAR(delivery_date,'YYYYMM')=$2`, [tenantId, period]),
-      db.query(`SELECT COUNT(*)::int AS n FROM immunization_records WHERE tenant_id=$1 AND TO_CHAR(administered_date,'YYYYMM')=$2`, [tenantId, period]),
+      db.query(`SELECT COUNT(*)::int AS n FROM immunization_records WHERE TO_CHAR(administered_at,'YYYYMM')=$1`, [period]),
     ]);
     const get = (s: PromiseSettledResult<any>) =>
       s.status === 'fulfilled' ? Number(s.value?.[0]?.n ?? 0) : 0;
