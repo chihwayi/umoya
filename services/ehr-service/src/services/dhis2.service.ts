@@ -1641,13 +1641,13 @@ export class Dhis2Service {
         asthmaPatientsActive, asthmaUncontrolled, copdActiveInCare, strokeAdmissions, strokeThromboliticsGiven,
       ] = await Promise.all([
         this.safeMetricCount(tenantDb, 'htn_new',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses
+          `SELECT COUNT(*)::int AS total FROM problems
            WHERE created_at >= $1 AND created_at < $2
-             AND icd10_code LIKE 'I1%' AND status = 'active'`,
+             AND code LIKE 'I1%' AND status = 'active'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'htn_active',
-          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM patient_diagnoses
-           WHERE icd10_code LIKE 'I1%' AND status = 'active'`),
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM problems
+           WHERE code LIKE 'I1%' AND status = 'active'`),
         this.safeMetricCount(tenantDb, 'htn_controlled',
           `SELECT COUNT(DISTINCT htnr.patient_id)::int AS total
            FROM hypertension_reviews htnr
@@ -1662,13 +1662,13 @@ export class Dhis2Service {
                SIMILAR TO '%(antihypertensive|ace inhibitor|arb|beta.block|calcium channel|diuretic|amlodipine|losartan|enalapril|hydrochlorothiazide)%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'dm_new',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses
+          `SELECT COUNT(*)::int AS total FROM problems
            WHERE created_at >= $1 AND created_at < $2
-             AND icd10_code LIKE 'E1%' AND status = 'active'`,
+             AND code LIKE 'E1%' AND status = 'active'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'dm_active',
-          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM patient_diagnoses
-           WHERE icd10_code LIKE 'E1%' AND status = 'active'`),
+          `SELECT COUNT(DISTINCT patient_id)::int AS total FROM problems
+           WHERE code LIKE 'E1%' AND status = 'active'`),
         this.safeMetricCount(tenantDb, 'dm_hba1c',
           `SELECT COUNT(DISTINCT lr.patient_id)::int AS total FROM lab_results lr
            WHERE lr.resulted_at >= $1 AND lr.resulted_at < $2
@@ -1727,91 +1727,81 @@ export class Dhis2Service {
         tbSuspected, stisUrogenital,
       ] = await Promise.all([
         this.safeMetricCount(tenantDb, 'opd_total',
-          `SELECT COUNT(*)::int AS total FROM encounters
-           WHERE COALESCE(encounter_date, created_at)::date >= $1
-             AND COALESCE(encounter_date, created_at)::date < $2
-             AND LOWER(COALESCE(encounter_type,'')) IN ('outpatient','opd','consultation')`,
+          `SELECT COUNT(*)::int AS total FROM medical_records
+           WHERE COALESCE(visit_date, created_at)::date >= $1
+             AND COALESCE(visit_date, created_at)::date < $2
+             AND LOWER(COALESCE(record_type,'')) IN ('outpatient','opd','consultation')`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_new',
-          `SELECT COUNT(DISTINCT e.patient_id)::int AS total FROM encounters e
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND LOWER(COALESCE(e.encounter_type,'')) IN ('outpatient','opd','consultation')
+          `SELECT COUNT(DISTINCT e.patient_id)::int AS total FROM medical_records e
+           WHERE COALESCE(e.visit_date, e.created_at)::date >= $1
+             AND COALESCE(e.visit_date, e.created_at)::date < $2
+             AND LOWER(COALESCE(e.record_type,'')) IN ('outpatient','opd','consultation')
              AND NOT EXISTS (
-               SELECT 1 FROM encounters e2
+               SELECT 1 FROM medical_records e2
                WHERE e2.patient_id = e.patient_id
-                 AND COALESCE(e2.encounter_date, e2.created_at) < COALESCE(e.encounter_date, e.created_at)
+                 AND COALESCE(e2.visit_date, e2.created_at) < COALESCE(e.visit_date, e.created_at)
              )`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_malaria',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND pd.icd10_code LIKE 'B5%'`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND pd.code LIKE 'B5%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_ari',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND (pd.icd10_code LIKE 'J0%' OR pd.icd10_code LIKE 'J1%' OR pd.icd10_code LIKE 'J2%')`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND (pd.code LIKE 'J0%' OR pd.code LIKE 'J1%' OR pd.code LIKE 'J2%')`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_diarrhoea',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND (pd.icd10_code LIKE 'A0%' OR pd.icd10_code LIKE 'K58%' OR pd.icd10_code = 'K59.1')`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND (pd.code LIKE 'A0%' OR pd.code LIKE 'K58%' OR pd.code = 'K59.1')`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_skin',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND pd.icd10_code LIKE 'L%'`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND pd.code LIKE 'L%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_eye',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND pd.icd10_code LIKE 'H%'`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND pd.code LIKE 'H%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_injury',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND (pd.icd10_code LIKE 'S%' OR pd.icd10_code LIKE 'T%')`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND (pd.code LIKE 'S%' OR pd.code LIKE 'T%')`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_htn',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND pd.icd10_code LIKE 'I1%'`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND pd.code LIKE 'I1%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_dm',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND pd.icd10_code LIKE 'E1%'`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND pd.code LIKE 'E1%'`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_tb_suspect',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND (pd.icd10_code LIKE 'A1%' OR pd.icd10_code LIKE 'Z03.6%')`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND (pd.code LIKE 'A1%' OR pd.code LIKE 'Z03.6%')`,
           [startDate, endDate]),
         this.safeMetricCount(tenantDb, 'opd_sti',
-          `SELECT COUNT(*)::int AS total FROM patient_diagnoses pd
-           JOIN encounters e ON e.id = pd.encounter_id
-           WHERE COALESCE(e.encounter_date, e.created_at)::date >= $1
-             AND COALESCE(e.encounter_date, e.created_at)::date < $2
-             AND (pd.icd10_code LIKE 'A5%' OR pd.icd10_code LIKE 'A6%' OR pd.icd10_code LIKE 'N74%')`,
+          `SELECT COUNT(*)::int AS total FROM problems pd
+           WHERE COALESCE(pd.created_at, pd.onset_date)::date >= $1
+             AND COALESCE(pd.created_at, pd.onset_date)::date < $2
+             AND (pd.code LIKE 'A5%' OR pd.code LIKE 'A6%' OR pd.code LIKE 'N74%')`,
           [startDate, endDate]),
       ]);
       return {
@@ -3360,22 +3350,22 @@ export class Dhis2Service {
     await this.ensureTenantSyncTables(tenantDb);
 
     const [encounter] = await tenantDb.query(
-      `SELECT e.id, e.patient_id, e.encounter_date, e.encounter_type, e.ward, e.department, e.created_at
-       FROM encounters e WHERE e.id = $1 LIMIT 1`,
+      `SELECT e.id, e.patient_id, e.visit_date, e.record_type, e.created_at
+       FROM medical_records e WHERE e.id = $1 LIMIT 1`,
       [encounterId],
     );
-    if (!encounter) return { status: 'ERROR', message: `Encounter ${encounterId} not found.` };
+    if (!encounter) return { status: 'ERROR', message: `Medical record ${encounterId} not found.` };
 
     const teiId = await this.loadPatientTeiMapping(tenantDb, encounter.patient_id);
     if (!teiId) return { status: 'ERROR', message: `No DHIS2 TEI mapping for patient ${encounter.patient_id}. Run patient sync first.` };
 
     const diagnoses: Array<{ icd10_code: string; description: string }> = await tenantDb.query(
-      `SELECT icd10_code, COALESCE(description, display_name, icd10_code) AS description
-       FROM patient_diagnoses WHERE encounter_id = $1 ORDER BY created_at ASC LIMIT 5`,
-      [encounterId],
+      `SELECT code AS icd10_code, COALESCE(description, snomed_term, code) AS description
+       FROM problems WHERE patient_id = $1 ORDER BY created_at ASC LIMIT 5`,
+      [encounter.patient_id],
     );
 
-    const eventDate = this.formatDateOnly(encounter.encounter_date || encounter.created_at);
+    const eventDate = this.formatDateOnly(encounter.visit_date || encounter.created_at);
     const orgUnit = context.config.orgUnitId || this.envOrgUnit || '';
 
     // Resolve data element IDs for encounter fields from DHIS2 metadata

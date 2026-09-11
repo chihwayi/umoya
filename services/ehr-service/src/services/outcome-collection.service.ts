@@ -253,10 +253,10 @@ export class OutcomeCollectionService {
 
     if (surface === 'vitals_interpretation' || surface === 'risk_deterioration') {
       const adverse = await tenantDb.query(`
-        SELECT COUNT(*) as cnt FROM encounters
+        SELECT COUNT(*) as cnt FROM medical_records
         WHERE patient_id = $1
-          AND encounter_type IN ('icu_admission', 'emergency')
-          AND started_at BETWEEN $2 AND $3
+          AND record_type IN ('icu_admission', 'emergency')
+          AND created_at BETWEEN $2 AND $3
       `, [patientId, decisionDate, thirtyDaysLater]);
       return Number(adverse[0]?.cnt) === 0 ? 0.9 : 0.2;
     }
