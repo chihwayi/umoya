@@ -1704,3 +1704,80 @@ Bug ref:       services/ehr-service/src/controllers/offline-sync.controller.ts.
 |---|---|---|---|
 | 43 | `OfflineSyncController`: 3 of 4 routes (`POST /sync/batch`, `GET /sync/checkpoint`, `GET /sync/queue`) had no auth guard at all — unauthenticated PHI read/write, reachable by anyone who knows a tenant slug | **Security (critical)** | Fixed |
 | 44 | Same file: `ENTITY_TO_TABLE['vitals']` pointed at a nonexistent `patient_vitals` table; `hiv_counselling_sessions` mapped to a table that doesn't exist anywhere in the schema | **Functional** | Fixed |
+
+### Test 32 — Codebase-wide auth-guard sweep: payment webhooks + lab-feed ingestion (backend, security)
+
+```
+Module:        Mobile Money payment callbacks (M-Pesa, MTN MoMo, EcoCash, Airtel Money,
+               Flutterwave), NHLS HL7 lab-result ingestion
+Platform:      Backend
+Role:          Unauthenticated attacker
+Context:       After fixing offline-sync's missing guard (Test 31), swept every controller for
+               the same class of gap: routes with zero guard coverage that aren't legitimately
+               public. Checked every controller with fewer @UseGuards occurrences than routes.
+               Most were fine by deliberate design (Prometheus scrape, token-gated shared-link
+               forms for consent/CSAT/pre-visit-intake/research-day, WebAuthn's own
+               login-equivalent endpoints) — clearly commented as intentional in each case. Two
+               were not:
+               1. `mobile-money.controller.ts`'s 5 payment-provider callback routes
+                  (`callback/mpesa`, `/mtn`, `/ecocash`, `/airtel`, `/flutterwave`) had NO
+                  signature/secret verification at all — `handleCallback()` reads a `success`/
+                  `status`/`ResultCode` field directly from the UNVERIFIED POST body and, if
+                  truthy, calls `billingService.addPayment()` to mark a real invoice paid. Anyone
+                  who could produce or guess a transaction reference could forge a "payment
+                  successful" webhook and get an invoice marked paid with no money changing
+                  hands. Worse: these routes were also entirely unreachable in practice —
+                  `tenant.middleware.ts` requires `X-Tenant-Id` on every route except a small
+                  hardcoded allowlist, and external payment providers have no way to send that
+                  header, so every real callback would 400 before ever reaching the controller
+                  (the `SINGLE_TENANT_ID` env-var fallback already written into the controller was
+                  dead code, unreachable).
+               2. `nhls-hl7.controller.ts`'s `POST /nhls/hl7/ingest` (National Health Laboratory
+                  Service lab-result feed) had zero guard of any kind — an unauthenticated caller
+                  who knows/guesses a tenant id could inject fabricated lab results that
+                  auto-link to a real patient by national ID match, a genuine clinical-safety
+                  risk (a clinician could act on a fake result).
+Fix:           Mobile money: added `MobileMoneyService.verifyWebhookSignature()` — implements
+               Flutterwave's real, documented `verif-hash` header check (fails closed, rejects
+               with 403 if `FLUTTERWAVE_WEBHOOK_SECRET_HASH` isn't configured or doesn't match).
+               M-Pesa/MTN/EcoCash/Airtel have no simple shared-secret header scheme available —
+               genuine protection for those needs either IP allowlisting at the infra layer or a
+               secret embedded in the callback URL registered in each provider's own merchant
+               dashboard, neither of which this session can configure — documented as a known gap
+               below rather than faked. Added a transaction-status guard
+               (`if (tx.status !== 'pending') return`) to `handleCallback()` for ALL providers —
+               this is a safe, unilateral improvement that prevents replay/double-crediting an
+               already-settled transaction regardless of signature verification. Added the 5
+               callback paths to `tenant.middleware.ts`'s public-endpoint allowlist (matching the
+               `/health` pattern) so callbacks can actually reach the controller at all — this was
+               a functional break, not just a security gap; payments could never have confirmed
+               automatically before this fix. NHLS: added a new `NhlsInboundKeyGuard`
+               (`X-Nhls-Api-Key` header vs `NHLS_INBOUND_API_KEY` env var, fails closed), mirrored
+               directly from the existing `FhirInboundKeyGuard` pattern already used for FHIR
+               inbound ingestion.
+Steps to test: 1) `POST /payments/mobile-money/callback/flutterwave` with no `verif-hash` header —
+               expect 403.  2) `POST /payments/mobile-money/callback/mpesa` with no `X-Tenant-Id`
+               header — expect 200 (previously 400, confirming the middleware-bypass fix).  3)
+               `POST /nhls/hl7/ingest` with no API key header — expect 401 ("NHLS inbound
+               ingestion is not configured" since no key is set in this dev environment, which is
+               the correct fail-closed behavior).
+Actual result: Pass on all 3. `npx tsc --noEmit` clean.
+Status:        Fail (forgeable payment confirmations + unreachable payment webhooks + open lab-
+               result injection) → Fixed (Flutterwave + all payment double-credit protection +
+               webhook reachability + NHLS API-key guard) → Pass (verified live). M-Pesa/MTN/
+               EcoCash/Airtel signature verification remains an open item requiring
+               operational/provider-dashboard access this session does not have — flagged for the
+               user, not silently left unverified.
+Bug ref:       services/ehr-service/src/services/mobile-money.service.ts,
+               services/ehr-service/src/controllers/mobile-money.controller.ts,
+               services/ehr-service/src/middleware/tenant.middleware.ts,
+               services/ehr-service/src/controllers/nhls-hl7.controller.ts,
+               services/ehr-service/src/guards/nhls-inbound-key.guard.ts (new).
+```
+
+## Update to Step 4 Deliverables (cont. 7)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 45 | Mobile money payment callbacks: no signature verification (forgeable "payment successful" webhooks could mark invoices paid) + entirely unreachable due to a tenant-header requirement external providers can't satisfy | **Security (critical) + Functional** | Partially fixed — Flutterwave signature check + double-credit guard (all providers) + webhook reachability fixed live; M-Pesa/MTN/EcoCash/Airtel signature verification needs provider-dashboard/infra access this session doesn't have |
+| 46 | `nhls-hl7.controller.ts`'s HL7 lab-result ingestion endpoint had no authentication at all — unauthenticated fabricated lab results could auto-link to a real patient | **Security (critical) / clinical safety** | Fixed — new `NhlsInboundKeyGuard`, mirrors the existing `FhirInboundKeyGuard` pattern |

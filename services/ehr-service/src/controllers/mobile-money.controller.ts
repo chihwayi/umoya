@@ -7,6 +7,8 @@ import {
   UseGuards,
   Request,
   HttpCode,
+  Headers,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { MobileMoneyService } from '../services/mobile-money.service';
@@ -80,7 +82,10 @@ export class MobileMoneyController {
 
   @Post('callback/flutterwave')
   @HttpCode(200)
-  async callbackFlutterwave(@Body() payload: any) {
+  async callbackFlutterwave(@Body() payload: any, @Headers() headers: Record<string, any>) {
+    if (!this.mobileMoneyService.verifyWebhookSignature('flutterwave', headers)) {
+      throw new ForbiddenException('Invalid webhook signature');
+    }
     const tenantId = process.env.SINGLE_TENANT_ID || '';
     if (tenantId) await this.mobileMoneyService.handleCallback(tenantId, 'flutterwave', payload);
     return { status: 'accepted' };

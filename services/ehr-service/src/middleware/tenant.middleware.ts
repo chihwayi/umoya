@@ -45,7 +45,14 @@ export class TenantMiddleware implements NestMiddleware {
       normalizedPath === '/health' ||
       normalizedOriginal === '/health' ||
       normalizedPath === '/health/ready' ||
-      normalizedOriginal === '/health/ready'
+      normalizedOriginal === '/health/ready' ||
+      // Payment-provider callbacks: external providers (M-Pesa, MTN, EcoCash,
+      // Airtel, Flutterwave) cannot send an X-Tenant-Id header. Tenant
+      // resolution for these happens inside MobileMoneyController via
+      // SINGLE_TENANT_ID — without this bypass every callback 400s before
+      // ever reaching the controller, so payments could never confirm.
+      normalizedPath.startsWith('/payments/mobile-money/callback/') ||
+      normalizedOriginal.startsWith('/payments/mobile-money/callback/')
     );
     
     if (isPublicTenantEndpoint) {

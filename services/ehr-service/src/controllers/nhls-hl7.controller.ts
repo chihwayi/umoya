@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { NhlsInboundKeyGuard } from '../guards/nhls-inbound-key.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { NhlsHl7Service } from '../services/nhls-hl7.service';
 
@@ -17,6 +18,7 @@ export class NhlsHl7Controller {
   constructor(private readonly nhlsHl7Service: NhlsHl7Service) {}
 
   @Post('hl7/ingest')
+  @UseGuards(NhlsInboundKeyGuard)
   ingest(@Body() body: any, @Request() req: RequestWithTenant) {
     const rawHl7 = typeof body === 'string' ? body : body?.hl7 || '';
     return this.nhlsHl7Service.ingestHl7(req.tenantId, rawHl7);

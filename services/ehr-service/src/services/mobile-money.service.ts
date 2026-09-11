@@ -241,6 +241,25 @@ export class MobileMoneyService {
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
 
+  /**
+   * Verify inbound webhook authenticity where the provider supports it.
+   * Flutterwave signs callbacks with a `verif-hash` header matched against a
+   * secret configured in their dashboard (FLUTTERWAVE_WEBHOOK_SECRET_HASH).
+   * M-Pesa Daraja / MTN MoMo / EcoCash / Airtel Money do not offer a simple
+   * shared-secret header scheme — authenticity for those relies on the
+   * callback URL itself being a per-tenant secret (registered in each
+   * provider's merchant dashboard) plus IP allowlisting at the infra layer,
+   * neither of which this application code can verify on its own.
+   */
+  verifyWebhookSignature(provider: string, headers: Record<string, any>): boolean {
+    if (provider === 'flutterwave') {
+      const expected = process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH || '';
+      const received = headers?.['verif-hash'] || headers?.['Verif-Hash'] || '';
+      return !!expected && received === expected;
+    }
+    return true; // no supported verification mechanism for this provider — see note above
+  }
+
   async handleCallback(tenantId: string, provider: string, payload: any): Promise<void> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const repo = db.getRepository(MobileMoneyTransaction);
@@ -303,6 +322,14 @@ export class MobileMoneyService {
 
     const tx = await repo.findOne({ where: { id: txId } });
     if (!tx) return;
+
+    // A transaction can only be confirmed once — without this, a replayed or
+    // forged callback for an already-settled transaction would re-invoke
+    // billingService.addPayment() and double-credit the invoice.
+    if (tx.status !== 'pending') {
+      this.logger.warn(`Ignoring ${provider} callback for non-pending transaction ${tx.id} (status=${tx.status})`);
+      return;
+    }
 
     await repo.update(tx.id, {
       status: success ? 'success' : 'failed',
