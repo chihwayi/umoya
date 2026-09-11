@@ -571,8 +571,7 @@ import { AppointmentAiService } from './services/appointment-ai.service';
 import { AppointmentAiController } from './controllers/appointment-ai.controller';
 import { VoiceTranscriptionService } from './services/voice-transcription.service';
 import { VoiceController } from './controllers/voice.controller';
-import { MessageAiService } from './services/message-ai.service';
-import { MessageAiController } from './controllers/message-ai.controller';
+import { PatientMessageReplyController } from './controllers/patient-message-reply.controller';
 import { AdherenceEngineService } from './services/adherence-engine.service';
 import { CronAdherenceService } from './services/cron-adherence.service';
 import { AdherenceController } from './controllers/adherence.controller';
@@ -941,7 +940,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     LabNarrativeController,
     AppointmentAiController,
     VoiceController,
-    MessageAiController,
+    PatientMessageReplyController,
     AdherenceController,
     ClinicalTimelineController,
     MortalityRiskController,
@@ -1166,7 +1165,6 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     LabAiNarrativeService,
     AppointmentAiService,
     VoiceTranscriptionService,
-    MessageAiService,
     AdherenceEngineService,
     CronAdherenceService,
     ClinicalTimelineService,

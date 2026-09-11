@@ -1,13 +1,17 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { TenantService } from './tenant.service';
+import { InboxTriageService } from './inbox-triage.service';
 import { PatientMessage, SenderType, RecipientType, MessageType, Priority } from '../entities/patient-message.entity';
 
 @Injectable()
 export class PatientMessagingService {
   private readonly logger = new Logger(PatientMessagingService.name);
 
-  constructor(private tenantService: TenantService) {}
+  constructor(
+    private tenantService: TenantService,
+    @Optional() private readonly inboxTriage?: InboxTriageService,
+  ) {}
 
   private async getMessageRepository(tenantId: string): Promise<Repository<PatientMessage>> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
@@ -43,7 +47,62 @@ export class PatientMessagingService {
       read: false,
     });
 
-    return await messageRepository.save(newMessage);
+    const saved = await messageRepository.save(newMessage);
+
+    // Fire-and-forget AI triage into the shared provider inbox (Sprint 65 —
+    // never blocks message delivery. sendMessage() is the patient-initiated
+    // path (senderType is always 'patient' above).
+    if (this.inboxTriage && (recipientType === 'staff' || recipientType === 'doctor') && recipientId) {
+      this.inboxTriage
+        .triage(
+          {
+            userId: recipientId,
+            patientId,
+            sourceType: 'patient_message',
+            sourceId: saved.id,
+            title: subject || 'Patient message',
+            content: message,
+          },
+          messageRepository.manager.connection,
+        )
+        .catch((err: any) => this.logger.warn(`Inbox triage failed for message ${saved.id}: ${err.message}`));
+    }
+
+    return saved;
+  }
+
+  /** Send a staff reply to a patient — used from the provider inbox's AI-draft-reply flow. */
+  async replyAsStaff(
+    originalMessageId: string,
+    staffId: string,
+    content: string,
+    tenantId: string,
+  ): Promise<PatientMessage> {
+    const messageRepository = await this.getMessageRepository(tenantId);
+
+    const original = await messageRepository.findOneBy({ id: originalMessageId });
+    if (!original) {
+      throw new NotFoundException(`Message ${originalMessageId} not found`);
+    }
+
+    const reply = messageRepository.create({
+      tenantId,
+      patientId: original.patientId,
+      senderType: 'staff',
+      senderId: staffId,
+      recipientType: 'patient',
+      recipientId: original.patientId,
+      message: content,
+      messageType: 'general',
+      priority: 'normal',
+      read: false,
+      parentMessageId: originalMessageId,
+    });
+    const saved = await messageRepository.save(reply);
+
+    await messageRepository.update({ id: originalMessageId }, { read: true, readAt: new Date() });
+
+    return saved;
   }
 
   async getPatientMessages(

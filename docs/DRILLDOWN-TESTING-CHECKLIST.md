@@ -1590,3 +1590,66 @@ Bug ref:       ~20 files under services/ehr-service/src/services/ — see commit
 |---|---|---|---|
 | 40 | Codebase-wide phantom table/column references (`patient_diagnoses`, `encounters`, `clinical_notes`, `patients.sex`/`.mrn`, `lab_results` wrong column names, `prescriptions.drug_name`/`.dose`, `news2_assessments`, `oi_alerts`, `vaccinations`, `clinical_tasks`, a fabricated `patients.tenant_id`) across ~20 backend service files — every affected query has always failed, several silently via `Promise.allSettled`/`.catch` swallowing the error | **Functional / data integrity** | Fixed (~20 files); `pharmacy-intelligence.service.ts`'s `getDrugWasteReport()` (and possibly sibling methods below it) still reference a nonexistent `pharmacy_stock_transactions` table — not fixed, needs a follow-up pass |
 | 41 | `dhis2-validation.service.ts`'s `computeLocalValues()` filtered 6 of 7 local-count queries on a nonexistent `patients.tenant_id`/etc. column, silently returning 0 via `Promise.allSettled` for every metric except deliveries — Zimbabwe MoHCC DHIS2 validation has likely never shown a correct local count for these 6 data elements | **Clinical/national-reporting data integrity** | Fixed |
+
+### Test 30 — Message-triage architecture decision: Sprint 177 replaced with Sprint 65's inbox (backend + frontend)
+
+```
+Module:        AI Patient Communication Hub (Test 27) — resolved
+Platform:      Backend + ehr-frontend
+Role:          Doctor, patient
+Test patient:  TEST_VerifyAnc MobileGaps (id 20ecbfb0-d6d1-4387-b897-17e0ff9c56e6)
+Context:       Test 27 documented three independent backend bugs plus an orphaned frontend
+               component in the Sprint 177 "AI Patient Communication Hub" (message-ai.controller/
+               service.ts, `messages`/`message_thread_participants` tables that don't exist).
+               While building the fix, discovered `MessageInboxItem.tsx`'s sibling component
+               `SmartInbox.tsx` (mounted in DoctorDashboard's Inbox modal, `sourceType:
+               'patient_message'` already in its type union) is a SEPARATE, EARLIER (Sprint 65),
+               fully-working, already-mounted general-purpose AI-triage inbox
+               (`inbox.controller.ts` / `InboxTriageService`, `inbox_items` table — correctly
+               provisioned and entity-registered, unlike Sprint 177's phantom tables). Sprint 177
+               was an unrelated, later reimplementation of the same "AI-triaged patient message"
+               concept that never got wired to feed real messages in, while Sprint 65's system
+               already had the exact producer API needed
+               (`InboxTriageService.triage({sourceType:'patient_message', ...})`) and a working
+               "AI draft reply" UI slot with no way to actually send it.
+Fix:           Architecture decision: retire Sprint 177 entirely rather than fix it in parallel
+               with Sprint 65. Deleted message-ai.controller.ts, message-ai.service.ts, and its
+               spec file; removed both from ehr.module.ts. Wired
+               `PatientMessagingService.sendMessage()` to call `InboxTriageService.triage()`
+               fire-and-forget whenever a patient messages staff/a doctor — this is the ONLY
+               connection point Sprint 65 was missing. Added `PatientMessagingService
+               .replyAsStaff()` + a new lean `PatientMessageReplyController`
+               (`POST /patient-messages/:messageId/reply`) so the existing "AI Draft Reply"
+               textarea in `SmartInbox.tsx` (previously decorative — no send action existed) can
+               actually deliver the reply back to the patient; wired a "Send Reply" button into
+               that component. `message_ai_enrichment` table is left in place (unused, not
+               dropped — no destructive schema change) since nothing references it now.
+Steps to test: 1) Set a known bcrypt password on the TEST_ patient's `portal_password_hash`
+               (reversible test-data change, same pattern used earlier this session for a
+               different dummy patient) to get a real patient-portal JWT.  2) POST
+               /api/patient-portal/messages as the patient, addressed to the doctor.  3) GET
+               /api/inbox as the doctor — confirm the message appears with `sourceType:
+               'patient_message'` and the correct `sourceId`.  4) POST
+               /api/patient-messages/:messageId/reply as the doctor.  5) GET
+               /api/patient-portal/messages as the patient — confirm the reply arrived, threaded
+               via `parentMessageId`.
+Actual result: Pass — full loop verified live: patient message → auto-triaged into the real
+               provider inbox (CDSS itself returned a 400 in this dev environment, correctly
+               falling back to `pending_review`, unrelated to this fix) → staff reply → patient
+               sees it. `npx tsc --noEmit` clean on both ehr-service and ehr-frontend.
+Status:        Test 27's finding fully resolved — not by fixing the broken implementation, but
+               by recognizing it duplicated a working one and consolidating onto that instead.
+Bug ref:       services/ehr-service/src/services/patient-messaging.service.ts,
+               services/ehr-service/src/controllers/patient-message-reply.controller.ts (new),
+               services/ehr-service/src/ehr.module.ts,
+               ehr-frontend/src/components/inbox/SmartInbox.tsx,
+               ehr-frontend/src/services/api.ts.
+               Deleted: services/ehr-service/src/controllers/message-ai.controller.ts,
+               services/ehr-service/src/services/message-ai.service.ts(+.spec.ts).
+```
+
+## Update to Step 4 Deliverables (cont. 5)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 42 | Sprint 177's AI message-triage feature duplicated Sprint 65's already-working `InboxTriageService`/`SmartInbox` system instead of using it, leaving both patient-message AI triage and the AI-draft-reply "Send" action completely non-functional | **Functional (dead feature) / product-quality** | Fixed — Sprint 177 retired, `sendMessage()` now feeds Sprint 65's inbox, reply-sending wired into the existing `SmartInbox` UI |

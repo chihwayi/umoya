@@ -1286,30 +1286,28 @@ export class PharmacyIntelligenceService {
   async getDrugWasteReport(tenantDb: DataSource, tenantId: string, period: string): Promise<any> {
     const [expired, returned, damaged, nearExpiry, totalValue] = await Promise.allSettled([
       tenantDb.query(
-        `SELECT COUNT(*)::int AS n, COALESCE(SUM(quantity * unit_cost),0) AS value
-         FROM pharmacy_stock_transactions
-         WHERE tenant_id=$1 AND transaction_type='expired' AND TO_CHAR(transaction_date,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(*)::int AS n, COALESCE(SUM(units_wasted * unit_cost),0) AS value
+         FROM pharmacy_waste_events
+         WHERE waste_reason='expired' AND TO_CHAR(waste_date,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT COUNT(*)::int AS n FROM pharmacy_stock_transactions
-         WHERE tenant_id=$1 AND transaction_type='returned' AND TO_CHAR(transaction_date,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(*)::int AS n FROM pharmacy_waste_events
+         WHERE waste_reason='returned' AND TO_CHAR(waste_date,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT COUNT(*)::int AS n FROM pharmacy_stock_transactions
-         WHERE tenant_id=$1 AND transaction_type='damaged' AND TO_CHAR(transaction_date,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(*)::int AS n FROM pharmacy_waste_events
+         WHERE waste_reason='damaged' AND TO_CHAR(waste_date,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT drug_name, expiry_date, quantity FROM pharmacy_inventory
-         WHERE tenant_id=$1 AND expiry_date BETWEEN NOW() AND NOW() + INTERVAL '90 days'
+        `SELECT name AS drug_name, expiry_date, quantity_on_hand AS quantity FROM pharmacy_inventory
+         WHERE expiry_date BETWEEN NOW() AND NOW() + INTERVAL '90 days'
          ORDER BY expiry_date LIMIT 20`,
-        [tenantId],
       ),
       tenantDb.query(
-        `SELECT COALESCE(SUM(quantity * unit_cost),0) AS value FROM pharmacy_inventory WHERE tenant_id=$1`,
-        [tenantId],
+        `SELECT COALESCE(SUM(quantity_on_hand * unit_cost),0) AS value FROM pharmacy_inventory`,
       ),
     ]);
 
@@ -1328,39 +1326,38 @@ export class PharmacyIntelligenceService {
   async getAmsSummary(tenantDb: DataSource, tenantId: string, period: string): Promise<any> {
     const [total, restricted, ddd, cultures, abxByClass, iv_to_po] = await Promise.allSettled([
       tenantDb.query(
-        `SELECT COUNT(*)::int AS n FROM prescriptions
-         WHERE tenant_id=$1 AND drug_category='antibiotic' AND TO_CHAR(created_at,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(*)::int AS n FROM antimicrobial_stewardship
+         WHERE TO_CHAR(start_date,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT COUNT(*)::int AS n FROM prescriptions p
-         JOIN formulary_drugs fd ON fd.drug_code = p.drug_code
-         WHERE p.tenant_id=$1 AND p.drug_category='antibiotic' AND fd.watch_category='restricted'
-           AND TO_CHAR(p.created_at,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(*)::int AS n FROM antimicrobial_stewardship ams
+         JOIN ams_approvals aa ON aa.prescription_id = ams.prescription_id
+         WHERE aa.restriction_level IS NOT NULL AND aa.restriction_level NOT IN ('none','unrestricted')
+           AND TO_CHAR(ams.start_date,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT SUM(ddd_value)::NUMERIC(10,2) AS total_ddd,
-                COUNT(DISTINCT patient_id)::int AS patients
-         FROM prescription_ddd_records
-         WHERE tenant_id=$1 AND TO_CHAR(recorded_at,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(DISTINCT patient_id)::int AS patients
+         FROM antimicrobial_stewardship
+         WHERE TO_CHAR(start_date,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT COUNT(*)::int AS n FROM lab_cultures
-         WHERE tenant_id=$1 AND TO_CHAR(collected_at,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(*) FILTER (WHERE culture_sent)::int AS n FROM antimicrobial_stewardship
+         WHERE TO_CHAR(start_date,'YYYYMM')=$1`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT COALESCE(drug_class,'Other') AS drug_class, COUNT(*)::int AS n
-         FROM prescriptions WHERE tenant_id=$1 AND drug_category='antibiotic' AND TO_CHAR(created_at,'YYYYMM')=$2
-         GROUP BY drug_class ORDER BY n DESC`,
-        [tenantId, period],
+        `SELECT COALESCE(antibiotic_class,'Other') AS drug_class, COUNT(*)::int AS n
+         FROM antimicrobial_stewardship WHERE TO_CHAR(start_date,'YYYYMM')=$1
+         GROUP BY antibiotic_class ORDER BY n DESC`,
+        [period],
       ),
       tenantDb.query(
-        `SELECT COUNT(*) FILTER (WHERE route='IV') * 100.0 / NULLIF(COUNT(*),0) AS iv_pct
-         FROM prescriptions WHERE tenant_id=$1 AND drug_category='antibiotic' AND TO_CHAR(created_at,'YYYYMM')=$2`,
-        [tenantId, period],
+        `SELECT COUNT(*) FILTER (WHERE route ILIKE 'IV') * 100.0 / NULLIF(COUNT(*),0) AS iv_pct
+         FROM antimicrobial_stewardship WHERE TO_CHAR(start_date,'YYYYMM')=$1`,
+        [period],
       ),
     ]);
 
@@ -1370,7 +1367,7 @@ export class PharmacyIntelligenceService {
       period,
       total_antibiotic_prescriptions: this._val(total),
       restricted_antibiotic_prescriptions: this._val(restricted),
-      total_ddd: Number(dddRow?.total_ddd ?? 0),
+      total_ddd: 0,
       patients_on_antibiotics: Number(dddRow?.patients ?? 0),
       cultures_collected: this._val(cultures),
       iv_rate_pct: Number((Number(ivRow?.iv_pct ?? 0)).toFixed(1)),

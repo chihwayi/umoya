@@ -11161,6 +11161,13 @@ export const cdssApi = {
     return { data: response.data };
   },
 
+  replyToPatientMessage: async (messageId: string, content: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/patient-messages/${messageId}/reply`, { content }, {
+      headers: { 'X-Tenant-ID': tenantSlug, 'Authorization': `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   // ── Tuberculosis Module (Sprint 66) ───────────────────────────────────────
 
   registerTbPatient: async (data: Record<string, any>, token: string, tenantSlug: string) => {

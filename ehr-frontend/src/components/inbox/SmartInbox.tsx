@@ -71,6 +71,8 @@ const SmartInbox: React.FC<SmartInboxProps> = ({ token, tenantSlug, userId, onCo
   const [unreadOnly, setUnreadOnly]   = useState(false);
   const [expanded, setExpanded]       = useState<string | null>(null);
   const [replyDraft, setReplyDraft]   = useState<Record<string, string>>({});
+  const [sendingReply, setSendingReply] = useState<string | null>(null);
+  const [replySent, setReplySent]     = useState<Record<string, boolean>>({});
   const socketRef = useRef<Socket | null>(null);
 
   const headers = { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` };
@@ -145,6 +147,20 @@ const SmartInbox: React.FC<SmartInboxProps> = ({ token, tenantSlug, userId, onCo
     await cdssApi.markInboxActioned(id, token, tenantSlug);
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, isActioned: true, isRead: true } : i));
     loadInbox();
+  };
+
+  const handleSendReply = async (item: InboxItem) => {
+    if (!item.sourceId) return;
+    const content = (replyDraft[item.id] ?? item.aiDraftReply ?? '').trim();
+    if (!content) return;
+    setSendingReply(item.id);
+    try {
+      await cdssApi.replyToPatientMessage(item.sourceId, content, token, tenantSlug);
+      setReplySent((prev) => ({ ...prev, [item.id]: true }));
+      await handleAction(item.id);
+    } finally {
+      setSendingReply(null);
+    }
   };
 
   const handleMarkAllRead = async () => {
@@ -315,8 +331,22 @@ const SmartInbox: React.FC<SmartInboxProps> = ({ token, tenantSlug, userId, onCo
                         value={replyDraft[item.id] ?? item.aiDraftReply}
                         onChange={(e) => setReplyDraft((prev) => ({ ...prev, [item.id]: e.target.value }))}
                         rows={3}
-                        className="w-full text-xs border border-indigo-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none"
+                        disabled={replySent[item.id]}
+                        className="w-full text-xs border border-indigo-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none disabled:opacity-50"
                       />
+                      {replySent[item.id] ? (
+                        <p className="mt-1.5 flex items-center gap-1 text-xs text-green-600 font-medium">
+                          <CheckCircle className="w-3.5 h-3.5" /> Reply sent to patient
+                        </p>
+                      ) : (
+                        <button
+                          onClick={() => handleSendReply(item)}
+                          disabled={sendingReply === item.id}
+                          className="mt-1.5 flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-semibold hover:bg-teal-700 disabled:opacity-60"
+                        >
+                          <Send className="w-3.5 h-3.5" /> {sendingReply === item.id ? 'Sending…' : 'Send Reply'}
+                        </button>
+                      )}
                     </div>
                   )}
 
