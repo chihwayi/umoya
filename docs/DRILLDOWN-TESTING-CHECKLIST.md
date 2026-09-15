@@ -1781,3 +1781,60 @@ Bug ref:       services/ehr-service/src/services/mobile-money.service.ts,
 |---|---|---|---|
 | 45 | Mobile money payment callbacks: no signature verification (forgeable "payment successful" webhooks could mark invoices paid) + entirely unreachable due to a tenant-header requirement external providers can't satisfy | **Security (critical) + Functional** | Partially fixed — Flutterwave signature check + double-credit guard (all providers) + webhook reachability fixed live; M-Pesa/MTN/EcoCash/Airtel signature verification needs provider-dashboard/infra access this session doesn't have |
 | 46 | `nhls-hl7.controller.ts`'s HL7 lab-result ingestion endpoint had no authentication at all — unauthenticated fabricated lab results could auto-link to a real patient | **Security (critical) / clinical safety** | Fixed — new `NhlsInboundKeyGuard`, mirrors the existing `FhirInboundKeyGuard` pattern |
+
+### Test 33 — Exhaustive auth-guard audit across every controller (backend, security)
+
+```
+Module:        All ~230 controllers in services/ehr-service/src/controllers
+Platform:      Backend
+Role:          Unauthenticated attacker
+Context:       Test 31/32's manual sampling missed cases because guard placement in this codebase
+               is inconsistent — `@UseGuards` sometimes precedes `@Controller()`, sometimes
+               follows it, and per-route it can appear either directly above or directly below
+               the route decorator (`@Get(...)`/`@Post(...)`/etc). Wrote a script to parse every
+               controller file properly (class-level guard search spans both above `@Controller`
+               and down to `export class`; per-route search spans the full decorator block on
+               both sides of the route decorator) and flag every route with neither a class-level
+               nor method-level `@UseGuards`/`@Public()`. First pass had two categories of false
+               positive, both diagnosed and excluded: (a) files with multiple controller classes,
+               where a route under the SECOND class's own `@UseGuards` was misattributed to the
+               first class's guard status (`ussd.controller.ts`'s `SmsCampaignController` — real,
+               correctly guarded); (b) legitimate by-design unauthenticated routes, each already
+               explicitly commented as intentional: login/register/password-reset endpoints
+               (`auth`, `patient-portal`, `webauthn`'s WebAuthn ceremony steps), token-is-the-
+               credential shared-link forms (`csat`, `digital-consent`, `pre-visit-intake`,
+               `research-day`), ops health/metrics endpoints, and SMS/USSD delivery-status
+               webhooks with no PHI/financial write. After excluding all of those, one new real
+               finding: `telemedicine-webhook.controller.ts`'s `POST /telemedicine/webhook/daily`
+               (Daily.co video call-ended webhook) checked its shared secret with `if
+               (expectedSecret && secret !== expectedSecret)` — a fail-OPEN pattern: if
+               `DAILY_WEBHOOK_SECRET` is unset, the whole check is skipped and the endpoint
+               accepts anything. It was ALSO unreachable in practice for the same reason as the
+               mobile-money callbacks (Test 32) — not in `tenant.middleware.ts`'s bypass list, so
+               it always 400'd on a missing `X-Tenant-Id` before Daily.co (which can't send that
+               header) could ever reach the secret check.
+Fix:           Changed the check to fail closed: reject with 401 if the secret isn't configured
+               at all, in addition to rejecting a mismatched secret (matches the
+               FhirInboundKeyGuard/NhlsInboundKeyGuard/mobile-money pattern established earlier
+               this session). Added `/telemedicine/webhook/daily` to the tenant-middleware bypass
+               list and added a `SINGLE_TENANT_ID`-based fallback (injecting `TenantService`
+               directly into the controller) so the route is actually reachable, mirroring the
+               mobile-money fix.
+Steps to test: `POST /telemedicine/webhook/daily` with no secret header and no `X-Tenant-Id` —
+               expect 401 "Daily.co webhook is not configured" (not a tenant error, confirming
+               the middleware bypass works), rather than either silently succeeding or 400ing on
+               tenant resolution. Regression-checked the controller's two JWT-guarded routes
+               still return 200 with a valid token.
+Actual result: Pass — verified live exactly as described.
+Status:        Fail (fail-open secret check + unreachable route) → Fixed → Pass (verified live).
+               Full audit script output reviewed for the other ~15 files it flagged; all
+               confirmed legitimate by-design exceptions, no further action needed.
+Bug ref:       services/ehr-service/src/controllers/telemedicine-webhook.controller.ts,
+               services/ehr-service/src/middleware/tenant.middleware.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 8)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 47 | `telemedicine-webhook.controller.ts`'s Daily.co webhook secret check was fail-open (skipped entirely if unconfigured) and the route was unreachable in practice (blocked by the tenant-header requirement, same root cause as bug #45) | **Security + Functional** | Fixed |

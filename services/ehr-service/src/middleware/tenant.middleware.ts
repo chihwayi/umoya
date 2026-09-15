@@ -52,7 +52,12 @@ export class TenantMiddleware implements NestMiddleware {
       // SINGLE_TENANT_ID — without this bypass every callback 400s before
       // ever reaching the controller, so payments could never confirm.
       normalizedPath.startsWith('/payments/mobile-money/callback/') ||
-      normalizedOriginal.startsWith('/payments/mobile-money/callback/')
+      normalizedOriginal.startsWith('/payments/mobile-money/callback/') ||
+      // Daily.co webhook: same problem as payment callbacks — the provider
+      // can't send X-Tenant-Id. Tenant resolution falls back to
+      // SINGLE_TENANT_ID inside TelemedicineWebhookController.
+      normalizedPath === '/telemedicine/webhook/daily' ||
+      normalizedOriginal === '/telemedicine/webhook/daily'
     );
     
     if (isPublicTenantEndpoint) {

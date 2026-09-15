@@ -4,12 +4,16 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { TelemedicinePostcallService, DailyWebhookPayload } from '../services/telemedicine-postcall.service';
+import { TenantService } from '../services/tenant.service';
 
 @Controller('telemedicine')
 export class TelemedicineWebhookController {
   private readonly logger = new Logger(TelemedicineWebhookController.name);
 
-  constructor(private readonly postcallService: TelemedicinePostcallService) {}
+  constructor(
+    private readonly postcallService: TelemedicinePostcallService,
+    private readonly tenantService: TenantService,
+  ) {}
 
   @Post('webhook/daily')
   @HttpCode(200)
@@ -19,7 +23,10 @@ export class TelemedicineWebhookController {
     @Req() req: any,
   ): Promise<{ ok: boolean }> {
     const expectedSecret = process.env.DAILY_WEBHOOK_SECRET ?? '';
-    if (expectedSecret && secret !== expectedSecret) {
+    if (!expectedSecret) {
+      throw new UnauthorizedException('Daily.co webhook is not configured');
+    }
+    if (secret !== expectedSecret) {
       throw new UnauthorizedException('Invalid webhook secret');
     }
 
@@ -27,8 +34,16 @@ export class TelemedicineWebhookController {
       return { ok: true };
     }
 
-    const db = req.tenantDb;
-    const subdomain = req.tenantSubdomain ?? '';
+    // Daily.co has no way to send X-Tenant-Id, so this path is excluded from
+    // tenant.middleware.ts (req.tenantDb is never set here) — resolve via
+    // SINGLE_TENANT_ID, same fallback used by the mobile-money webhooks.
+    const tenantId = req.tenantId ?? process.env.SINGLE_TENANT_ID ?? '';
+    if (!tenantId) {
+      this.logger.warn('Daily.co webhook received but no tenant could be resolved (SINGLE_TENANT_ID unset)');
+      return { ok: true };
+    }
+    const db = req.tenantDb ?? (await this.tenantService.getTenantDatabase(tenantId));
+    const subdomain = req.tenantSubdomain ?? tenantId;
 
     this.logger.log(`Daily.co meeting.ended received: ${payload.id}`);
     await this.postcallService.handleCallEnded(payload, db, subdomain);
