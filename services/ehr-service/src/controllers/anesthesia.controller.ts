@@ -1,14 +1,21 @@
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { AnesthesiaService } from '../services/anesthesia.service';
 import { TenantService } from '../services/tenant.service';
 
+// Anesthesia records document a controlled-drug-heavy, life-critical
+// procedure — every write route previously required only JwtAuthGuard.
+// Clinical routes are restricted to doctor/nurse/admin (class default);
+// billing routes are restricted separately below.
 @ApiTags('Anesthesia')
 @ApiBearerAuth()
 @Controller('anesthesia')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('doctor', 'nurse', 'admin')
 export class AnesthesiaController {
   constructor(
     private readonly anesthesiaService: AnesthesiaService,
@@ -247,6 +254,7 @@ export class AnesthesiaController {
   // ==================== BILLING ====================
 
   @Post('billing/calculate')
+  @Roles('accounts', 'nurse_accounts', 'admin')
   @ApiOperation({ summary: 'Calculate anesthesia billing' })
   @ApiResponse({ status: 201, description: 'Billing calculated' })
   async calculateAnesthesiaBilling(
@@ -262,6 +270,7 @@ export class AnesthesiaController {
   }
 
   @Get('billing/case/:caseId')
+  @Roles('accounts', 'nurse_accounts', 'admin')
   @ApiOperation({ summary: 'Get anesthesia billing for case' })
   @ApiResponse({ status: 200, description: 'Billing retrieved' })
   async getAnesthesiaBilling(
@@ -273,6 +282,7 @@ export class AnesthesiaController {
   }
 
   @Post('billing/:id/mark-billed')
+  @Roles('accounts', 'nurse_accounts', 'admin')
   @ApiOperation({ summary: 'Mark anesthesia billing as billed' })
   @ApiResponse({ status: 200, description: 'Billing marked as billed' })
   async markBilled(

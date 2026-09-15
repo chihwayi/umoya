@@ -18,6 +18,32 @@ export class AnesthesiaService {
     return Boolean(row?.table_name);
   }
 
+  // updateData/scoreData here come straight from the request body as `any`
+  // and were previously Object.assign'd onto the entity wholesale — letting
+  // a caller overwrite attribution (who assessed/anesthetized/scored a
+  // patient) and its timestamp, falsifying the medical record. Strip fields
+  // that identify the record, its owning case/patient, or who/when an
+  // action was attributed to; those are set explicitly by the service, not
+  // the caller.
+  private static readonly IMMUTABLE_UPDATE_FIELDS = new Set([
+    'id', 'surgicalCaseId', 'patientId',
+    'assessedById', 'assessedAt', 'consentObtainedById',
+    'anesthesiologistId', 'crnaId', 'anesthesiaStartTime',
+    'pacuNurseId', 'dischargeApprovedById', 'anesthesiaRecordId',
+    'createdAt', 'updatedAt',
+  ]);
+
+  private sanitizeUpdate(data: any): any {
+    if (!data || typeof data !== 'object') return data;
+    const clean: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (!AnesthesiaService.IMMUTABLE_UPDATE_FIELDS.has(key)) {
+        clean[key] = value;
+      }
+    }
+    return clean;
+  }
+
   private async ensureTableForWrite(
     tenantDb: DataSource,
     tableName: string,
@@ -99,7 +125,7 @@ export class AnesthesiaService {
       throw new NotFoundException(`Pre-anesthesia assessment ${id} not found`);
     }
 
-    Object.assign(assessment, updateData);
+    Object.assign(assessment, this.sanitizeUpdate(updateData));
     return await repository.save(assessment);
   }
 
@@ -151,7 +177,7 @@ export class AnesthesiaService {
       throw new NotFoundException(`Anesthesia record ${id} not found`);
     }
 
-    Object.assign(record, updateData);
+    Object.assign(record, this.sanitizeUpdate(updateData));
     return await repository.save(record);
   }
 
@@ -354,8 +380,8 @@ export class AnesthesiaService {
       throw new NotFoundException(`PACU record ${id} not found`);
     }
 
-    Object.assign(record, scoreData);
-    
+    Object.assign(record, this.sanitizeUpdate(scoreData));
+
     // Check if ready for discharge (Aldrete ≥ 9)
     if (scoreData.aldreteScoreDischarge >= 9) {
       record.dischargeCriteriaMet = true;

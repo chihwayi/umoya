@@ -77,7 +77,17 @@ export class NotificationCampaignService {
       throw new BadRequestException('Only draft/scheduled campaigns can be updated');
     }
 
-    Object.assign(existing, body as any);
+    // body is Partial<NotificationCampaign> straight off the request —
+    // Object.assign'ing it wholesale let a caller set createdBy, startedAt,
+    // completedAt, or id, spoofing campaign attribution/history. Whitelist
+    // the fields an update is actually meant to change.
+    const { name, channel, messageTemplate, targetType, targetRefId, criteria } = body;
+    if (name !== undefined) existing.name = name;
+    if (channel !== undefined) existing.channel = channel;
+    if (messageTemplate !== undefined) existing.messageTemplate = messageTemplate;
+    if (targetType !== undefined) existing.targetType = targetType;
+    if (targetRefId !== undefined) existing.targetRefId = targetRefId;
+    if (criteria !== undefined) existing.criteria = criteria;
     if (body.scheduledAt !== undefined) {
       existing.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
       existing.status = existing.scheduledAt ? 'scheduled' : 'draft';

@@ -114,7 +114,14 @@ export class PracticeManagementService {
     const repo = tenantDb.getRepository(SuperbillTemplate);
     const existing = await repo.findOne({ where: { id } });
     if (!existing) throw new NotFoundException('Superbill template not found');
-    Object.assign(existing, body);
+    // Whitelist — body is Partial<SuperbillTemplate> straight off the
+    // request and includes createdBy; Object.assign'ing it wholesale let a
+    // caller spoof template ownership.
+    const b = body as any;
+    if (b.name !== undefined) existing.name = b.name;
+    if (b.specialty !== undefined) existing.specialty = b.specialty;
+    if (b.sections !== undefined) existing.sections = b.sections;
+    if (typeof b.isActive === 'boolean') existing.isActive = b.isActive;
     return repo.save(existing);
   }
 
@@ -166,14 +173,18 @@ export class PracticeManagementService {
     const repo = tenantDb.getRepository(InsuranceVerification);
     const existing = await repo.findOne({ where: { id } });
     if (!existing) throw new NotFoundException('Insurance verification not found');
-    Object.assign(existing, {
-      ...body,
-      copayAmount: (body as any).copayAmount != null ? String((body as any).copayAmount) : existing.copayAmount,
-      deductibleRemaining:
-        (body as any).deductibleRemaining != null
-          ? String((body as any).deductibleRemaining)
-          : existing.deductibleRemaining,
-    });
+    // This is the generic "edit details" endpoint, not the verification
+    // action (that's markInsuranceVerification, below, which sets these
+    // fields server-side from the authenticated user). Object.assign'ing
+    // the raw body let a caller mark themselves "verified" without an
+    // actual carrier check, or edit copay/deductible liabilities and
+    // verifiedBy/verifiedAt directly — whitelist to non-verification fields.
+    const b = body as any;
+    if (b.payerName !== undefined) existing.payerName = b.payerName;
+    if (b.policyNumber !== undefined) existing.policyNumber = b.policyNumber;
+    if (b.groupNumber !== undefined) existing.groupNumber = b.groupNumber;
+    if (b.coverageDetails !== undefined) existing.coverageDetails = b.coverageDetails;
+    if (b.notes !== undefined) existing.notes = b.notes;
     return repo.save(existing);
   }
 

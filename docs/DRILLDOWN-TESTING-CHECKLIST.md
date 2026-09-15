@@ -2562,3 +2562,76 @@ Bug ref:       services/ehr-service/src/controllers/bcma.controller.ts,
 | 66 | patient-safety-incident.controller.ts, order.controller.ts, and telemedicine.controller.ts had no role restriction on incident closure/RCA, clinical order authorization/execution, and telemedicine consultation/monitoring setup | **Security (medium-high) -- unrestricted clinical workflow and governance actions** | Fixed |
 
 This closes out the systematic RBAC sweep started at Test 42 (bugs #56-66, 13 controllers).
+
+
+### Test 46 -- Mass-assignment: attribution/verification fields spoofable via generic update endpoints (backend, security)
+
+```
+Module:        Anesthesia records, Notification Campaigns, Practice Management (superbill
+               templates, insurance verification)
+Platform:      Backend
+Role:          Any authenticated staff role with legitimate access to the endpoint
+Context:       New angle after the RBAC sweep: hunting for the same root-cause SHAPE as the
+               users.controller.ts admin-self-promotion bug (Object.assign(entity, dto) with an
+               untyped/overly-broad dto), independent of RBAC -- even a correctly-role-gated
+               caller might be able to set fields an endpoint was never meant to expose.
+               Found the pattern in four services: anesthesia.service.ts's
+               updatePreAnesthesiaAssessment/updateAnesthesiaRecord/updateAldreteScore did
+               `Object.assign(entity, updateData)` where updateData is `any` straight off the
+               request body, letting a caller overwrite assessedById/assessedAt (who assessed a
+               patient and when, falsifying the medical record) or anesthesiologistId/crnaId
+               (who administered the anesthesia). notification-campaign.service.ts's
+               updateCampaign did the same with `Partial<NotificationCampaign>`, exposing
+               createdBy/startedAt/completedAt. practice-management.service.ts's
+               updateSuperbillTemplate exposed createdBy; updateInsuranceVerification exposed
+               verificationStatus/verifiedBy/verifiedAt/copayAmount/deductibleRemaining --
+               letting a caller mark insurance "verified" without an actual carrier check via
+               the generic edit endpoint, bypassing the dedicated markInsuranceVerification
+               action that correctly sets those fields server-side.
+Fix:           Anesthesia -- added a shared sanitizeUpdate() helper stripping id/
+               surgicalCaseId/patientId and every attribution/timestamp field
+               (assessedById/assessedAt/anesthesiologistId/crnaId/pacuNurseId/
+               dischargeApprovedById/createdAt/updatedAt) before Object.assign, applied to all
+               three update methods. Notification campaigns -- replaced the wholesale
+               Object.assign with an explicit whitelist of the fields an update is meant to
+               change (name/channel/messageTemplate/targetType/targetRefId/criteria/
+               scheduledAt). Practice management -- same whitelist treatment for both
+               updateSuperbillTemplate (name/specialty/sections/isActive) and
+               updateInsuranceVerification (payerName/policyNumber/groupNumber/
+               coverageDetails/notes only -- verification/financial fields now only settable via
+               the dedicated markInsuranceVerification action).
+               Also fixed in passing: anesthesia.controller.ts had zero role restriction on any
+               route (same "@UseGuards(JwtAuthGuard) only" gap as the earlier RBAC sweep) --
+               added RolesGuard, doctor/nurse/admin for clinical routes, accounts/nurse_accounts/
+               admin for billing routes.
+Steps to test: Created a real insurance verification, then PUT its generic update endpoint with
+               {"verificationStatus":"verified","verifiedBy":"<doctor-id>","copayAmount":9999,
+               "payerName":"UpdatedPayer"} -- expected only payerName to change. Created a real
+               superbill template, then PUT its update endpoint with
+               {"createdBy":"<forged-uuid>","name":"Renamed"} -- expected only name to change.
+               Then called the legitimate POST .../mark endpoint on the same verification --
+               expected verificationStatus/verifiedBy/verifiedAt to be set correctly.
+Actual result: Pass on all three checks. Insurance verification: payerName updated to
+               "UpdatedPayer", verification_status/verified_by/copay_amount all stayed
+               null/pending -- the spoof attempt had zero effect. Superbill template: name
+               updated to "Renamed", created_by stayed the real creator -- spoofed UUID rejected
+               silently (field dropped, not erroring, matching the whitelist pattern). Legitimate
+               mark-verify correctly set status='verified', verifiedBy=<doctor-id>,
+               verifiedAt=<real timestamp>. npx tsc --noEmit clean. Test records deleted after
+               verification.
+Status:        Fail (any caller with access to a generic update endpoint could spoof medical-
+               record attribution, campaign history, or insurance verification status/financial
+               fields) -> Fixed -> Pass (verified live).
+Bug ref:       services/ehr-service/src/services/anesthesia.service.ts,
+               services/ehr-service/src/controllers/anesthesia.controller.ts,
+               services/ehr-service/src/services/notification-campaign.service.ts,
+               services/ehr-service/src/services/practice-management.service.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 22)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 67 | anesthesia.service.ts's three update methods Object.assign'd an untyped request body onto the entity, letting a caller overwrite who-assessed/who-anesthetized attribution and its timestamp; anesthesia.controller.ts also had zero role restriction on any route | **Security (high) -- medical record attribution spoofable + missing RBAC** | Fixed |
+| 68 | notification-campaign.service.ts's updateCampaign exposed createdBy/startedAt/completedAt via unrestricted Object.assign | **Security (medium) -- campaign history/attribution spoofable** | Fixed |
+| 69 | practice-management.service.ts's updateSuperbillTemplate exposed createdBy; updateInsuranceVerification exposed verificationStatus/verifiedBy/verifiedAt/financial fields, bypassing the dedicated verification action | **Security (high) -- insurance verification status and financial fields spoofable, enabling billing/coverage fraud** | Fixed |
