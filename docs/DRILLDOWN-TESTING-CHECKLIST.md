@@ -2046,3 +2046,99 @@ confirmed safe (all follow the same dynamic-UPDATE-builder pattern already valid
 interpolated identifiers come from hardcoded internal field-mapping objects or whitelists, never
 directly from request input). anc.service.ts was the one exception (bug #51, above). This closes out
 the SQL-injection sweep that began with Test 34.
+
+
+### Test 38 -- IDOR: any patient could read/edit/delete any other patient's health goals and care plans (backend, security)
+
+```
+Module:        Patient Portal -- Health Goals & Care Plans
+Platform:      Backend
+Role:          Authenticated patient (patient-portal JWT)
+Context:       Background IDOR sweep of patient-portal.controller.ts. Four health-goal routes
+               (GET/PUT/DELETE goals/:goalId, GET goals/:goalId/progress) and three care-plan
+               routes (GET care-plans/:carePlanId, POST care-plans/:carePlanId/progress,
+               POST care-plans/:carePlanId/goals/:goalId/progress) took the resource id straight
+               from the URL and fetched/mutated it with no check that it belonged to
+               req.user.sub (the calling patient). Any authenticated patient could read, edit,
+               or delete any OTHER patient's health goals or care plans just by guessing/
+               enumerating UUIDs -- no cross-tenant access (each tenant has its own DB), but
+               full cross-patient access within a tenant. Post-visit routes elsewhere in the
+               same controller already had the correct pattern
+               (getSessionForPatient(id, patientId, tenantDb)) -- these 7 routes were the
+               exception, not the rule.
+Fix:           health-goals.service.ts: getGoalById/updateGoal/deleteGoal/getProgressLogs now
+               take an optional patientId and add `AND patient_id = $N` to the query when
+               present; internal callers (updateProgress, logProgress) that already have their
+               own verified ownership omit it.
+               care-plan.service.ts: getCarePlanById/updateCarePlan add the same optional
+               patientId + WHERE filter; updateGoal (care_plan_goals has no direct patient_id
+               column) joins to care_plans to check p.patient_id = patientId.
+               patient-portal.controller.ts: all 7 routes now pass req.user.sub through.
+               Staff-facing care-plan.controller.ts routes are unaffected -- they call the same
+               methods without patientId, preserving "any staff can manage any patient's plan".
+Steps to test: Seeded two real patients (A = existing TEST_VerifyAnc, B = new TEST_IdorVictim)
+               with portal logins, and a real health goal + care plan + care-plan goal owned by
+               B. As A's JWT: 1) GET goals/:B's-goal-id, 2) PUT same, 3) DELETE same,
+               4) GET same/progress, 5) GET care-plans/:B's-plan-id, 6) POST same/progress,
+               7) POST same/goals/:B's-care-plan-goal-id/progress. Then re-verified as B that
+               their own goal/plan were untouched and still normally accessible/editable.
+Actual result: Pass on all 7 attack attempts -- each returned a clean 404 ("Goal not found" /
+               "Care plan not found"), no data returned, no mutation applied (B's goal
+               current_value stayed 140, not overwritten to 999; B's goal was not deleted).
+               B's own access to the same resources continued to work normally, including a
+               real goal-progress update (6.5, applied correctly). npx tsc --noEmit clean.
+               Test patient, goal, care plan, and care-plan goal deleted after verification.
+Status:        Fail (any authenticated patient could read/tamper with/delete any other
+               patient's health goals and care plans) -> Fixed -> Pass (verified live against
+               two real patient accounts).
+Bug ref:       services/ehr-service/src/services/health-goals.service.ts,
+               services/ehr-service/src/services/care-plan.service.ts,
+               services/ehr-service/src/controllers/patient-portal.controller.ts.
+```
+
+### Test 39 -- HIPAA audit logging silently dropped for every patient-portal action (backend, compliance)
+
+```
+Module:        HIPAA Audit Logging -- patient-portal requests
+Platform:      Backend
+Role:          Authenticated patient (any)
+Context:       Found while live-verifying Test 38 -- docker logs showed a QueryFailedError on
+               every single patient-portal request: "insert or update on table
+               hipaa_audit_logs violates foreign key constraint hipaa_audit_logs_user_id_fkey".
+               Root cause: hipaa-audit.interceptor.ts derives userId from the JWT's
+               id/sub field for every request. For a patient-portal JWT that field holds the
+               PATIENT's own id -- a syntactically valid UUID, but one that lives in `patients`,
+               not `users`. hipaa-audit.service.ts already has logic to null out user_id and
+               log via patient_id instead for "patient portal" access (a comment says so
+               explicitly), but that logic only triggers when userId ISN'T a valid UUID --
+               so a patient's own valid-looking UUID slipped past it and hit the FK every time.
+               A second, compounding bug: extractPatientId() in the interceptor only reads
+               patientId from URL params/body/query -- for self-service routes like
+               `GET goals/:goalId` (no patientId anywhere in the request), it returned
+               undefined too, so even the fallback path had nothing to log against.
+               Net effect: EVERY patient-portal action (viewing labs, medications, messages,
+               goals, care plans, appointments, downloading records, everything) has never
+               produced a HIPAA audit trail entry -- a real compliance gap, not a cosmetic bug,
+               and the interceptor's own try/catch (by design, to never fail the real request)
+               was swallowing the error silently, so nothing ever surfaced this in normal use.
+Fix:           hipaa-audit.interceptor.ts: added isPatientActor = user?.role === 'patient'.
+               When true, userId is forced to 'anonymous' (routing it into hipaa-audit.service's
+               existing NULL-user_id path) and patientId falls back to the JWT's own identity
+               (user.patientId || user.sub || user.id) when the URL/body didn't carry one.
+Steps to test: Log in as a real patient, call a self-service route with no patientId anywhere
+               in the URL (GET /patient-portal/goals), then check docker logs for the FK error
+               and query hipaa_audit_logs for a matching row.
+Actual result: Pass. No FK error in logs after the fix. hipaa_audit_logs now has a row for the
+               request: user_id NULL, user_role 'patient', patient_id correctly set to the
+               patient's own id, action 'patient_view', outcome 'success'.
+Status:        Fail (100% of patient-portal actions produced zero audit trail, silently) ->
+               Fixed -> Pass (verified live).
+Bug ref:       services/ehr-service/src/interceptors/hipaa-audit.interceptor.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 14)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 52 | 7 patient-portal routes (health goals + care plans) fetched/mutated records by URL id with no check the record belonged to the calling patient -- any authenticated patient could read, edit, or delete any other patient's health goals and care plans | **Security (critical) -- IDOR / broken object-level authorization** | Fixed |
+| 53 | hipaa-audit.interceptor.ts treated a patient-portal JWT's own id as a staff user_id, tripping hipaa_audit_logs' FK to `users` on every single patient-portal request -- 100% of patient actions produced no audit trail, silently (caught by the interceptor's own error-swallowing try/catch) | **Compliance (critical) -- HIPAA audit trail completely broken for patient-portal access** | Fixed |

@@ -107,13 +107,23 @@ export class HealthGoalsService {
   /**
    * Get a single goal by ID
    */
-  async getGoalById(tenantDb: DataSource, goalId: string) {
+  // patientId, when passed, scopes the lookup to that patient's own goal —
+  // callers reached from the patient-portal (where any authenticated patient
+  // could otherwise read/edit/delete any other patient's goal by ID) must
+  // always pass it. Internal callers with their own already-verified
+  // ownership (e.g. updateProgress) may omit it.
+  async getGoalById(tenantDb: DataSource, goalId: string, patientId?: string) {
     this.ensureTenantDb(tenantDb);
 
-    const result = await tenantDb.query(
-      `SELECT * FROM patient_health_goals WHERE id = $1`,
-      [goalId],
-    );
+    const result = patientId
+      ? await tenantDb.query(
+          `SELECT * FROM patient_health_goals WHERE id = $1 AND patient_id = $2`,
+          [goalId, patientId],
+        )
+      : await tenantDb.query(
+          `SELECT * FROM patient_health_goals WHERE id = $1`,
+          [goalId],
+        );
 
     if (!result || result.length === 0) {
       throw new NotFoundException('Goal not found');
@@ -125,10 +135,10 @@ export class HealthGoalsService {
   /**
    * Update a goal
    */
-  async updateGoal(tenantDb: DataSource, goalId: string, dto: UpdateGoalDto) {
+  async updateGoal(tenantDb: DataSource, goalId: string, dto: UpdateGoalDto, patientId?: string) {
     this.ensureTenantDb(tenantDb);
 
-    const goal = await this.getGoalById(tenantDb, goalId);
+    const goal = await this.getGoalById(tenantDb, goalId, patientId);
 
     const updates: string[] = [];
     const params: any[] = [];
@@ -186,11 +196,11 @@ export class HealthGoalsService {
   /**
    * Delete a goal
    */
-  async deleteGoal(tenantDb: DataSource, goalId: string) {
+  async deleteGoal(tenantDb: DataSource, goalId: string, patientId?: string) {
     this.ensureTenantDb(tenantDb);
 
-    const goal = await this.getGoalById(tenantDb, goalId);
-    
+    const goal = await this.getGoalById(tenantDb, goalId, patientId);
+
     await tenantDb.query(
       `DELETE FROM patient_health_goals WHERE id = $1`,
       [goalId],
@@ -205,7 +215,7 @@ export class HealthGoalsService {
   async logProgress(tenantDb: DataSource, goalId: string, patientId: string, dto: LogProgressDto) {
     this.ensureTenantDb(tenantDb);
 
-    const goal = await this.getGoalById(tenantDb, goalId);
+    const goal = await this.getGoalById(tenantDb, goalId, patientId);
 
     // Insert or update progress log
     await tenantDb.query(
@@ -240,8 +250,12 @@ export class HealthGoalsService {
   /**
    * Get progress logs for a goal
    */
-  async getProgressLogs(tenantDb: DataSource, goalId: string, limit?: number) {
+  async getProgressLogs(tenantDb: DataSource, goalId: string, limit?: number, patientId?: string) {
     this.ensureTenantDb(tenantDb);
+
+    if (patientId) {
+      await this.getGoalById(tenantDb, goalId, patientId);
+    }
 
     let query = `SELECT * FROM goal_progress_logs WHERE goal_id = $1 ORDER BY logged_date DESC`;
     const params: any[] = [goalId];

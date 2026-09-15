@@ -1893,7 +1893,7 @@ export class PatientPortalController {
     @Req() req: RequestWithTenant & { user: { sub: string } },
     @Param('goalId') goalId: string,
   ) {
-    return this.healthGoalsService.getGoalById(req.tenantDb, goalId);
+    return this.healthGoalsService.getGoalById(req.tenantDb, goalId, req.user.sub);
   }
 
   @Put('goals/:goalId')
@@ -1907,7 +1907,7 @@ export class PatientPortalController {
     @Param('goalId') goalId: string,
     @Body() dto: UpdateGoalDto,
   ) {
-    return this.healthGoalsService.updateGoal(req.tenantDb, goalId, dto);
+    return this.healthGoalsService.updateGoal(req.tenantDb, goalId, dto, req.user.sub);
   }
 
   @Delete('goals/:goalId')
@@ -1920,7 +1920,7 @@ export class PatientPortalController {
     @Req() req: RequestWithTenant & { user: { sub: string } },
     @Param('goalId') goalId: string,
   ) {
-    return this.healthGoalsService.deleteGoal(req.tenantDb, goalId);
+    return this.healthGoalsService.deleteGoal(req.tenantDb, goalId, req.user.sub);
   }
 
   @Post('goals/:goalId/progress')
@@ -1950,7 +1950,7 @@ export class PatientPortalController {
     @Param('goalId') goalId: string,
     @Query('limit') limit?: number,
   ) {
-    return this.healthGoalsService.getProgressLogs(req.tenantDb, goalId, limit ? parseInt(String(limit), 10) : undefined);
+    return this.healthGoalsService.getProgressLogs(req.tenantDb, goalId, limit ? parseInt(String(limit), 10) : undefined, req.user.sub);
   }
 
   @Get('achievements')
@@ -2002,7 +2002,7 @@ export class PatientPortalController {
     @Req() req: RequestWithTenant & { user: { sub: string } },
     @Param('carePlanId') carePlanId: string,
   ) {
-    return this.carePlanService.getCarePlanById(carePlanId, req.tenantDb);
+    return this.carePlanService.getCarePlanById(carePlanId, req.tenantDb, req.user.sub);
   }
 
   @Post('care-plans/:carePlanId/progress')
@@ -2016,7 +2016,7 @@ export class PatientPortalController {
     @Param('carePlanId') carePlanId: string,
     @Body() progressData: { notes: string; metrics?: any },
   ) {
-    return this.carePlanService.updateCarePlan(carePlanId, { notes: progressData.notes }, req.tenantDb);
+    return this.carePlanService.updateCarePlan(carePlanId, { notes: progressData.notes }, req.tenantDb, req.user.sub);
   }
 
   @Post('care-plans/:carePlanId/goals/:goalId/progress')
@@ -2032,10 +2032,10 @@ export class PatientPortalController {
     @Param('goalId') goalId: string,
     @Body() progressData: { currentValue: number; notes?: string; metrics?: any },
   ) {
-    return this.carePlanService.updateGoal(goalId, { 
+    return this.carePlanService.updateGoal(goalId, {
       currentValue: progressData.currentValue,
-      notes: progressData.notes 
-    }, req.tenantDb);
+      notes: progressData.notes
+    }, req.tenantDb, req.user.sub);
   }
 
   // ==================== TIER 1: E-CONSENT MANAGEMENT ====================

@@ -30,9 +30,15 @@ export class HipaaAuditInterceptor implements NestInterceptor {
     const handler = context.getHandler();
     const controller = context.getClass();
 
-    // Extract user information
+    // Extract user information. Patient-portal JWTs put the patient's own id
+    // in `sub`/`id` — that id is a valid UUID but lives in `patients`, not
+    // `users`, so treating it as a staff userId trips hipaa_audit_logs'
+    // user_id -> users FK and silently drops every patient-portal audit
+    // entry. Route patient actors through patientId instead (matches
+    // hipaa-audit.service.ts's existing NULL-user_id-for-patient-portal path).
     const user = (request as any).user;
-    const userId = user?.id || user?.userId || 'anonymous';
+    const isPatientActor = user?.role === 'patient';
+    const userId = isPatientActor ? 'anonymous' : (user?.id || user?.userId || 'anonymous');
     const userName = user?.fullName || user?.name || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email) || 'Unknown';
     const userRole = user?.role || 'unknown';
 
@@ -48,8 +54,12 @@ export class HipaaAuditInterceptor implements NestInterceptor {
     const action = this.determineAction(method, route, handler.name);
     const resourceType = this.determineResourceType(route, controller.name);
 
-    // Extract patient ID from params or body
-    const patientId = this.extractPatientId(request);
+    // Extract patient ID from params or body. For a patient acting on their
+    // own record (e.g. GET /patient-portal/goals/:goalId — no patientId in
+    // the URL at all), fall back to their own JWT identity.
+    const patientId = isPatientActor
+      ? (user?.patientId || user?.sub || user?.id)
+      : this.extractPatientId(request);
 
     // Extract resource ID
     const resourceId = (request.params?.id || request.params?.patientId || request.body?.id) as string | undefined;

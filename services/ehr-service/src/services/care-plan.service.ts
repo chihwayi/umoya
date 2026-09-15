@@ -64,10 +64,16 @@ export class CarePlanService {
     return this.getCarePlanById(carePlan.id, tenantDb);
   }
 
-  async updateCarePlan(planId: string, updates: any, tenantDb: DataSource) {
+  // patientId, when passed, scopes the lookup to that patient's own plan —
+  // callers reached from the patient-portal (where any authenticated patient
+  // could otherwise read/edit any other patient's care plan by ID) must
+  // always pass it. Staff-facing callers omit it (staff may manage any plan).
+  async updateCarePlan(planId: string, updates: any, tenantDb: DataSource, patientId?: string) {
     this.ensureTenantDb(tenantDb);
 
-    const existing = await tenantDb.query(`SELECT * FROM care_plans WHERE id = $1`, [planId]);
+    const existing = patientId
+      ? await tenantDb.query(`SELECT * FROM care_plans WHERE id = $1 AND patient_id = $2`, [planId, patientId])
+      : await tenantDb.query(`SELECT * FROM care_plans WHERE id = $1`, [planId]);
     if (existing.length === 0) {
       throw new NotFoundException('Care plan not found');
     }
@@ -177,10 +183,12 @@ export class CarePlanService {
     return carePlans;
   }
 
-  async getCarePlanById(planId: string, tenantDb: DataSource) {
+  async getCarePlanById(planId: string, tenantDb: DataSource, patientId?: string) {
     this.ensureTenantDb(tenantDb);
 
-    const result = await tenantDb.query(`SELECT * FROM care_plans WHERE id = $1`, [planId]);
+    const result = patientId
+      ? await tenantDb.query(`SELECT * FROM care_plans WHERE id = $1 AND patient_id = $2`, [planId, patientId])
+      : await tenantDb.query(`SELECT * FROM care_plans WHERE id = $1`, [planId]);
     if (result.length === 0) {
       throw new NotFoundException('Care plan not found');
     }
@@ -266,10 +274,17 @@ export class CarePlanService {
     return result[0];
   }
 
-  async updateGoal(goalId: string, updates: any, tenantDb: DataSource) {
+  async updateGoal(goalId: string, updates: any, tenantDb: DataSource, patientId?: string) {
     this.ensureTenantDb(tenantDb);
 
-    const existing = await tenantDb.query(`SELECT * FROM care_plan_goals WHERE id = $1`, [goalId]);
+    const existing = patientId
+      ? await tenantDb.query(
+          `SELECT g.* FROM care_plan_goals g
+           JOIN care_plans p ON p.id = g.care_plan_id
+           WHERE g.id = $1 AND p.patient_id = $2`,
+          [goalId, patientId],
+        )
+      : await tenantDb.query(`SELECT * FROM care_plan_goals WHERE id = $1`, [goalId]);
     if (existing.length === 0) {
       throw new NotFoundException('Goal not found');
     }
