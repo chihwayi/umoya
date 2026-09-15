@@ -11,6 +11,7 @@ import { PAYMENT_STATUS } from '../constants/payment-status';
 import { TerminologyService, SnomedMapping } from './terminology.service';
 import { CdssHookService } from './cdss-hook.service';
 import { StoreroomService } from './storeroom.service';
+import { StaffNotificationsService } from './staff-notifications.service';
 
 @Injectable()
 export class LabOrderService {
@@ -22,6 +23,7 @@ export class LabOrderService {
     private terminologyService: TerminologyService,
     private readonly cdssHookService: CdssHookService,
     @Optional() private readonly storeroomService: StoreroomService,
+    @Optional() private readonly staffNotifications: StaffNotificationsService,
   ) {}
 
   private async getLabLocationId(tenantDb: any): Promise<string | null> {
@@ -876,7 +878,7 @@ export class LabOrderService {
     return labOrderRepository.save(labOrder);
   }
 
-  async submitResults(id: string, resultsDto: any, tenantDb: DataSource, reviewedById: string): Promise<LabOrder> {
+  async submitResults(id: string, resultsDto: any, tenantDb: DataSource, reviewedById: string, tenantId?: string): Promise<LabOrder> {
     const labOrderRepository = tenantDb.getRepository(LabOrder);
     const testRepository = tenantDb.getRepository(LabTest);
     const patientRepository = tenantDb.getRepository(Patient);
@@ -897,6 +899,7 @@ export class LabOrderService {
       const results = resultsDto.results || labOrder.results;
       
       // Check for critical values and create alerts
+      let hasCriticalResult = false;
       if (results && Array.isArray(results)) {
         for (const result of results) {
           if (result.testCode && result.value) {
@@ -911,8 +914,9 @@ export class LabOrderService {
                 const criticalCheck = await this.checkCriticalValue(test, numericValue);
                 
                 if (criticalCheck.isCritical) {
+                  hasCriticalResult = true;
                   const alertMessage = `Critical ${criticalCheck.type} value: ${result.testName} = ${result.value} ${result.unit || ''}`;
-                  
+
                   await this.criticalAlertService.createAlert({
                     labOrderId: labOrder.id,
                     patientId: labOrder.patientId,
@@ -950,6 +954,23 @@ export class LabOrderService {
       });
       
     const completedOrder = await labOrderRepository.save(labOrder);
+
+    // Notify the ordering clinician — results were previously only ever
+    // discoverable by manually reopening the order (or, for critical values,
+    // by a CriticalResultAlert row that nothing ever surfaced). Lab -> Doctor/
+    // Nurse was a dead-end write with no read-side signal.
+    if (this.staffNotifications && tenantId && completedOrder.orderingProviderId) {
+      const testNames = Array.isArray(results)
+        ? results.map((r: any) => r.testName).filter(Boolean).join(', ')
+        : undefined;
+      this.staffNotifications.notifyLabResultReady(tenantId, tenantDb, {
+        recipientId: completedOrder.orderingProviderId,
+        labOrderId: completedOrder.id,
+        patientName: patient ? `${patient.firstName} ${patient.lastName}` : undefined,
+        testName: testNames || undefined,
+        isCritical: hasCriticalResult,
+      }).catch(e => this.logger.warn(`Lab result notification failed for order ${completedOrder.id}: ${e?.message}`));
+    }
 
     // ── Storeroom kit deduction ─────────────────────────────────────────────
     const kitCatalogId = (completedOrder as any).kit_catalog_id;

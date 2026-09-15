@@ -173,6 +173,7 @@ export class StaffNotificationsService {
       labOrderId: string;
       patientName?: string;
       testName?: string;
+      isCritical?: boolean;
     },
   ): Promise<void> {
     await this.create(
@@ -180,11 +181,11 @@ export class StaffNotificationsService {
       {
         recipientId: opts.recipientId,
         notificationType: 'lab_result_ready',
-        title: 'Lab result ready for review',
+        title: opts.isCritical ? 'CRITICAL lab result ready for review' : 'Lab result ready for review',
         message: opts.testName && opts.patientName
-          ? `${opts.testName} results are ready for ${opts.patientName}.`
+          ? `${opts.isCritical ? 'CRITICAL: ' : ''}${opts.testName} results are ready for ${opts.patientName}.`
           : 'A lab result is ready for your review.',
-        priority: 'normal',
+        priority: opts.isCritical ? 'urgent' : 'normal',
         actionUrl: `/lab-orders/${opts.labOrderId}`,
         actionLabel: 'View Result',
         sourceEntityId: opts.labOrderId,

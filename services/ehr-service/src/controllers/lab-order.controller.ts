@@ -84,7 +84,7 @@ export class LabOrderController {
   @Put(':id/submit-results')
   @ApiOperation({ summary: 'Submit lab results (with optional documents)' })
   async submitResults(@Param('id') id: string, @Body() resultsDto: any, @Request() req: RequestWithTenant) {
-    const updated = await this.labOrderService.submitResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
+    const updated = await this.labOrderService.submitResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id, req.tenantId);
 
     // ── PROACTIVE TRIGGER — pass fresh lab results ──
     if (updated?.patientId) {

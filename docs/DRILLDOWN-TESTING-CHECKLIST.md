@@ -2142,3 +2142,97 @@ Bug ref:       services/ehr-service/src/interceptors/hipaa-audit.interceptor.ts.
 |---|---|---|---|
 | 52 | 7 patient-portal routes (health goals + care plans) fetched/mutated records by URL id with no check the record belonged to the calling patient -- any authenticated patient could read, edit, or delete any other patient's health goals and care plans | **Security (critical) -- IDOR / broken object-level authorization** | Fixed |
 | 53 | hipaa-audit.interceptor.ts treated a patient-portal JWT's own id as a staff user_id, tripping hipaa_audit_logs' FK to `users` on every single patient-portal request -- 100% of patient actions produced no audit trail, silently (caught by the interceptor's own error-swallowing try/catch) | **Compliance (critical) -- HIPAA audit trail completely broken for patient-portal access** | Fixed |
+
+
+### Test 40 -- Lab results never notified the ordering clinician (backend, patient-safety)
+
+```
+Module:        Laboratory -- result submission -> clinician notification
+Platform:      Backend
+Role:          Doctor/nurse (whoever ordered the test)
+Context:       Found by a background architectural audit of bidirectional communication flows
+               (patient<->nurse, nurse<->doctor, doctor<->patient, lab<->doctor, lab<->nurse,
+               lab<->patient), requested explicitly to check that data actually flows both ways
+               between these roles, not just one.
+               lab-order.service.ts's submitResults() already detects critical values and calls
+               CriticalAlertService.createAlert() -- but that only INSERTs a row into
+               critical_result_alerts; nothing ever notified anyone it existed (a clinician
+               would have to already know to poll GET /critical-alerts/pending). Worse: for
+               NON-critical (the overwhelming majority of) results, there was no notification
+               path at all -- StaffNotificationsService.notifyLabResultReady() existed, fully
+               implemented, wired into the same notification system nurse-task assignment
+               already uses successfully, but had zero callers anywhere in the codebase. A
+               doctor or nurse who ordered a test had no way to learn results were ready other
+               than manually reopening that specific order.
+Fix:           Injected StaffNotificationsService into LabOrderService (@Optional(), matching
+               the existing StoreroomService pattern). submitResults() now takes an optional
+               tenantId param (threaded from the controller's req.tenantId, matching
+               NurseTaskService's existing tenantId-threading pattern) and, after saving the
+               completed order, calls notifyLabResultReady() for the ordering provider --
+               summarizing the test name(s) and patient name, and marked isCritical (bumping
+               priority to 'urgent' and the title/message) if any result in the batch tripped
+               the critical-value check. Also extended notifyLabResultReady() with an
+               isCritical flag so a critical result's notification is visibly distinct from a
+               routine one, not just an identical "ready for review".
+Steps to test: Created a real lab order for the TEST_ patient with the e2e-clinic doctor as
+               orderingProviderId (via POST /lab-orders, bypassing the awaiting_payment gate by
+               marking payment_status=payment_confirmed directly, matching prior session
+               precedent for backend-only test-data setup), then PUT
+               /lab-orders/:id/submit-results with a normal (non-critical) result. Checked
+               staff_notifications for a row, then the doctor's own GET /staff-notifications API
+               to confirm delivery through the real endpoint.
+Actual result: Pass. A lab_result_ready notification was created for the ordering doctor
+               immediately on result submission (message: "Complete Blood Count results are
+               ready for TEST_VerifyAnc MobileGaps.", priority normal, actionUrl pointing at the
+               order). Confirmed visible via the doctor's own GET /staff-notifications endpoint,
+               not just the raw table. npx tsc --noEmit clean. Test lab order, notification, and
+               its finance transaction deleted after verification.
+Status:        Fail (lab results were a complete write-only dead end for both doctors and
+               nurses -- results existed but nothing ever told the ordering clinician they were
+               ready, critical or not) -> Fixed -> Pass (verified live end-to-end through the
+               real notification API).
+Bug ref:       services/ehr-service/src/services/lab-order.service.ts,
+               services/ehr-service/src/services/staff-notifications.service.ts,
+               services/ehr-service/src/controllers/lab-order.controller.ts.
+
+Note: this tenant's lab_tests table has zero rows with critical_high/critical_low configured,
+so the isCritical branch (urgent priority + CRITICAL-prefixed message) could not be exercised
+end-to-end against live data in this environment -- the code path was verified by reading
+checkCriticalValue()'s logic and confirming hasCriticalResult correctly gates the isCritical
+flag, but that's a data-configuration gap (no tenant has ever populated critical thresholds for
+any test), not a code bug, and is out of scope for a backend fix. Flagged for follow-up: lab
+reference-range/critical-threshold seeding is missing for this tenant entirely.
+```
+
+## Update to Step 4 Deliverables (cont. 15)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 54 | Lab results (critical and routine alike) never notified the ordering doctor/nurse -- CriticalAlertService only wrote a DB row nothing ever surfaced, and StaffNotificationsService.notifyLabResultReady() existed fully implemented but had zero callers | **Patient safety (critical) -- lab-to-clinician communication was a complete dead end** | Fixed |
+
+## Update to Step 4 Deliverables (cont. 16) -- Bidirectional Communication Audit Summary
+
+Requested audit of 6 actor-pair communication flows (patient<->nurse, nurse<->doctor,
+doctor<->patient, lab<->doctor, lab<->nurse, lab<->patient). Findings beyond bug #54 (Lab<->Doctor
+and Lab<->Nurse, both fixed together since they share the same notifyLabResultReady() call site):
+
+- **Patient<->Nurse**: partially working (nurses share the same unrestricted staff inbox patients'
+  messages triage into, and can reply via the same endpoint fixed in Test 30) but messages aren't
+  routed to a specific nurse -- generic staff/doctor recipientType only. Not a security or
+  data-loss bug, a UX/routing gap. Not fixed this pass -- needs a product decision on whether
+  patients should be able to target "my nurse" specifically before building routing for it.
+- **Nurse<->Doctor**: nurse-created tasks notify the assigned nurse (via the same
+  notifyTaskAssigned() pattern bug #54 now mirrors for labs) but there's no reverse
+  doctor->nurse task assignment, no escalation-to-doctor path, and no abnormal-vitals-alerts-
+  doctor flow. Real gap, but broad (would mean designing a new escalation feature, not fixing an
+  existing broken wire) -- flagged for a future sprint rather than a drive-by fix.
+- **Doctor<->Patient**: patient-initiated messaging + staff reply already works (Test 30). No
+  doctor-initiated-to-patient messaging exists (only reactive replies), and prescriptions/visit
+  notes don't push a notification to the patient portal (patient would have to check manually).
+  Same as above -- a feature gap, not a broken wire, deferred.
+- **Lab<->Patient**: patient portal shows completed lab results, but with no critical-value hold
+  (imaging already has one: a critical report is blocked until a physician acknowledges it,
+  lab results have no equivalent) and no "new result available" notification to the patient
+  (only a manual SMS helper that's never called). Real gap, flagged for follow-up -- deliberately
+  not fixed in this pass since a hold/release mechanism for lab results touches clinical policy
+  (who must acknowledge, what counts as critical) that's a product decision, not just a wiring fix.
