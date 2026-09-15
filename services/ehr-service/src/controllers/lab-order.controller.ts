@@ -2,6 +2,8 @@ import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Reque
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { LabOrderService } from '../services/lab-order.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { LabOrderStatus } from '../entities/lab-order.entity';
 import { ProactiveAiService } from '../services/proactive-ai.service';
@@ -9,7 +11,7 @@ import { ProactiveAiService } from '../services/proactive-ai.service';
 @ApiTags('Laboratory Orders')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('lab-orders')
 export class LabOrderController {
   private readonly logger = new Logger(LabOrderController.name);
@@ -20,6 +22,7 @@ export class LabOrderController {
   ) {}
 
   @Post()
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Create lab order' })
   async createLabOrder(@Body() createDto: any, @Request() req: RequestWithTenant) {
     return this.labOrderService.create(createDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id, req.tenantId);
@@ -32,6 +35,7 @@ export class LabOrderController {
   }
 
   @Put(':id/results')
+  @Roles('lab_tech', 'doctor', 'admin')
   @ApiOperation({ summary: 'Add lab results' })
   async addResults(@Param('id') id: string, @Body() resultsDto: any, @Request() req: RequestWithTenant) {
     const updated = await this.labOrderService.addResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
@@ -70,18 +74,21 @@ export class LabOrderController {
   }
 
   @Put(':id/collect')
+  @Roles('lab_tech', 'nurse', 'admin')
   @ApiOperation({ summary: 'Mark sample as collected' })
   async collectSample(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.labOrderService.collectSample(id, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Put(':id/start-processing')
+  @Roles('lab_tech', 'admin')
   @ApiOperation({ summary: 'Start processing lab order' })
   async startProcessing(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.labOrderService.startProcessing(id, req.tenantDb);
   }
 
   @Put(':id/submit-results')
+  @Roles('lab_tech', 'doctor', 'admin')
   @ApiOperation({ summary: 'Submit lab results (with optional documents)' })
   async submitResults(@Param('id') id: string, @Body() resultsDto: any, @Request() req: RequestWithTenant) {
     const updated = await this.labOrderService.submitResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id, req.tenantId);
@@ -101,12 +108,14 @@ export class LabOrderController {
   }
 
   @Put(':id/status')
+  @Roles('lab_tech', 'doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Update lab order status' })
   async updateStatus(@Param('id') id: string, @Body() body: { status: string }, @Request() req: RequestWithTenant) {
     return this.labOrderService.updateStatus(id, body.status as LabOrderStatus, req.tenantDb);
   }
 
   @Put(':id/processing-context')
+  @Roles('lab_tech', 'doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Update processing context, analyzer assignment, or workflow notes' })
   async updateProcessingContext(
     @Param('id') id: string,
@@ -145,6 +154,7 @@ export class LabOrderController {
   }
 
   @Post('quality-controls')
+  @Roles('lab_tech', 'admin')
   @ApiOperation({ summary: 'Log a quality control run' })
   async createQualityControl(
     @Body()
@@ -171,6 +181,7 @@ export class LabOrderController {
   }
 
   @Post('inventory/reagents')
+  @Roles('lab_tech', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Create or update a reagent inventory item' })
   async upsertReagentInventory(
     @Body()
@@ -199,6 +210,7 @@ export class LabOrderController {
   }
 
   @Patch('inventory/reagents/:id/quantity')
+  @Roles('lab_tech', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Update reagent quantity' })
   async updateReagentQuantity(
     @Param('id') id: string,

@@ -1,10 +1,12 @@
 import { Controller, Get, Post, Param, Query, Body, UseGuards, Request } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { DrugService } from '../services/drug.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('drugs')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class DrugController {
   constructor(
     private drugService: DrugService
@@ -44,6 +46,7 @@ export class DrugController {
   }
 
   @Post('seed')
+  @Roles('admin')
   async seedDefaultDrugs(
     @Request() req: RequestWithTenant
   ) {

@@ -1,14 +1,21 @@
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { BloodBankService } from '../services/blood-bank.service';
 import { TenantService } from '../services/tenant.service';
 
+// Transfusion errors are life-threatening — every write route here (donor
+// registration, unit reservation, crossmatching, transfusion start/
+// complete, MTP activation) previously required only JwtAuthGuard, so any
+// authenticated staff account (e.g. a receptionist) could order or start a
+// transfusion. GET routes stay open to any authenticated staff.
 @ApiTags('Blood Bank')
 @ApiBearerAuth()
 @Controller('blood-bank')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class BloodBankController {
   constructor(
     private readonly bloodBankService: BloodBankService,
@@ -18,6 +25,7 @@ export class BloodBankController {
   // ==================== DONORS ====================
 
   @Post('donors')
+  @Roles('lab_tech', 'admin')
   @ApiOperation({ summary: 'Register blood donor' })
   @ApiResponse({ status: 201, description: 'Donor registered' })
   async registerDonor(
@@ -73,6 +81,7 @@ export class BloodBankController {
   }
 
   @Post('inventory/:id/reserve')
+  @Roles('lab_tech', 'doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Reserve blood unit for patient' })
   @ApiResponse({ status: 200, description: 'Unit reserved' })
   async reserveUnit(
@@ -87,6 +96,7 @@ export class BloodBankController {
   // ==================== TRANSFUSIONS ====================
 
   @Post('transfusions')
+  @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'Order blood transfusion' })
   @ApiResponse({ status: 201, description: 'Transfusion ordered' })
   async orderTransfusion(
@@ -98,6 +108,7 @@ export class BloodBankController {
   }
 
   @Post('transfusions/:id/start')
+  @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Start blood transfusion' })
   @ApiResponse({ status: 200, description: 'Transfusion started' })
   async startTransfusion(
@@ -110,6 +121,7 @@ export class BloodBankController {
   }
 
   @Post('transfusions/:id/vitals')
+  @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Record transfusion vitals' })
   @ApiResponse({ status: 200, description: 'Vitals recorded' })
   async recordTransfusionVitals(
@@ -122,6 +134,7 @@ export class BloodBankController {
   }
 
   @Post('transfusions/:id/complete')
+  @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Complete blood transfusion' })
   @ApiResponse({ status: 200, description: 'Transfusion completed' })
   async completeTransfusion(
@@ -202,6 +215,7 @@ export class BloodBankController {
   }
 
   @Post('type-and-screen')
+  @Roles('lab_tech', 'admin')
   @ApiOperation({ summary: 'Type and screen for patient' })
   async typeAndScreen(@Body() body: { patientId: string; bloodGroup: string; rhFactor: string; antibodyScreen?: string }, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -210,6 +224,7 @@ export class BloodBankController {
   }
 
   @Post('crossmatch')
+  @Roles('lab_tech', 'admin')
   @ApiOperation({ summary: 'Perform crossmatch' })
   async performCrossmatch(@Body() body: { patientId: string; inventoryId: string; majorCrossMatch?: string; minorCrossMatch?: string }, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -225,6 +240,7 @@ export class BloodBankController {
   }
 
   @Post('transfusions/:id/reaction')
+  @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Report transfusion reaction' })
   async reportTransfusionReaction(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -240,6 +256,7 @@ export class BloodBankController {
   }
 
   @Post('massive-transfusion-protocol')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Activate massive transfusion protocol' })
   async activateMTP(@Body() body: { patientId: string; unitsRequested?: number; indication?: string }, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);

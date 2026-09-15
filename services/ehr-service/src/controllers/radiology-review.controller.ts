@@ -2,14 +2,17 @@ import {
   Controller, Get, Post, Patch, Param, Body, Req, UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RadiologyAiService } from '../services/radiology-ai.service';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('radiology')
 export class RadiologyReviewController {
   constructor(private readonly radiologyAi: RadiologyAiService) {}
 
   @Post('studies/:studyId/analyse')
+  @Roles('radiologist', 'doctor', 'admin')
   async analyseStudy(
     @Param('studyId') studyId: string,
     @Body() body: { patientId: string; modality?: string; bodyPart?: string },
@@ -34,6 +37,7 @@ export class RadiologyReviewController {
   }
 
   @Patch('ai-findings/:findingId/review')
+  @Roles('radiologist', 'admin')
   async reviewFinding(
     @Param('findingId') findingId: string,
     @Body() body: { status: 'confirmed' | 'rejected' | 'needs_review'; comment?: string },

@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { ReferralService } from '../services/referral.service';
 import { ReferralTemplateService } from '../services/referral-template.service';
@@ -20,7 +22,7 @@ import { ReferralFacilityService } from '../services/referral-facility.service';
 
 @ApiTags('Referrals')
 @Controller('referrals')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class ReferralController {
   constructor(
@@ -32,6 +34,7 @@ export class ReferralController {
   // ==================== REFERRAL MANAGEMENT ====================
 
   @Post()
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Create a new referral' })
   @ApiResponse({ status: 201, description: 'Referral created successfully' })
   async createReferral(
@@ -88,6 +91,7 @@ export class ReferralController {
   }
 
   @Put(':id')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Update a referral' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiResponse({ status: 200, description: 'Referral updated successfully' })
@@ -100,6 +104,7 @@ export class ReferralController {
   }
 
   @Delete(':id')
+  @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'Delete a referral' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiResponse({ status: 200, description: 'Referral deleted successfully' })
@@ -110,6 +115,7 @@ export class ReferralController {
   // ==================== REFERRAL ACTIONS ====================
 
   @Post(':id/send')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Send a referral' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiResponse({ status: 200, description: 'Referral sent successfully' })
@@ -122,6 +128,7 @@ export class ReferralController {
   }
 
   @Post(':id/acknowledge')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Acknowledge receipt of referral' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiResponse({ status: 200, description: 'Referral acknowledged successfully' })
@@ -134,6 +141,7 @@ export class ReferralController {
   }
 
   @Post(':id/schedule')
+  @Roles('doctor', 'nurse', 'receptionist', 'admin')
   @ApiOperation({ summary: 'Schedule appointment for referral' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiResponse({ status: 200, description: 'Appointment scheduled successfully' })
@@ -146,6 +154,7 @@ export class ReferralController {
   }
 
   @Post(':id/complete')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Complete a referral' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiResponse({ status: 200, description: 'Referral completed successfully' })
@@ -158,6 +167,7 @@ export class ReferralController {
   }
 
   @Post(':id/cancel')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Cancel a referral' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiResponse({ status: 200, description: 'Referral cancelled successfully' })
@@ -180,6 +190,7 @@ export class ReferralController {
   // ==================== REFERRAL ATTACHMENTS ====================
 
   @Post(':id/attachments')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Add attachment to referral' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiResponse({ status: 201, description: 'Attachment added successfully' })
@@ -200,6 +211,7 @@ export class ReferralController {
   }
 
   @Delete(':id/attachments/:attachmentId')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Delete an attachment' })
   @ApiParam({ name: 'id', description: 'Referral ID' })
   @ApiParam({ name: 'attachmentId', description: 'Attachment ID' })
@@ -232,6 +244,7 @@ export class ReferralController {
   }
 
   @Post('templates')
+  @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'Create a new referral template' })
   @ApiResponse({ status: 201, description: 'Template created successfully' })
   async createTemplate(
@@ -242,6 +255,7 @@ export class ReferralController {
   }
 
   @Put('templates/:id')
+  @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'Update a template' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template updated successfully' })
@@ -254,6 +268,7 @@ export class ReferralController {
   }
 
   @Delete('templates/:id')
+  @Roles('admin')
   @ApiOperation({ summary: 'Delete a template' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template deleted successfully' })
@@ -262,6 +277,7 @@ export class ReferralController {
   }
 
   @Post('templates/:id/apply')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Apply a template to create a referral' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 201, description: 'Referral created from template' })
@@ -320,6 +336,7 @@ export class ReferralController {
   }
 
   @Post('facilities')
+  @Roles('admin')
   @ApiOperation({ summary: 'Add a new facility to directory' })
   @ApiResponse({ status: 201, description: 'Facility added successfully' })
   async addFacility(@Body() facilityData: any, @Req() req: RequestWithTenant) {
@@ -327,6 +344,7 @@ export class ReferralController {
   }
 
   @Put('facilities/:id')
+  @Roles('admin')
   @ApiOperation({ summary: 'Update a facility' })
   @ApiParam({ name: 'id', description: 'Facility ID' })
   @ApiResponse({ status: 200, description: 'Facility updated successfully' })
@@ -339,6 +357,7 @@ export class ReferralController {
   }
 
   @Delete('facilities/:id')
+  @Roles('admin')
   @ApiOperation({ summary: 'Delete a facility' })
   @ApiParam({ name: 'id', description: 'Facility ID' })
   @ApiResponse({ status: 200, description: 'Facility deleted successfully' })

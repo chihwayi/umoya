@@ -1,13 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { PriorAuthorizationService } from '../services/prior-authorization.service';
 
 @ApiTags('Prior Authorization')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('prior-authorizations')
 export class PriorAuthorizationController {
   constructor(private readonly service: PriorAuthorizationService) {}
@@ -31,6 +33,7 @@ export class PriorAuthorizationController {
   }
 
   @Post()
+  @Roles('accounts', 'nurse_accounts', 'doctor', 'admin')
   @ApiOperation({ summary: 'Create prior authorization (draft)' })
   @ApiResponse({ status: 201 })
   create(@Body() body: any, @Req() req: RequestWithTenant) {
@@ -39,6 +42,7 @@ export class PriorAuthorizationController {
   }
 
   @Put(':id')
+  @Roles('accounts', 'nurse_accounts', 'admin')
   @ApiOperation({ summary: 'Update prior authorization' })
   @ApiResponse({ status: 200 })
   update(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithTenant) {
@@ -46,6 +50,7 @@ export class PriorAuthorizationController {
   }
 
   @Delete(':id')
+  @Roles('accounts', 'admin')
   @ApiOperation({ summary: 'Delete prior authorization' })
   @ApiResponse({ status: 200 })
   delete(@Param('id') id: string, @Req() req: RequestWithTenant) {
@@ -53,6 +58,7 @@ export class PriorAuthorizationController {
   }
 
   @Post(':id/status')
+  @Roles('accounts', 'nurse_accounts', 'admin')
   @ApiOperation({ summary: 'Update status + workflow fields' })
   @ApiResponse({ status: 200 })
   setStatus(

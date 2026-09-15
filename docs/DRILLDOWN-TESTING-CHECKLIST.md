@@ -2409,3 +2409,80 @@ Bug ref:       services/ehr-service/src/controllers/pharmacy.controller.ts.
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 58 | pharmacy.controller.ts had no role restriction on ~24 of its ~25 write routes (suppliers, inventory, purchase orders, stock adjustments, pricing, formulary, dispensing, payments) -- any authenticated staff account could mutate pharmacy data or dispense medication regardless of role | **Security (high) -- missing RBAC across an entire module's write surface** | Fixed |
+
+
+### Test 44 -- Missing RBAC across blood bank, lab results, radiology review, referrals, prior-auth, drug seeding (backend, security)
+
+```
+Module:        Blood Bank/Transfusion, Lab Result Finalization, Radiology AI Review, Referrals,
+               Prior Authorization, Drug Database Seeding
+Platform:      Backend
+Role:          Any authenticated staff role
+Context:       Continuation of the RBAC sweep (Tests 42/43, bugs #56-58). Six more controllers
+               had the same "@UseGuards(JwtAuthGuard) only, no role restriction" gap on
+               genuinely high-risk actions:
+               - blood-bank.controller.ts: registering donors, reserving units, ordering/
+                 starting/completing transfusions, type-and-screen, crossmatch, reporting
+                 transfusion reactions, and activating the massive transfusion protocol all had
+                 zero role restriction -- transfusion errors are life-threatening, and any
+                 authenticated staff account (receptionist, etc.) could order or start one.
+               - lab-order.controller.ts: adding/submitting lab results, sample collection,
+                 processing status, quality-control logging, and reagent inventory had no role
+                 restriction -- any staff account could finalize a lab result into the clinical
+                 record.
+               - radiology-review.controller.ts: triggering AI analysis of an imaging study and,
+                 more seriously, reviewing/confirming an AI finding into the record had no role
+                 restriction -- the entire point of a "clinician must validate AI output" gate
+                 is defeated if any staff role can do the validating.
+               - referral.controller.ts: creating/updating/deleting referrals, sending/
+                 acknowledging/scheduling/completing/cancelling them, attachments, templates,
+                 and the facility directory all had no role restriction.
+               - prior-authorization.controller.ts: creating/updating/deleting a prior auth and
+                 setting its status (including approve/deny, which gates whether a patient's
+                 treatment is covered) had no role restriction.
+               - drug.controller.ts: POST /drugs/seed (reseeds the formulary/drug database) had
+                 no role restriction at all -- any authenticated user could trigger it.
+Fix:           Added RolesGuard + per-route @Roles(...) to all six controllers, using role sets
+               appropriate to each domain and consistent with the roles already established this
+               session (storeroom.controller.ts, finance.controller.ts, pharmacy.controller.ts):
+               blood bank -- lab_tech for donor/crossmatch/type-and-screen work, doctor for
+               ordering a transfusion, nurse+doctor for administering/monitoring/reacting to one
+               (matching real-world transfusion administration by nursing staff), doctor+nurse
+               for MTP activation (an emergency action that shouldn't be gated behind only one
+               role being present). Lab -- lab_tech for results/QC/reagents, doctor added to the
+               results routes (a doctor may also enter/correct a result). Radiology -- radiologist
+               (+doctor for triggering analysis, since a doctor might order an AI read) but
+               review/confirmation restricted to radiologist only. Referrals -- doctor/nurse for
+               the clinical workflow, admin-only for the template and facility-directory
+               (reference data) routes. Prior authorization -- accounts/nurse_accounts (this
+               system's existing billing-role pattern) plus doctor for creation. Drug seeding --
+               admin only. GET/read routes were left open to any authenticated staff throughout.
+Steps to test: As receptionist: 1) POST /blood-bank/transfusions, 2) PUT
+               /lab-orders/:id/submit-results, 3) PATCH /radiology/ai-findings/:id/review,
+               4) DELETE /referrals/facilities/:id, 5) POST /drugs/seed -- all five expected a
+               clean 403. As doctor: 6) POST /referrals with a complete payload -- expected
+               success.
+Actual result: Pass on all six checks. All five receptionist attempts returned 403. Doctor's
+               referral create succeeded (id e9ad182f-..., status 'draft', correctly attributed
+               to the doctor as referring_provider_id). npx tsc --noEmit clean across all six
+               files. Test referral deleted, receptionist test password restored after
+               verification.
+Status:        Fail (any authenticated staff account could order a transfusion, finalize a lab
+               result, approve an AI radiology finding, or delete referral/facility directory
+               data) -> Fixed -> Pass (verified live).
+Bug ref:       services/ehr-service/src/controllers/blood-bank.controller.ts,
+               services/ehr-service/src/controllers/lab-order.controller.ts,
+               services/ehr-service/src/controllers/radiology-review.controller.ts,
+               services/ehr-service/src/controllers/referral.controller.ts,
+               services/ehr-service/src/controllers/prior-authorization.controller.ts,
+               services/ehr-service/src/controllers/drug.controller.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 20)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 59 | blood-bank.controller.ts had no role restriction on any write route -- any authenticated staff account could order/start/complete a transfusion, crossmatch blood, or activate the massive transfusion protocol | **Patient safety (critical) -- unrestricted transfusion actions** | Fixed |
+| 60 | lab-order.controller.ts had no role restriction on results entry/submission, sample collection, QC logging, or reagent inventory | **Security/clinical-integrity (high) -- any staff could finalize lab results** | Fixed |
+| 61 | radiology-review.controller.ts had no role restriction on AI-finding review/confirmation -- defeats the intended "clinician validates AI output" safeguard | **Clinical-integrity (high) -- AI diagnostic findings confirmable by any staff role** | Fixed |
+| 62 | referral.controller.ts, prior-authorization.controller.ts, and drug.controller.ts had no role restriction on referral/prior-auth workflow actions, the referral facility/template directories, or drug-database seeding | **Security (medium-high) -- unrestricted care-coordination and reference-data writes** | Fixed |
