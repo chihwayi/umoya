@@ -2236,3 +2236,48 @@ and Lab<->Nurse, both fixed together since they share the same notifyLabResultRe
   (only a manual SMS helper that's never called). Real gap, flagged for follow-up -- deliberately
   not fixed in this pass since a hold/release mechanism for lab results touches clinical policy
   (who must acknowledge, what counts as critical) that's a product decision, not just a wiring fix.
+
+
+### Test 41 -- Patient portal could show an unacknowledged critical lab result (backend, patient-safety)
+
+```
+Module:        Patient Portal -- Lab Results
+Platform:      Backend
+Role:          Authenticated patient
+Context:       Follow-up to the bidirectional-communication audit (Test 40 / bug #54). Once lab
+               results were made to actually notify the ordering clinician, the natural next
+               question was: could a PATIENT see a critical result before that clinician does?
+               getPatientLabResults() in patient-portal.service.ts showed every lab order with
+               status = 'completed', with no check against critical_result_alerts at all.
+               imaging_reports already has exactly this guard (verifyImagingReportReleased() /
+               the WHERE clause in getPatientImagingStudies() -- a report flagged is_critical is
+               withheld until an imaging_report_acknowledgements row exists), with a comment
+               explicitly stating the rationale: a patient should never discover a critical
+               finding in an app before their doctor has seen it and had the chance to call
+               them. Lab results had no equivalent -- a patient could open the portal and see
+               (for example) a critical potassium level with zero clinical context, before
+               anyone on staff had even been notified (this was true even before Test 40's fix,
+               and remained a separate, independent gap after it).
+Fix:           Added a NOT EXISTS subquery to getPatientLabResults()'s query builder, excluding
+               any order with a critical_result_alerts row in 'pending' status for that
+               lab_order_id -- same shape as imaging's guard, adapted to this table's schema
+               (status enum pending/acknowledged/dismissed rather than a join table).
+Steps to test: Seeded a completed lab order with a critical result and a 'pending'
+               critical_result_alerts row for the TEST_ patient. 1) GET
+               /patient-portal/lab-results as that patient -- expect the order absent.
+               2) Marked the alert 'acknowledged'. 3) GET again -- expect the order now present.
+Actual result: Pass both ways. Order was absent from the list while the alert was pending,
+               present immediately after acknowledgement. No errors in logs. npx tsc --noEmit
+               clean. Test lab order and alert deleted, patient portal credentials reset after
+               verification.
+Status:        Fail (a patient could see a critical lab result before any clinician acknowledged
+               it, unlike the equivalent imaging safeguard that already existed) -> Fixed ->
+               Pass (verified live both directions).
+Bug ref:       services/ehr-service/src/services/patient-portal.service.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 17)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 55 | getPatientLabResults() showed every completed lab order to the patient with no check for a pending critical_result_alerts row -- a patient could see a critical result before any clinician acknowledged it, unlike the equivalent (already-existing) safeguard on imaging reports | **Patient safety (critical) -- premature critical-result disclosure** | Fixed |

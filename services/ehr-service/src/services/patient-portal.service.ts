@@ -305,7 +305,10 @@ export class PatientPortalService {
     }));
   }
 
-  // Lab Results
+  // Lab Results — a completed order with an unacknowledged critical-value
+  // alert is withheld, same principle as imaging below: a patient should
+  // never be the one to discover a critical result in an app before their
+  // doctor has seen it and had the chance to call them.
   async getPatientLabResults(patientId: string, tenantId: string, filters?: { startDate?: string; endDate?: string }): Promise<any[]> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
     if (!connection) {
@@ -317,7 +320,13 @@ export class PatientPortalService {
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.patient', 'patient')
       .where('order.patientId = :patientId', { patientId })
-      .andWhere('order.status = :status', { status: 'completed' });
+      .andWhere('order.status = :status', { status: 'completed' })
+      .andWhere(
+        `NOT EXISTS (
+           SELECT 1 FROM critical_result_alerts cra
+           WHERE cra.lab_order_id = order.id AND cra.status = 'pending'
+         )`,
+      );
 
     if (filters?.startDate) {
       queryBuilder.andWhere('order.createdAt >= :startDate', { startDate: filters.startDate });
