@@ -2635,3 +2635,81 @@ Bug ref:       services/ehr-service/src/services/anesthesia.service.ts,
 | 67 | anesthesia.service.ts's three update methods Object.assign'd an untyped request body onto the entity, letting a caller overwrite who-assessed/who-anesthetized attribution and its timestamp; anesthesia.controller.ts also had zero role restriction on any route | **Security (high) -- medical record attribution spoofable + missing RBAC** | Fixed |
 | 68 | notification-campaign.service.ts's updateCampaign exposed createdBy/startedAt/completedAt via unrestricted Object.assign | **Security (medium) -- campaign history/attribution spoofable** | Fixed |
 | 69 | practice-management.service.ts's updateSuperbillTemplate exposed createdBy; updateInsuranceVerification exposed verificationStatus/verifiedBy/verifiedAt/financial fields, bypassing the dedicated verification action | **Security (high) -- insurance verification status and financial fields spoofable, enabling billing/coverage fraud** | Fixed |
+
+
+### Test 47 -- CDSS service: fail-open auth default + weak credential fallbacks (backend, security)
+
+```
+Module:        CDSS (Python/FastAPI) -- startup security validation, MinIO storage, master DB
+Platform:      Backend
+Role:          N/A (deployment-configuration hardening)
+Context:       First-ever audit of the CDSS service this session (previously untouched; all
+               prior fixes were in the NestJS ehr-service). Background audit covered auth,
+               injection, prompt injection, multi-tenant isolation, and secrets handling.
+               SQL injection, command injection, and JWT replay protection all checked out fine
+               (parameterized queries throughout, subprocess uses list args, Redis-based jti
+               dedup already implemented).
+               Two real findings, both fail-open-by-default patterns matching this session's
+               recurring theme (webhook secret checks, tenant-middleware bypass, RBAC gaps --
+               all previously fixed in ehr-service): (1) CDSS_REQUIRE_SERVICE_AUTH defaults to
+               "false", and unlike every other security switch in _validate_security_config()
+               (JWT_SECRET, OWNER_EMAILS, egress allowlist, encryption), there was no check
+               forcing it true in a non-dev environment -- a production deployment that simply
+               omitted this one env var would silently run every clinical CDSS endpoint with
+               zero authentication. This deployment's docker-compose.prod.yml already hardcodes
+               it to "true" as static text, and this environment's own .env correctly sets it
+               true -- so NOT currently exploitable here, but nothing at the code level would
+               catch a different orchestrator/deployment forgetting to carry that setting.
+               (2) MinIO credentials and the master-DB connection's Postgres password both had
+               hardcoded fallback defaults ("umoya"/"umoya_password", "postgres") that would be
+               silently used if the real env vars were unset -- inconsistent with
+               _feedback_pg_dsn() two functions above, which already had this exact issue fixed
+               with a comment explaining the rationale (a prior fix applied to one function but
+               missed two siblings).
+               A third area (prompt injection into LLM clinical guidance from patient-controlled
+               free text) was flagged but NOT fixed -- LLM prompt hardening is a design-level
+               change (structured prompting, an injection-detection library) rather than a
+               targeted bug, and the CDSS output already goes through existing PHI-redaction and
+               presumably clinician review before any action is taken; flagged for follow-up
+               rather than a drive-by fix given the uncertainty about downstream safeguards.
+               A fourth claimed finding (feedback endpoints leaking cross-tenant data) was
+               investigated and found to be a false positive: those endpoints ARE covered by the
+               same service-to-service auth middleware as every other route (verified they're
+               not in the exempt-prefix list), and grep of ehr-service confirms zero tenant-
+               facing controllers ever call /feedback/outcome/summary, /review/:id, or
+               /learning/claim -- they're purely an internal ML-ops feedback-aggregation
+               pipeline, and cross-tenant aggregation is inherent to training a single shared
+               clinical model, not a bug.
+Fix:           Added a fail-fast check in _validate_security_config(): non-dev environment +
+               CDSS_REQUIRE_SERVICE_AUTH not true now raises RuntimeError at startup, matching
+               the pattern every other security switch already follows. Removed the MinIO
+               access/secret key hardcoded defaults (now empty string, service warns and MinIO
+               calls fail closed rather than silently authenticating with a known default).
+               Removed the master-DB password's "postgres" fallback (now None, matching
+               _feedback_pg_dsn()'s existing correct behavior of omitting the password component
+               entirely rather than guessing one).
+Steps to test: docker restart umoya-cdss-service and confirm clean startup (ENVIRONMENT=
+               development in this deployment, so the new check doesn't fire; MinIO bucket
+               existence check still passes using the real configured credentials, confirming
+               they're actually set and the removed defaults were never load-bearing here).
+               Then exercised a real end-to-end CDSS call through the EHR service (POST
+               /api/cdss/guidelines/search) to confirm the service-to-service auth path still
+               works correctly post-change.
+Actual result: Pass. Clean restart, "Bucket 'umoya-documents' exists" confirms real MinIO creds
+               in use, application startup completed normally. Guidelines search through the
+               full ehr-service -> CDSS round trip returned real WHO-sourced clinical guidance
+               successfully. No new errors in either service's logs (one pre-existing, unrelated
+               Gemini/Vertex AI billing error observed -- an external API configuration issue,
+               not caused by this change; the request still succeeded via fallback).
+Status:        Fail (no code-level backstop against a production deployment accidentally running
+               CDSS with zero authentication; weak credential defaults inconsistent with a fix
+               already applied to a sibling function) -> Fixed -> Pass (verified live, no
+               regression).
+Bug ref:       services/cdss-service/main.py.
+```
+
+## Update to Step 4 Deliverables (cont. 23)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 70 | CDSS's CDSS_REQUIRE_SERVICE_AUTH had no non-dev-environment enforcement (unlike every other security switch in the same startup validator) -- a production deployment that omitted the env var would silently run all clinical endpoints unauthenticated; MinIO and master-DB connections also had weak hardcoded credential fallbacks inconsistent with a fix already applied to a sibling function in the same file | **Security (medium, defense-in-depth) -- fail-open auth default + inconsistent credential hardening** | Fixed |

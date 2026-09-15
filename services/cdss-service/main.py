@@ -168,7 +168,10 @@ def _master_pg_conn_sync():
     host = os.getenv("DB_HOST") or os.getenv("SERVICE_POSTGRES_HOST", "postgres-master")
     port = int(os.getenv("DB_PORT") or os.getenv("PORT_POSTGRES", "5432"))
     user = os.getenv("DB_USERNAME") or os.getenv("POSTGRES_USER", "postgres")
-    password = os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD", "postgres")
+    # No hardcoded password fallback — same rationale as _feedback_pg_dsn()
+    # above: a misconfigured deployment should fail to connect, not
+    # silently authenticate with a well-known default.
+    password = os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD")
     dbname = os.getenv("MASTER_POSTGRES_DB") or os.getenv("POSTGRES_DB", "umoya")
 
     return psycopg2.connect(
@@ -565,6 +568,15 @@ def _validate_security_config() -> None:
 
     # Strict boolean parsing for security switches
     service_auth_required = _get_bool_env_strict("CDSS_REQUIRE_SERVICE_AUTH", "false")
+    # Every other security switch below fails fast if misconfigured outside
+    # dev — this one didn't: a non-dev deployment that simply omits
+    # CDSS_REQUIRE_SERVICE_AUTH silently runs every clinical endpoint with
+    # zero authentication (the default is "false" for local-dev
+    # convenience). Docker Compose currently hardcodes it to true in
+    # docker-compose.prod.yml, but nothing at the code level backstops a
+    # different orchestrator/deployment forgetting to carry that setting.
+    if not _is_dev_like_env(env) and not service_auth_required:
+        raise RuntimeError("CDSS_REQUIRE_SERVICE_AUTH must be true in non-development environments.")
     _get_bool_env_strict(
         "CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT",
         "false" if _is_dev_like_env(env) else "true",
@@ -1709,9 +1721,14 @@ if not MINIO_ENDPOINT:
     # In docker, it might be 'http://minio:9000', locally 'http://localhost:9000'
     # We'll leave it empty to force configuration or handle it downstream
 
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "umoya")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "umoya_password")
+# No hardcoded fallback credentials — a deployment that forgets to set
+# these should fail loudly (empty creds -> MinIO rejects the connection),
+# not silently accept requests under a well-known default.
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET", "umoya-documents")
+if not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
+    print("Warning: MINIO_ACCESS_KEY/MINIO_SECRET_KEY not set — MinIO requests will be rejected until configured")
 
 # Initialize S3 Client
 s3_client = boto3.client(
