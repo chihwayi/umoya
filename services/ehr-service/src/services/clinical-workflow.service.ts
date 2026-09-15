@@ -12,6 +12,13 @@ import { firstReturningRow } from '../utils/returning-row';
 // step that always fails once a workflow actually fires.
 const UNIMPLEMENTED_STEP_TYPES = new Set(['assign_role', 'create_task', 'create_order']);
 
+// update_status interpolates config.entityType directly into a table name —
+// config comes from step.stepConfig, a free-form JSONB field any
+// authenticated user can set via POST /workflows with zero validation.
+// Whitelisting to real tables that have both id and status columns prevents
+// SQL injection and confused-deputy writes to unrelated tables.
+const UPDATE_STATUS_ENTITY_TABLES = new Set(['appointments', 'lab_orders', 'prescriptions', 'referrals']);
+
 export interface WorkflowStepConfig {
   assignRole?: { role: string; entityId: string; entityType: string };
   sendNotification?: { userIds: string[]; message: string; priority: string };
@@ -264,6 +271,11 @@ export class ClinicalWorkflowService {
         `Step type '${stepData.stepType}' has no real backend implementation and would silently do nothing when the workflow runs. Use 'send_notification', 'send_message', 'update_status', 'assign_appointment', 'wait', or 'condition' instead.`,
       );
     }
+    if (stepData.stepType === 'update_status' && !UPDATE_STATUS_ENTITY_TABLES.has(stepData.stepConfig?.entityType)) {
+      throw new BadRequestException(
+        `update_status: entityType must be one of ${[...UPDATE_STATUS_ENTITY_TABLES].join(', ')}`,
+      );
+    }
 
     // Get current max step_order
     const maxOrderResult = await tenantDb.query(
@@ -308,6 +320,11 @@ export class ClinicalWorkflowService {
       values.push(updates.stepType);
     }
     if (updates.stepConfig !== undefined) {
+      if (updates.stepConfig?.entityType !== undefined && !UPDATE_STATUS_ENTITY_TABLES.has(updates.stepConfig.entityType)) {
+        throw new BadRequestException(
+          `update_status: entityType must be one of ${[...UPDATE_STATUS_ENTITY_TABLES].join(', ')}`,
+        );
+      }
       updateFields.push(`step_config = $${paramIndex++}`);
       values.push(JSON.stringify(updates.stepConfig));
     }
@@ -684,6 +701,9 @@ export class ClinicalWorkflowService {
 
       case 'update_status':
         // Update entity status
+        if (!UPDATE_STATUS_ENTITY_TABLES.has(config.entityType)) {
+          throw new Error(`update_status: unsupported entityType '${config.entityType}'`);
+        }
         await tenantDb.query(
           `UPDATE ${config.entityType} SET status = $1, updated_at = NOW() WHERE id = $2`,
           [config.status, config.entityId],

@@ -1887,3 +1887,44 @@ Bug ref:       services/ehr-service/src/services/report-builder.service.ts.
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 48 | `report-builder.service.ts`'s custom report executor built raw SQL directly from an unvalidated free-form `query_config` JSONB field — any authenticated staff account (not just admins) could inject arbitrary SQL via `table`/`columns` | **Security (critical) — SQL injection** | Fixed |
+
+### Test 35 — SQL injection via clinical workflow `update_status` steps (backend, security)
+
+```
+Module:        Clinical Workflows — workflow step actions
+Platform:      Backend
+Role:          Any authenticated staff role
+Context:       Same shape as Test 34, found while checking every other `${...}`-in-SQL hit from
+               that sweep. `clinical-workflow.service.ts`'s `executeStep()` handles an
+               `update_status` action by running
+               `UPDATE ${config.entityType} SET status = $1 ... WHERE id = $2`, where
+               `config = step.stepConfig`. `POST /workflows` (`workflow.controller.ts`) accepts
+               `@Body() workflowData: any` with zero validation, guarded only by
+               `@UseGuards(JwtAuthGuard)` — any authenticated user of any role could create a
+               workflow step with `stepConfig.entityType` set to an injection payload; when the
+               workflow later fires (or is triggered), the injected SQL runs. `stepConfig.status`/
+               `.entityId` were already safely parameterized — only `entityType` was interpolated
+               raw.
+Fix:           Added `UPDATE_STATUS_ENTITY_TABLES` (`appointments`, `lab_orders`,
+               `prescriptions`, `referrals` — confirmed live to be the only workflow-relevant
+               tables with both an `id` and a `status` column) and enforced it in three places:
+               `addWorkflowStep()` and `updateWorkflowStep()` (reject at creation/edit time,
+               matching this file's existing `UNIMPLEMENTED_STEP_TYPES` rejection pattern) and
+               `executeStep()` itself (the actual point of execution — the authoritative check
+               that can't be bypassed even if a step was created before this fix shipped).
+Steps to test: 1) Create a workflow, add an `update_status` step with `entityType: 'users'` —
+               expect rejection at creation time.  2) Add one with `entityType: 'appointments'` —
+               expect success.
+Actual result: Pass — malicious entityType rejected with a clear error at step-creation time
+               (never even reaches execution); legitimate entityType accepted and stored
+               correctly. `npx tsc --noEmit` clean. Test workflow cleaned up after verification.
+Status:        Fail (SQL injection, any staff account, via a workflow step never actually needing
+               to fire) → Fixed → Pass (verified live).
+Bug ref:       services/ehr-service/src/services/clinical-workflow.service.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 10)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 49 | `clinical-workflow.service.ts`'s `update_status` workflow-step action interpolated an unvalidated `entityType` field directly into a table name — any authenticated staff account could inject SQL via a workflow step's config | **Security (critical) — SQL injection** | Fixed |
