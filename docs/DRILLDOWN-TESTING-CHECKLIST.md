@@ -2281,3 +2281,77 @@ Bug ref:       services/ehr-service/src/services/patient-portal.service.ts.
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 55 | getPatientLabResults() showed every completed lab order to the patient with no check for a pending critical_result_alerts row -- a patient could see a critical result before any clinician acknowledged it, unlike the equivalent (already-existing) safeguard on imaging reports | **Patient safety (critical) -- premature critical-result disclosure** | Fixed |
+
+
+### Test 42 -- Missing RBAC: staff self-promotion to admin + unrestricted prescribing/dispensing/discharge/patient-deactivation (backend, security)
+
+```
+Module:        Staff account management, Prescriptions, Discharge, Patient deactivation
+Platform:      Backend
+Role:          Any authenticated staff role (receptionist, lab tech, etc.)
+Context:       Requested audit of role-based access control (distinct from authentication,
+               which an earlier exhaustive pass already confirmed complete) -- do sensitive,
+               high-privilege actions actually require the right STAFF ROLE, or can any
+               authenticated staff account perform them regardless of role?
+               The most severe finding: users.controller.ts had @UseGuards(JwtAuthGuard) only,
+               no role restriction at all, on POST/PUT/DELETE routes. UpdateUserDto includes a
+               `role` field, and UsersService.updateUser() applies the whole DTO via an
+               unrestricted Object.assign(user, updateUserDto) with zero field allowlist. Net
+               effect: ANY authenticated staff member (receptionist, lab tech, anyone) could
+               call PUT /users/:their-own-id with {"role":"admin"} and self-promote to full
+               admin -- a complete privilege-escalation path, not just a missing-guard nicety.
+               Four more routes had the same "any authenticated staff, any role" gap for
+               actions that clearly need restriction: prescription creation and dispensing
+               (medication safety -- a receptionist could write or dispense a prescription for
+               any drug, including controlled substances), discharge finalization (a clinical
+               decision), and patient deactivation (already had the right pattern on the
+               sibling markDeceased route two methods above it in the same file -- deactivation
+               was simply the one route that never got it).
+Fix:           users.controller.ts: added RolesGuard + @Roles('admin') to the five mutating
+               routes (create/update/deactivate/reset-password/activate); left the two GET
+               routes open to any authenticated staff since the frontend uses them to populate
+               staff pickers (surgery scheduling, preference cards) for non-admin roles --
+               restricting those too would have broken real functionality for no security gain
+               (nothing sensitive is exposed by a staff directory listing).
+               prescription.controller.ts: @Roles('doctor') on create, @Roles('pharmacist') on
+               dispense, @Roles('doctor','pharmacist') on cancel.
+               discharge.controller.ts: @Roles('doctor','nurse') on finalise.
+               patient.controller.ts: @Roles('doctor','admin') on deactivatePatient, matching
+               the existing pattern already used on markDeceased in the same controller.
+Steps to test: Logged in as receptionist (a role with no clinical or admin authority) and
+               attempted: 1) PUT /users/:own-id with {"role":"admin"} (self-promotion),
+               2) POST /prescriptions for a controlled-sounding drug, 3) PUT
+               /prescriptions/:id/dispense, 4) DELETE /patients/:id. All four expected a clean
+               403. Then confirmed GET /users still works for receptionist (no regression), and
+               that a doctor could still create a prescription and a pharmacist could still
+               dispense it (legitimate round trip unaffected).
+Actual result: Pass on all six checks. All four attack attempts returned 403 "You do not have
+               access to this resource". GET /users still returned 200 for receptionist.
+               Doctor-created prescription was successfully dispensed by pharmacist. npx tsc
+               --noEmit clean. Test prescription deleted, receptionist/pharmacist test
+               passwords restored to original hash after verification.
+Status:        Fail (any authenticated staff member could self-promote to admin, and
+               prescribe/dispense/discharge/deactivate with no role check) -> Fixed -> Pass
+               (verified live against real role-scoped accounts).
+Bug ref:       services/ehr-service/src/controllers/users.controller.ts,
+               services/ehr-service/src/controllers/prescription.controller.ts,
+               services/ehr-service/src/controllers/discharge.controller.ts,
+               services/ehr-service/src/controllers/patient.controller.ts.
+
+Note: the same audit flagged lab-critical-alert.controller.ts (a SEPARATE, apparently orphaned
+critical-alert system writing to a `lab_critical_alerts` table -- confirmed 0 rows in this
+tenant, distinct from the `critical_result_alerts` table lab-order.service.ts actually writes
+to and that Tests 40/41 verified end-to-end) and pharmacy.controller.ts (broad inventory/
+supplier/formulary write routes with only one @Roles usage in the whole file, referencing a
+'senior_clinician' role that doesn't exist in the UserRole enum -- effectively unreachable by
+anyone but admin). Both look like real gaps but touch either dead/duplicate code (same shape as
+the Sprint 177/Sprint 65 duplicate retired earlier this session) or a broader inventory-RBAC
+design question -- deferred rather than drive-by fixed.
+```
+
+## Update to Step 4 Deliverables (cont. 18)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 56 | users.controller.ts had no role restriction on create/update/deactivate/reset-password/activate -- combined with UpdateUserDto's unrestricted `role` field and an unguarded Object.assign in updateUser(), any authenticated staff member could self-promote to admin | **Security (critical) -- full privilege escalation** | Fixed |
+| 57 | prescription.controller.ts, discharge.controller.ts, and patient.controller.ts's deactivatePatient had no role restriction -- any authenticated staff (e.g. receptionist) could create/dispense/cancel prescriptions, finalize a discharge, or deactivate a patient record | **Security (high) -- missing RBAC on medication-safety and clinical-decision actions** | Fixed |

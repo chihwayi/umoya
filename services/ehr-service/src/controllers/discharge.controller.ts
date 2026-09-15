@@ -2,13 +2,16 @@ import { Controller, Post, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { DischargeDocumentService } from '../services/discharge-document.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { PatientJwtAuthGuard } from '../guards/patient-jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 
 @Controller('encounters/:encounterId/discharge')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class DischargeController {
   constructor(private readonly discharge: DischargeDocumentService) {}
 
   @Post('finalise')
+  @Roles('doctor', 'nurse')
   async finalise(@Req() req: any, @Param('encounterId') encounterId: string) {
     return this.discharge.finaliseAndSend(
       req.tenantDb,

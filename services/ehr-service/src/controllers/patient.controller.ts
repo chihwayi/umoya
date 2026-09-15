@@ -190,6 +190,8 @@ export class PatientController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'Deactivate patient' })
   @ApiResponse({ status: 200, description: 'Patient deactivated successfully' })
   async deactivatePatient(@Param('id') id: string, @Request() req: RequestWithTenant) {

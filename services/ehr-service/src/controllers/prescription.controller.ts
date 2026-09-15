@@ -4,13 +4,15 @@ import { Response } from 'express';
 import { PrescriptionService } from '../services/prescription.service';
 import { PrescriptionPdfService } from '../services/prescription-pdf.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { ProactiveAiService } from '../services/proactive-ai.service';
 
 @ApiTags('Prescription Management')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('prescriptions')
 export class PrescriptionController {
   private readonly logger = new Logger(PrescriptionController.name);
@@ -22,6 +24,7 @@ export class PrescriptionController {
   ) {}
 
   @Post()
+  @Roles('doctor')
   @ApiOperation({ summary: 'Create prescription' })
   async createPrescription(@Body() createDto: any, @Request() req: RequestWithTenant) {
     const saved = await this.prescriptionService.create(createDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id, req.tenantId);
@@ -47,12 +50,14 @@ export class PrescriptionController {
   }
 
   @Put(':id/dispense')
+  @Roles('pharmacist')
   @ApiOperation({ summary: 'Dispense prescription' })
   async dispensePrescription(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.prescriptionService.dispense(id, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
   }
 
   @Patch(':id/cancel')
+  @Roles('doctor', 'pharmacist')
   @ApiOperation({ summary: 'Cancel prescription and release any stock reservation' })
   async cancelPrescription(@Param('id') id: string, @Request() req: RequestWithTenant) {
     await this.prescriptionService.cancelPrescription(id, req.tenantDb);

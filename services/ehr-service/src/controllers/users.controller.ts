@@ -1,13 +1,22 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { UsersService } from '../services/users.service';
 import { CreateUserDto, UpdateUserDto } from '../dto/users.dto';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
+// Mutating routes (create/update/deactivate/reset-password/activate) are
+// admin-only: UpdateUserDto includes `role`, and updateUser() applies it
+// via an unrestricted Object.assign — without a guard here, any
+// authenticated staff member could PUT their own user record with
+// {"role":"admin"} and self-promote. GET routes stay open to any
+// authenticated staff — the frontend uses them to populate staff pickers
+// (surgery scheduling, preference cards) for non-admin roles.
 @ApiTags('User Management')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private usersService: UsersService) {}
@@ -27,6 +36,7 @@ export class UsersController {
   }
 
   @Post()
+  @Roles('admin')
   @ApiOperation({ summary: 'Create new clinic user' })
   @ApiResponse({ status: 201, description: 'User created successfully' })
   async createUser(@Body() createUserDto: CreateUserDto, @Request() req: RequestWithTenant) {
@@ -34,6 +44,7 @@ export class UsersController {
   }
 
   @Put(':id')
+  @Roles('admin')
   @ApiOperation({ summary: 'Update user' })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
   async updateUser(
@@ -45,6 +56,7 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @Roles('admin')
   @ApiOperation({ summary: 'Deactivate user' })
   @ApiResponse({ status: 200, description: 'User deactivated successfully' })
   async deactivateUser(@Param('id') id: string, @Request() req: RequestWithTenant) {
@@ -52,6 +64,7 @@ export class UsersController {
   }
 
   @Put(':id/reset-password')
+  @Roles('admin')
   @ApiOperation({ summary: 'Reset user password' })
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   async resetPassword(@Param('id') id: string, @Request() req: RequestWithTenant) {
@@ -59,6 +72,7 @@ export class UsersController {
   }
 
   @Put(':id/activate')
+  @Roles('admin')
   @ApiOperation({ summary: 'Activate user' })
   @ApiResponse({ status: 200, description: 'User activated successfully' })
   async activateUser(@Param('id') id: string, @Request() req: RequestWithTenant) {
