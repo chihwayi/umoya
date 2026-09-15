@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class AncService {
@@ -120,6 +120,8 @@ export class AncService {
     return rows[0];
   }
 
+  private static readonly EID_TIMEPOINTS = new Set(['6w', '4m', '12m', '18m']);
+
   async recordEidResult(
     eidId: string,
     timepoint: '6w' | '4m' | '12m' | '18m',
@@ -127,6 +129,12 @@ export class AncService {
     doneDate: string,
     db: any,
   ): Promise<{ requiresImmediateArt: boolean }> {
+    // timepoint is a body field with only a compile-time type union — no
+    // runtime enforcement — and was previously interpolated raw into a
+    // column identifier, a SQL injection. Whitelist it before use.
+    if (!AncService.EID_TIMEPOINTS.has(timepoint)) {
+      throw new BadRequestException(`Invalid timepoint: ${timepoint}`);
+    }
     const col = `test_${timepoint}`;
     await db.query(
       `UPDATE eid_schedules SET ${col}_result = $2, ${col}_done_at = $3, updated_at = NOW() WHERE id = $1`,

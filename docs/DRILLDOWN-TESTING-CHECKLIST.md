@@ -1993,3 +1993,56 @@ Bug ref:       services/ehr-service/src/services/clinical-conflict-resolution.se
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 50 | clinical-conflict-resolution.service.ts interpolated an unvalidated conflictField directly into a column identifier (SQL injection, any authenticated staff account) AND targeted two tables (patient_allergies, active_medications) that don't exist in the schema, meaning the feature never worked at all; fix also caught a follow-on bug where allergies lacks an updated_at column | **Security (critical) -- SQL injection + broken feature** | Fixed |
+
+
+### Test 37 -- SQL injection via EID result timepoint (backend, security)
+
+```
+Module:        ANC / PMTCT -- Early Infant Diagnosis (EID) result recording
+Platform:      Backend
+Role:          Any authenticated staff role
+Context:       Found by a background sweep re-checking every remaining file from the original
+               ${...}-in-SQL grep that Tests 34/35/36 had already found 3 confirmed injections in.
+               anc.service.ts's recordEidResult() built a column identifier as
+               `test_${timepoint}` and interpolated it raw into
+               `UPDATE eid_schedules SET ${col}_result = $2, ${col}_done_at = $3 ... WHERE id = $1`.
+               timepoint's only protection was a TypeScript union type
+               ('6w' | '4m' | '12m' | '18m') on the method signature -- a compile-time-only
+               annotation, not a runtime check. The controller
+               (clinical-specialties.controller.ts, PUT clinical/anc/eid-schedules/:id/result)
+               passes body.timepoint straight through with the same non-enforcing type
+               annotation and no DTO/class-validator decorators, so any authenticated staff
+               account of any role could inject arbitrary SQL via that field.
+Fix:           Added a runtime whitelist, EID_TIMEPOINTS = Set(['6w','4m','12m','18m']), checked
+               at the top of recordEidResult() before the column identifier is built; throws
+               BadRequestException on anything outside the whitelist.
+Steps to test: 1) Seed a real eid_schedules row for the TEST_ patient.  2) PUT a malicious
+               timepoint (`6w_due = NOW(),test_6w_done_at`) -- expect a clean BadRequestException,
+               not a raw SQL error or silent corruption.  3) PUT a legitimate timepoint (`6w`)
+               with result=negative -- expect it applied correctly.
+Actual result: Pass. Malicious payload rejected with "Invalid timepoint: ...". Legitimate request
+               correctly set test_6w_result='negative' and test_6w_done_at='2026-02-01'.
+               docker logs clean. npx tsc --noEmit clean. Test row deleted after verification.
+Status:        Fail (SQL injection, any staff account, via a legitimate-looking clinical
+               workflow field) -> Fixed -> Pass (verified live).
+Bug ref:       services/ehr-service/src/services/anc.service.ts,
+               services/ehr-service/src/controllers/clinical-specialties.controller.ts (route only,
+               not modified).
+```
+
+## Update to Step 4 Deliverables (cont. 12)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 51 | anc.service.ts's recordEidResult() interpolated an unvalidated timepoint field (protected only by a compile-time-only TypeScript union type) directly into a column identifier -- any authenticated staff account could inject SQL when recording an EID test result | **Security (critical) -- SQL injection** | Fixed |
+
+## Update to Step 4 Deliverables (cont. 13)
+
+Background sweep of the remaining 21 files from the original ${...}-in-SQL grep (care-plan, document,
+referral-facility, care-plan-template, ophthalmology, appointment, diabetes, storeroom, patient-portal,
+patient-transport, referral, oncology, fhir, referral-template, health-goals, sepsis, clinical-outcomes,
+pharmacy, cardiology, clinical-staff-credentialing, invoice-template, anc) is now complete. 20 of 21
+confirmed safe (all follow the same dynamic-UPDATE-builder pattern already validated in sibling files --
+interpolated identifiers come from hardcoded internal field-mapping objects or whitelists, never
+directly from request input). anc.service.ts was the one exception (bug #51, above). This closes out
+the SQL-injection sweep that began with Test 34.
