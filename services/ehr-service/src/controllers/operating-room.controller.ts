@@ -13,14 +13,20 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { OperatingRoomService } from '../services/operating-room.service';
 import { TenantService } from '../services/tenant.service';
 
+// Surgical safety checklist sign-off (WHO sign-in/time-out/sign-out) and
+// specimen chain-of-custody are patient-safety-critical — any authenticated
+// staff account could previously falsify a checklist or schedule a case.
+// GET routes stay open.
 @ApiTags('Operating Room')
 @ApiBearerAuth()
 @Controller('operating-room')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class OperatingRoomController {
   constructor(
     private readonly orService: OperatingRoomService,
@@ -50,6 +56,7 @@ export class OperatingRoomController {
   }
 
   @Post('cases')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Schedule a surgical case' })
   async scheduleSurgicalCase(@Body() caseData: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -72,6 +79,7 @@ export class OperatingRoomController {
   }
 
   @Put('cases/:id/status')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Update case status' })
   @HttpCode(HttpStatus.OK)
   async updateCaseStatus(
@@ -84,6 +92,7 @@ export class OperatingRoomController {
   }
 
   @Put('cases/:id/documentation')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Update case documentation' })
   @HttpCode(HttpStatus.OK)
   async updateCaseDocumentation(
@@ -96,6 +105,7 @@ export class OperatingRoomController {
   }
 
   @Post('cases/:id/cancel')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Cancel surgical case' })
   @HttpCode(HttpStatus.OK)
   async cancelCase(
@@ -108,6 +118,7 @@ export class OperatingRoomController {
   }
 
   @Post('implants')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Track surgical implant' })
   async trackImplant(@Body() implantData: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -142,6 +153,7 @@ export class OperatingRoomController {
   }
 
   @Post('cases/:id/safety-checklist/sign-in')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Complete Sign In (before anesthesia)' })
   @HttpCode(HttpStatus.OK)
   async safetyChecklistSignIn(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
@@ -150,6 +162,7 @@ export class OperatingRoomController {
   }
 
   @Post('cases/:id/safety-checklist/time-out')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Complete Time Out (before skin incision)' })
   @HttpCode(HttpStatus.OK)
   async safetyChecklistTimeOut(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
@@ -158,6 +171,7 @@ export class OperatingRoomController {
   }
 
   @Post('cases/:id/safety-checklist/sign-out')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Complete Sign Out (before patient leaves OR)' })
   @HttpCode(HttpStatus.OK)
   async safetyChecklistSignOut(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
@@ -173,6 +187,7 @@ export class OperatingRoomController {
   }
 
   @Post('cases/:id/count-sheets')
+  @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Add count sheet item' })
   async addCountSheet(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -180,6 +195,7 @@ export class OperatingRoomController {
   }
 
   @Put('count-sheets/:id/verify')
+  @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Verify count (final count)' })
   async verifyCountSheet(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -194,6 +210,7 @@ export class OperatingRoomController {
   }
 
   @Post('cases/:id/specimens')
+  @Roles('nurse', 'doctor', 'lab_tech', 'admin')
   @ApiOperation({ summary: 'Add specimen' })
   async addSpecimen(@Param('id') caseId: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -215,6 +232,7 @@ export class OperatingRoomController {
   }
 
   @Post('preference-cards')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Create preference card' })
   async createPreferenceCard(@Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
@@ -222,6 +240,7 @@ export class OperatingRoomController {
   }
 
   @Put('preference-cards/:id')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Update preference card' })
   async updatePreferenceCard(@Param('id') id: string, @Body() body: any, @Req() req: RequestWithTenant) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);

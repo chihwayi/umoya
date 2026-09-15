@@ -2486,3 +2486,79 @@ Bug ref:       services/ehr-service/src/controllers/blood-bank.controller.ts,
 | 60 | lab-order.controller.ts had no role restriction on results entry/submission, sample collection, QC logging, or reagent inventory | **Security/clinical-integrity (high) -- any staff could finalize lab results** | Fixed |
 | 61 | radiology-review.controller.ts had no role restriction on AI-finding review/confirmation -- defeats the intended "clinician validates AI output" safeguard | **Clinical-integrity (high) -- AI diagnostic findings confirmable by any staff role** | Fixed |
 | 62 | referral.controller.ts, prior-authorization.controller.ts, and drug.controller.ts had no role restriction on referral/prior-auth workflow actions, the referral facility/template directories, or drug-database seeding | **Security (medium-high) -- unrestricted care-coordination and reference-data writes** | Fixed |
+
+
+### Test 45 -- Missing RBAC: medication administration, surgical safety, ICU, credentialing, incident closure, clinical orders (backend, security)
+
+```
+Module:        BCMA/Medication Administration, Operating Room, ICU, Staff Credentialing,
+               Patient Safety Incidents, Clinical Orders, Telemedicine
+Platform:      Backend
+Role:          Any authenticated staff role
+Context:       Final pass of the RBAC sweep (Tests 42-44, bugs #56-62). Seven more controllers
+               had the same "@UseGuards(JwtAuthGuard) only" gap:
+               - bcma.controller.ts: administering medication, holding/refusing a dose, and
+                 acknowledging a medication safety alert had no role restriction -- BCMA is the
+                 last checkpoint before a drug reaches a patient.
+               - operating-room.controller.ts: scheduling a case, and completing the WHO safety
+                 checklist (sign-in/time-out/sign-out) -- a globally-recognized surgical safety
+                 protocol -- and specimen chain-of-custody had no role restriction.
+               - icu.controller.ts: ICU admission/discharge, charting vitals, ventilator
+                 settings, and starting/stopping critical-drug infusions had no role restriction.
+               - clinical-staff-credentialing.controller.ts: granting or revoking a clinical
+                 privilege had no role restriction -- any staff account could grant themselves
+                 privileges with zero oversight.
+               - patient-safety-incident.controller.ts: closing an incident, starting/updating a
+                 root-cause analysis, and adding corrective actions had no role restriction
+                 (reporting an incident was correctly left open to everyone -- restricting who
+                 can report a safety concern is its own anti-pattern).
+               - order.controller.ts: creating, authorizing, and executing a clinical order had
+                 no role restriction.
+               - telemedicine.controller.ts: creating/ending a consultation and setting up
+                 remote patient monitoring had no role restriction.
+Fix:           Added RolesGuard + per-route @Roles(...) to all seven controllers. Role sets:
+               BCMA -- nurse/doctor/pharmacist/admin (medication administration is nursing-led
+               but doctors and pharmacists also administer/oversee in some settings). OR --
+               doctor/nurse/admin, specimens also allow lab_tech. ICU -- doctor/nurse/admin.
+               Credentialing -- admin only (governance requires committee-level approval, not
+               self-service). Incident closure/RCA -- admin/doctor (reporting stays open to
+               all). Orders -- doctor/admin for create/authorize (matches the existing doctorId
+               attribution in createOrder), nurse/doctor/admin for execute/status (execution is
+               typically nursing-performed). Telemedicine -- doctor/nurse/admin for the three
+               flagged routes. GET/read routes were left open to any authenticated staff
+               throughout.
+Steps to test: As receptionist: 1) POST /bcma/administer, 2) POST /operating-room/cases,
+               3) POST /icu/admissions, 4) POST /staff-credentialing/credentials, 5) PATCH
+               /patient-safety/incidents/:id/close, 6) PUT /orders/:id/authorize -- all six
+               expected a clean 403. 7) POST /patient-safety/incidents (report, not close) --
+               expected success (unrestricted by design). As doctor: 8) POST /icu/admissions
+               with a complete payload -- expected success.
+Actual result: Pass on all eight checks. All six receptionist attack attempts returned 403.
+               Receptionist's incident report succeeded (id cede9360-..., status 'reported',
+               correctly attributed via reported_by). Doctor's ICU admission succeeded (id
+               f44da523-..., status 'active', correctly attributed via admitted_by). npx tsc
+               --noEmit clean across all seven files. Test incident and ICU admission deleted,
+               receptionist test password restored after verification.
+Status:        Fail (any authenticated staff account could administer medication, falsify a
+               surgical safety checklist, admit/discharge ICU patients, grant themselves
+               clinical privileges, or close a safety investigation) -> Fixed -> Pass (verified
+               live).
+Bug ref:       services/ehr-service/src/controllers/bcma.controller.ts,
+               services/ehr-service/src/controllers/operating-room.controller.ts,
+               services/ehr-service/src/controllers/icu.controller.ts,
+               services/ehr-service/src/controllers/clinical-staff-credentialing.controller.ts,
+               services/ehr-service/src/controllers/patient-safety-incident.controller.ts,
+               services/ehr-service/src/controllers/order.controller.ts,
+               services/ehr-service/src/controllers/telemedicine.controller.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 21)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 63 | bcma.controller.ts (medication administration) and operating-room.controller.ts (surgical safety checklist, specimen custody) had no role restriction on any write route | **Patient safety (critical) -- unrestricted medication administration and surgical safety sign-off** | Fixed |
+| 64 | icu.controller.ts had no role restriction on admission/discharge, vitals, ventilator settings, or critical-drug infusions | **Patient safety (critical) -- unrestricted ICU/critical-care orders** | Fixed |
+| 65 | clinical-staff-credentialing.controller.ts had no role restriction on granting/revoking clinical privileges | **Security (high) -- privilege grant with no governance oversight** | Fixed |
+| 66 | patient-safety-incident.controller.ts, order.controller.ts, and telemedicine.controller.ts had no role restriction on incident closure/RCA, clinical order authorization/execution, and telemedicine consultation/monitoring setup | **Security (medium-high) -- unrestricted clinical workflow and governance actions** | Fixed |
+
+This closes out the systematic RBAC sweep started at Test 42 (bugs #56-66, 13 controllers).

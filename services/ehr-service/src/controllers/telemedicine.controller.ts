@@ -15,6 +15,8 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { TelemedicineService } from '../services/telemedicine.service';
 import { RemoteMonitoringService } from '../services/remote-monitoring.service';
@@ -41,7 +43,7 @@ import {
 
 @ApiTags('Telemedicine')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('telemedicine')
 export class TelemedicineController {
   constructor(
@@ -56,6 +58,7 @@ export class TelemedicineController {
   // ============================================
 
   @Post('consultations')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Create a new telemedicine consultation' })
   @ApiResponse({ status: 201, description: 'Consultation created successfully' })
   async createConsultation(
@@ -111,6 +114,7 @@ export class TelemedicineController {
   }
 
   @Post('consultations/:id/end')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'End a consultation' })
   @ApiParam({ name: 'id', description: 'Consultation ID' })
   @ApiResponse({ status: 200, description: 'Consultation ended successfully' })
@@ -240,6 +244,7 @@ export class TelemedicineController {
   }
 
   @Post('monitoring/setup')
+  @Roles('doctor', 'nurse', 'admin')
   @ApiOperation({ summary: 'Setup monitoring for a patient' })
   @ApiResponse({ status: 200, description: 'Monitoring setup completed' })
   async setupMonitoring(

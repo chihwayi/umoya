@@ -1,9 +1,16 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, Req, UseGuards, Logger } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { IcuService } from '../services/icu.service';
 import { OutcomeLinkageService } from '../services/outcome-linkage.service';
 
-@UseGuards(JwtAuthGuard)
+// ICU admission/discharge, ventilator settings, and critical-drug infusions
+// are life-critical — every write route previously required only
+// JwtAuthGuard, so any authenticated staff account could admit a patient,
+// start a vasopressor infusion, or change ventilator settings regardless
+// of clinical role. GET routes stay open.
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('icu')
 export class IcuController {
   private readonly logger = new Logger(IcuController.name);
@@ -19,6 +26,7 @@ export class IcuController {
   }
 
   @Post('admissions')
+  @Roles('doctor', 'nurse', 'admin')
   admit(
     @Req() req: any,
     @Body() body: {
@@ -36,6 +44,7 @@ export class IcuController {
   }
 
   @Patch('admissions/:id/discharge')
+  @Roles('doctor', 'nurse', 'admin')
   async discharge(@Req() req: any, @Param('id') id: string, @Body() body: { destination?: string }) {
     const admission = await this.icu.dischargePatient(req.tenantDb, id, body.destination);
     if (admission?.patient_id && req.tenantId) {
@@ -48,6 +57,7 @@ export class IcuController {
   }
 
   @Post('admissions/:id/vitals')
+  @Roles('doctor', 'nurse', 'admin')
   chartVitals(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     return this.icu.chartVitals(req.tenantDb, req.user.id, id, body);
   }
@@ -58,6 +68,7 @@ export class IcuController {
   }
 
   @Post('admissions/:id/ventilator')
+  @Roles('doctor', 'nurse', 'admin')
   recordVentilator(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     return this.icu.recordVentilatorSettings(req.tenantDb, req.user.id, id, body);
   }
@@ -73,6 +84,7 @@ export class IcuController {
   }
 
   @Post('admissions/:id/fluid-balance')
+  @Roles('doctor', 'nurse', 'admin')
   upsertFluidBalance(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     return this.icu.upsertFluidBalance(req.tenantDb, req.user.id, id, body);
   }
@@ -83,6 +95,7 @@ export class IcuController {
   }
 
   @Post('admissions/:id/infusions')
+  @Roles('doctor', 'nurse', 'admin')
   startInfusion(
     @Req() req: any,
     @Param('id') id: string,
@@ -92,6 +105,7 @@ export class IcuController {
   }
 
   @Patch('infusions/:infusionId/stop')
+  @Roles('doctor', 'nurse', 'admin')
   stopInfusion(@Req() req: any, @Param('infusionId') infusionId: string) {
     return this.icu.stopInfusion(req.tenantDb, infusionId);
   }
@@ -102,6 +116,7 @@ export class IcuController {
   }
 
   @Post('admissions/:id/daily-goals')
+  @Roles('doctor', 'nurse', 'admin')
   saveDailyGoals(@Req() req: any, @Param('id') id: string, @Body() body: any) {
     return this.icu.saveDailyGoals(req.tenantDb, req.user.id, id, body);
   }
@@ -112,6 +127,7 @@ export class IcuController {
   }
 
   @Post('admissions/:id/scores')
+  @Roles('doctor', 'nurse', 'admin')
   recordScore(
     @Req() req: any,
     @Param('id') id: string,

@@ -1,14 +1,21 @@
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, Req, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { BcmaService } from '../services/bcma.service';
 import { TenantService } from '../services/tenant.service';
 
+// Medication administration is the last checkpoint before a drug reaches a
+// patient — every write route here (administering, holding/refusing a dose,
+// acknowledging a safety alert) previously required only JwtAuthGuard, so
+// any authenticated staff account could administer or manipulate MAR
+// records regardless of clinical role. GET routes stay open.
 @ApiTags('BCMA - Medication Safety')
 @ApiBearerAuth()
 @Controller('bcma')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class BcmaController {
   constructor(
     private readonly bcmaService: BcmaService,
@@ -18,6 +25,7 @@ export class BcmaController {
   // ==================== PATIENT WRISTBAND ====================
 
   @Post('wristband/issue')
+  @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Issue patient wristband with barcode' })
   @ApiResponse({ status: 201, description: 'Wristband issued' })
   async issueWristband(
@@ -79,6 +87,7 @@ export class BcmaController {
   // ==================== MEDICATION ADMINISTRATION ====================
 
   @Post('administer')
+  @Roles('nurse', 'doctor', 'pharmacist', 'admin')
   @ApiOperation({ summary: 'Administer medication and create MAR' })
   @ApiResponse({ status: 201, description: 'Medication administered' })
   async administerMedication(
@@ -159,6 +168,7 @@ export class BcmaController {
   }
 
   @Post('mar/:id/hold')
+  @Roles('nurse', 'doctor', 'pharmacist', 'admin')
   @ApiOperation({ summary: 'Hold medication administration' })
   @ApiResponse({ status: 200, description: 'Medication held' })
   async holdMedication(
@@ -172,6 +182,7 @@ export class BcmaController {
   }
 
   @Post('mar/:id/refuse')
+  @Roles('nurse', 'doctor', 'admin')
   @ApiOperation({ summary: 'Patient refused medication' })
   @ApiResponse({ status: 200, description: 'Refusal documented' })
   async refuseMedication(
@@ -184,6 +195,7 @@ export class BcmaController {
   }
 
   @Post('mar/:id/escalate')
+  @Roles('nurse', 'doctor', 'pharmacist', 'admin')
   @ApiOperation({ summary: 'Escalate MAR entry into medication safety alert' })
   @ApiResponse({ status: 201, description: 'Escalation alert created' })
   async escalateMedicationSafety(
@@ -216,6 +228,7 @@ export class BcmaController {
   }
 
   @Post('alerts/:id/acknowledge')
+  @Roles('nurse', 'doctor', 'pharmacist', 'admin')
   @ApiOperation({ summary: 'Acknowledge medication alert' })
   @ApiResponse({ status: 200, description: 'Alert acknowledged' })
   async acknowledgeAlert(
@@ -229,6 +242,7 @@ export class BcmaController {
   }
 
   @Post('generate-mar/:prescriptionId')
+  @Roles('nurse', 'doctor', 'pharmacist', 'admin')
   @ApiOperation({ summary: 'Generate scheduled MAR entries from prescription' })
   async generateMARFromPrescription(
     @Param('prescriptionId') prescriptionId: string,
@@ -257,6 +271,7 @@ export class BcmaController {
   }
 
   @Post('mar/scheduled/:id/administer')
+  @Roles('nurse', 'doctor', 'pharmacist', 'admin')
   @ApiOperation({ summary: 'Administer from scheduled entry (witness enforced if required)' })
   async administerFromScheduled(
     @Param('id') id: string,

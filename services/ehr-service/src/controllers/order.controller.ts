@@ -2,14 +2,17 @@ import { Controller, Post, Get, Put, Body, Param, Req, Query, UseGuards, BadRequ
 import { OrderService, CreateOrderDto, UpdateOrderDto } from '../services/order.service';
 import { OrderType, OrderStatus } from '../entities/order.entity';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 
 @Controller('orders')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Post()
+  @Roles('doctor', 'admin')
   async createOrder(@Body() body: CreateOrderDto, @Req() req: RequestWithTenant) {
     const tenantId = req.tenantId;
     const doctorId = (req.user && (req.user.userId || req.user.id)) || (body as any).doctorId;
@@ -69,6 +72,7 @@ export class OrderController {
   }
 
   @Put(':id/authorize')
+  @Roles('doctor', 'admin')
   async authorizeOrder(@Param('id') orderId: string, @Req() req: any) {
     const tenantId = req.tenantId;
     const authorizedBy = (req.user as any)?.userId ?? (req.user as any)?.id;
@@ -78,6 +82,7 @@ export class OrderController {
   }
 
   @Put(':id/execute')
+  @Roles('nurse', 'doctor', 'admin')
   async executeOrder(
     @Param('id') orderId: string, 
     @Body() body: { executionNotes: string }, 
@@ -91,6 +96,7 @@ export class OrderController {
   }
 
   @Put(':id/status')
+  @Roles('nurse', 'doctor', 'admin')
   async updateOrderStatus(
     @Param('id') orderId: string,
     @Body() body: { status: OrderStatus },
