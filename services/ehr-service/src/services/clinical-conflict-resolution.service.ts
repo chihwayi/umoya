@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 export interface SyncConflict {
@@ -19,25 +19,54 @@ export interface MergeResult {
   reason: string;
 }
 
-const SAFETY_CRITICAL: Record<string, Set<string>> = {
-  patient_allergies:  new Set(['allergen', 'severity', 'status', 'reaction_type']),
-  active_medications: new Set(['drug_name', 'dose', 'status', 'stopped_reason']),
+// Real tables (not the phantom patient_allergies/active_medications this
+// service originally referenced — confirmed live against the tenant schema).
+const TABLE_BY_RECORD_TYPE: Record<SyncConflict['recordType'], string> = {
+  allergy: 'allergies',
+  active_medication: 'patient_medications',
 };
+
+// conflictField is attacker-controlled (POST /conflict-queue/sync/conflicts
+// accepts SyncConflict[] straight from the request body, JwtAuthGuard only,
+// no role restriction) and was previously interpolated raw as a column
+// identifier — a SQL injection. Whitelisting every column BOTH tables can
+// legitimately sync closes it; SAFETY_CRITICAL is now a subset of this,
+// not an independent gate.
+const SYNCABLE_FIELDS: Record<string, Set<string>> = {
+  allergies: new Set(['allergen', 'severity', 'clinical_status', 'reaction', 'verification_status']),
+  patient_medications: new Set(['medication_name', 'dosage', 'frequency', 'status', 'reason_for_discontinuation', 'route', 'notes']),
+};
+
+const SAFETY_CRITICAL: Record<string, Set<string>> = {
+  allergies: new Set(['allergen', 'severity', 'clinical_status', 'reaction']),
+  patient_medications: new Set(['medication_name', 'dosage', 'status', 'reason_for_discontinuation']),
+};
+
+// allergies has no updated_at column (patient_medications does) — confirmed
+// live via \d allergies. Appending "updated_at = now()" unconditionally 500s
+// on every allergy resolution, so gate it per table.
+const TABLES_WITH_UPDATED_AT = new Set(['patient_medications']);
 
 @Injectable()
 export class ClinicalConflictResolutionService {
   private readonly logger = new Logger(ClinicalConflictResolutionService.name);
 
   async resolveConflict(tenantDb: DataSource, conflict: SyncConflict): Promise<MergeResult> {
-    const table =
-      conflict.recordType === 'allergy' ? 'patient_allergies' : 'active_medications';
+    const table = TABLE_BY_RECORD_TYPE[conflict.recordType];
+    if (!table) {
+      throw new BadRequestException(`Unsupported recordType: ${conflict.recordType}`);
+    }
+    if (!SYNCABLE_FIELDS[table]?.has(conflict.conflictField)) {
+      throw new BadRequestException(`Unsupported conflictField '${conflict.conflictField}' for ${conflict.recordType}`);
+    }
     const isCritical = SAFETY_CRITICAL[table]?.has(conflict.conflictField) ?? false;
 
     if (!isCritical) {
       // Safe to LWW for non-critical fields
       if (new Date(conflict.clientTimestamp) > new Date(conflict.serverTimestamp)) {
+        const touchUpdatedAt = TABLES_WITH_UPDATED_AT.has(table) ? ', updated_at = now()' : '';
         await tenantDb.query(
-          `UPDATE ${table} SET "${conflict.conflictField}" = $1, updated_at = now() WHERE id = $2`,
+          `UPDATE ${table} SET "${conflict.conflictField}" = $1${touchUpdatedAt} WHERE id = $2`,
           [conflict.clientValue, conflict.recordId],
         );
       }
@@ -84,11 +113,14 @@ export class ClinicalConflictResolutionService {
 
     const valueToApply =
       resolution === 'resolved_keep_client' ? entry.client_value : entry.server_value;
-    const table =
-      entry.record_type === 'allergy' ? 'patient_allergies' : 'active_medications';
+    const table = TABLE_BY_RECORD_TYPE[entry.record_type as SyncConflict['recordType']];
+    if (!table || !SYNCABLE_FIELDS[table]?.has(entry.conflict_field)) {
+      throw new BadRequestException(`Unsupported conflictField '${entry.conflict_field}' for ${entry.record_type}`);
+    }
 
+    const touchUpdatedAt = TABLES_WITH_UPDATED_AT.has(table) ? ', updated_at = now()' : '';
     await tenantDb.query(
-      `UPDATE ${table} SET "${entry.conflict_field}" = $1, updated_at = now() WHERE id = $2`,
+      `UPDATE ${table} SET "${entry.conflict_field}" = $1${touchUpdatedAt} WHERE id = $2`,
       [valueToApply, entry.record_id],
     );
     await tenantDb.query(

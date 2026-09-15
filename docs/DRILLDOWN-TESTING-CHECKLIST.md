@@ -1928,3 +1928,68 @@ Bug ref:       services/ehr-service/src/services/clinical-workflow.service.ts.
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 49 | `clinical-workflow.service.ts`'s `update_status` workflow-step action interpolated an unvalidated `entityType` field directly into a table name — any authenticated staff account could inject SQL via a workflow step's config | **Security (critical) — SQL injection** | Fixed |
+
+
+### Test 36 — SQL injection + phantom tables in offline-sync conflict resolution (backend, security + functional)
+
+```
+Module:        Offline Sync — clinical conflict resolution queue
+Platform:      Backend
+Role:          Any authenticated staff role
+Context:       Same sweep as Tests 34/35, continuing through every remaining ${...}-in-SQL hit.
+               clinical-conflict-resolution.service.ts's resolveConflict() and
+               resolveQueueEntry() ran UPDATE ${table} SET "${conflictField}" = $1 ..., where
+               conflictField came straight from the request body of
+               POST /conflict-queue/sync/conflicts (SyncConflict[], guarded only by
+               @UseGuards(JwtAuthGuard), no role restriction, no DTO validation) and from a
+               stored clinical_resolution_queue.conflict_field value written by that same
+               endpoint. Double-quoting the interpolated identifier does NOT prevent injection --
+               an attacker-supplied string can contain a literal " to break out of the quoted
+               identifier.
+               Separately, and independently of the injection: the two hardcoded target tables,
+               patient_allergies and active_medications, do not exist anywhere in the schema
+               at all (\d patient_allergies / \d active_medications -> "Did not find any
+               relation"). This means clinical conflict resolution for allergies and medications
+               has never worked in any capacity -- every resolution attempt, malicious or entirely
+               legitimate, would have 500'd. Real tables are allergies and patient_medications.
+Fix:           Rewrote the file: TABLE_BY_RECORD_TYPE maps recordType to the real table names;
+               SYNCABLE_FIELDS whitelists every column either table can legitimately have synced
+               (confirmed live via \d on both tables); SAFETY_CRITICAL (unchanged logic) is now
+               a subset of that whitelist rather than an independent, unvalidated set. Both
+               resolveConflict() and resolveQueueEntry() validate recordType->table and
+               field-in-whitelist, throwing BadRequestException before the interpolated-SQL line
+               is ever reached. Live testing surfaced a second real bug the rewrite would otherwise
+               have carried forward: allergies has no updated_at column (only patient_medications
+               does), so unconditionally appending ", updated_at = now()" 500'd on every
+               legitimate allergy resolution. Added TABLES_WITH_UPDATED_AT and made that clause
+               conditional per table in both query sites.
+Steps to test: 1) Seed a real allergies row and a real patient_medications row for the TEST_
+               patient.  2) POST a conflict with an injection-shaped conflictField
+               (allergen" = (SELECT 1),x) -- expect a clean BadRequestException, not a raw SQL
+               error.  3) POST a legitimate non-critical allergy field (verification_status) --
+               expect it applied (LWW) with no updated_at error.  4) POST a legitimate critical
+               allergy field (severity) -- expect it queued, not silently overwritten.  5) POST a
+               legitimate patient_medications field (notes) -- expect it applied, updated_at
+               touched correctly (that table does have the column).  6) PATCH the queued entry via
+               /conflict-queue/:id/resolve with resolved_keep_client -- expect the underlying
+               allergies.severity updated and the queue entry marked resolved, no error.
+Actual result: Pass on all six steps. Injection payload rejected with a clear 400. Non-critical
+               allergy field applied (verification_status -> confirmed). Critical allergy field
+               correctly queued (severity left at moderate pending review) then correctly
+               applied on manual resolve (severity -> severe), queue entry marked
+               resolved_keep_client with resolved_by/resolution_note recorded. Medication
+               field applied with updated_at touched. docker logs clean after the fix (the one
+               updated_at error seen was from the pre-fix test run, before the second issue was
+               found and patched). npx tsc --noEmit clean. All test rows (allergy, medication,
+               queue entry) deleted after verification.
+Status:        Fail (SQL injection, any staff account; plus a completely broken feature -- target
+               tables never existed) -> Fixed -> Pass (verified live, including a second bug found
+               mid-verification).
+Bug ref:       services/ehr-service/src/services/clinical-conflict-resolution.service.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 11)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 50 | clinical-conflict-resolution.service.ts interpolated an unvalidated conflictField directly into a column identifier (SQL injection, any authenticated staff account) AND targeted two tables (patient_allergies, active_medications) that don't exist in the schema, meaning the feature never worked at all; fix also caught a follow-on bug where allergies lacks an updated_at column | **Security (critical) -- SQL injection + broken feature** | Fixed |
