@@ -2355,3 +2355,57 @@ design question -- deferred rather than drive-by fixed.
 |---|---|---|---|
 | 56 | users.controller.ts had no role restriction on create/update/deactivate/reset-password/activate -- combined with UpdateUserDto's unrestricted `role` field and an unguarded Object.assign in updateUser(), any authenticated staff member could self-promote to admin | **Security (critical) -- full privilege escalation** | Fixed |
 | 57 | prescription.controller.ts, discharge.controller.ts, and patient.controller.ts's deactivatePatient had no role restriction -- any authenticated staff (e.g. receptionist) could create/dispense/cancel prescriptions, finalize a discharge, or deactivate a patient record | **Security (high) -- missing RBAC on medication-safety and clinical-decision actions** | Fixed |
+
+
+### Test 43 -- Pharmacy module had no role restriction on any write route (backend, security)
+
+```
+Module:        Pharmacy -- suppliers, inventory, purchase orders, dispensing, pricing, formulary
+Platform:      Backend
+Role:          Any authenticated staff role
+Context:       Follow-up to Test 42 (bug #56/#57). pharmacy.controller.ts had @UseGuards(JwtAuthGuard)
+               only at class level; of its ~25 write routes (suppliers, inventory, purchase
+               orders, receipts, dispensings, returns, stock adjustments, pricing rules,
+               formulary, alerts, prescription dispensing, dispensing payment), exactly ONE
+               (override-contraindication) had a role check, and even that one referenced a
+               'senior_clinician' role that doesn't exist anywhere in the UserRole enum
+               (admin/doctor/nurse/nurse_accounts/receptionist/pharmacist/lab_tech/radiologist/
+               accounts/store_manager) -- effectively unreachable by anyone but a doctor or
+               admin (the enum's real 'doctor' entry in that same @Roles list still worked).
+               Every other write route -- creating suppliers, deleting inventory, adjusting
+               stock quantities, changing drug pricing, editing the formulary, dispensing
+               prescriptions, processing payments -- was reachable by any authenticated staff
+               account regardless of role, e.g. a receptionist could dispense medication or
+               falsify a stock adjustment.
+Fix:           Added RolesGuard at class level and @Roles(...) to every write route, scoped by
+               domain and matching the role sets already established in storeroom.controller.ts
+               (the sibling inventory module) and finance.controller.ts (for payment
+               processing): pharmacist/store_manager/admin for suppliers, inventory, purchase
+               orders, receipts, returns, and stock adjustments; pharmacist/admin for
+               dispensings, pricing rules, alerts, and prescription dispensing; pharmacist/
+               doctor/admin for formulary (drug-list changes plausibly need clinical input);
+               pharmacist/accounts/nurse_accounts/admin for dispensing payment (financial,
+               matching finance.controller.ts's existing accounts/nurse_accounts pattern). GET
+               routes were left open to any authenticated staff (read-only, no sensitive write
+               exposure). The AI-analysis "intelligence/*" routes (reconciliation review,
+               dispense-plan, inventory forecasting, anomaly detection) were deliberately left
+               unrestricted -- they're read-adjacent generation/analysis, not a financial or
+               clinical mutation, so restricting them wouldn't close a real exposure.
+Steps to test: As receptionist: 1) POST /pharmacy/suppliers, 2) POST
+               /pharmacy/stock-adjustments -- both expect a clean 403. 3) GET
+               /pharmacy/inventory -- expect 200 (no regression). As pharmacist: 4) POST
+               /pharmacy/suppliers -- expect success (legitimate role unaffected).
+Actual result: Pass on all four checks. Receptionist got 403 on both write attempts, 200 on the
+               read. Pharmacist successfully created a real supplier record. npx tsc --noEmit
+               clean. Test supplier deleted, receptionist/pharmacist test passwords restored
+               after verification.
+Status:        Fail (any authenticated staff account could mutate pharmacy inventory, pricing,
+               suppliers, and dispense medication) -> Fixed -> Pass (verified live).
+Bug ref:       services/ehr-service/src/controllers/pharmacy.controller.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 19)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 58 | pharmacy.controller.ts had no role restriction on ~24 of its ~25 write routes (suppliers, inventory, purchase orders, stock adjustments, pricing, formulary, dispensing, payments) -- any authenticated staff account could mutate pharmacy data or dispense medication regardless of role | **Security (high) -- missing RBAC across an entire module's write surface** | Fixed |

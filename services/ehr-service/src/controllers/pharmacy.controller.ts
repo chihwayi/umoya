@@ -25,10 +25,16 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { PaginationQueryDto } from 'src/dto/diabetes.dto';
 
+// Write routes are restricted to the roles that actually run a pharmacy
+// (pharmacist/store_manager/admin, with accounts added for payment
+// processing) — previously only JwtAuthGuard was applied, so any
+// authenticated staff account (e.g. a receptionist) could create suppliers,
+// adjust stock, change drug pricing, or dispense medication. GET routes
+// stay open to any authenticated staff (read-only, no sensitive exposure).
 @ApiTags('Pharmacy Management')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('pharmacy')
 export class PharmacyController {
   constructor(
@@ -47,6 +53,7 @@ export class PharmacyController {
   }
 
   @Post('suppliers')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Create supplier' })
   async createSupplier(@Body() dto: CreateSupplierDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createSupplier(req.tenantDb, dto);
@@ -59,12 +66,14 @@ export class PharmacyController {
   }
 
   @Put('suppliers/:id')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Update supplier' })
   async updateSupplier(@Param('id') id: string, @Body() dto: UpdateSupplierDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.updateSupplier(req.tenantDb, id, dto);
   }
 
   @Delete('suppliers/:id')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Delete supplier' })
   async deleteSupplier(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.pharmacyService.deleteSupplier(req.tenantDb, id);
@@ -87,6 +96,7 @@ export class PharmacyController {
   }
 
   @Post('inventory')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Create inventory item' })
   async createInventory(@Body() dto: CreateInventoryDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createInventory(req.tenantDb, dto);
@@ -99,12 +109,14 @@ export class PharmacyController {
   }
 
   @Put('inventory/:id')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Update inventory item' })
   async updateInventory(@Param('id') id: string, @Body() dto: UpdateInventoryDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.updateInventory(req.tenantDb, id, dto);
   }
 
   @Delete('inventory/:id')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Delete inventory item' })
   async deleteInventory(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.pharmacyService.deleteInventory(req.tenantDb, id);
@@ -127,6 +139,7 @@ export class PharmacyController {
   }
 
   @Post('purchase-orders')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Create purchase order' })
   async createPurchaseOrder(@Body() dto: CreatePurchaseOrderDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createPurchaseOrder(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
@@ -139,6 +152,7 @@ export class PharmacyController {
   }
 
   @Put('purchase-orders/:id')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Update purchase order' })
   async updatePurchaseOrder(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.updatePurchaseOrder(req.tenantDb, id, dto);
@@ -149,6 +163,7 @@ export class PharmacyController {
   // ============================================
 
   @Post('receipts')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Create receipt' })
   async createReceipt(@Body() dto: CreateReceiptDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createReceipt(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
@@ -171,6 +186,7 @@ export class PharmacyController {
   // ============================================
 
   @Post('dispensings')
+  @Roles('pharmacist', 'admin')
   @ApiOperation({ summary: 'Create dispensing' })
   async createDispensing(@Body() dto: CreateDispensingDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createDispensing(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
@@ -308,6 +324,7 @@ export class PharmacyController {
   }
 
   @Put('dispensings/:id')
+  @Roles('pharmacist', 'admin')
   @ApiOperation({ summary: 'Update dispensing' })
   async updateDispensing(@Param('id') id: string, @Body() dto: CreateDispensingDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.updateDispensing(req.tenantDb, id, dto);
@@ -318,6 +335,7 @@ export class PharmacyController {
   // ============================================
 
   @Post('returns')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Create return' })
   async createReturn(@Body() dto: CreateReturnDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createReturn(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
@@ -334,6 +352,7 @@ export class PharmacyController {
   // ============================================
 
   @Post('stock-adjustments')
+  @Roles('pharmacist', 'store_manager', 'admin')
   @ApiOperation({ summary: 'Create stock adjustment' })
   async createStockAdjustment(@Body() dto: CreateStockAdjustmentDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createStockAdjustment(req.tenantDb, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
@@ -356,12 +375,14 @@ export class PharmacyController {
   }
 
   @Post('pricing-rules')
+  @Roles('pharmacist', 'admin')
   @ApiOperation({ summary: 'Create pricing rule' })
   async createPricingRule(@Body() dto: CreatePricingRuleDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createPricingRule(req.tenantDb, dto);
   }
 
   @Put('pricing-rules/:id')
+  @Roles('pharmacist', 'admin')
   @ApiOperation({ summary: 'Update pricing rule' })
   async updatePricingRule(@Param('id') id: string, @Body() dto: UpdatePricingRuleDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.updatePricingRule(req.tenantDb, id, dto);
@@ -378,12 +399,14 @@ export class PharmacyController {
   }
 
   @Post('formulary')
+  @Roles('pharmacist', 'doctor', 'admin')
   @ApiOperation({ summary: 'Create formulary item' })
   async createFormulary(@Body() dto: CreateFormularyDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createFormulary(req.tenantDb, dto);
   }
 
   @Put('formulary/:id')
+  @Roles('pharmacist', 'doctor', 'admin')
   @ApiOperation({ summary: 'Update formulary item' })
   async updateFormulary(@Param('id') id: string, @Body() dto: UpdateFormularyDto, @Request() req: RequestWithTenant) {
     return this.pharmacyService.updateFormulary(req.tenantDb, id, dto);
@@ -400,12 +423,14 @@ export class PharmacyController {
   }
 
   @Post('alerts')
+  @Roles('pharmacist', 'admin')
   @ApiOperation({ summary: 'Create alert' })
   async createAlert(@Body() dto: any, @Request() req: RequestWithTenant) {
     return this.pharmacyService.createAlert(req.tenantDb, dto);
   }
 
   @Put('alerts/:id')
+  @Roles('pharmacist', 'admin')
   @ApiOperation({ summary: 'Update alert' })
   async updateAlert(@Param('id') id: string, @Body() dto: any, @Request() req: RequestWithTenant) {
     return this.pharmacyService.updateAlert(req.tenantDb, id, dto, (req.user as any)?.userId ?? (req.user as any)?.id);
@@ -428,6 +453,7 @@ export class PharmacyController {
   }
 
   @Post('prescriptions/:id/dispense')
+  @Roles('pharmacist', 'admin')
   @ApiOperation({ summary: 'Dispense a prescription' })
   async dispensePrescription(
     @Param('id') id: string,
@@ -438,6 +464,7 @@ export class PharmacyController {
   }
 
   @Post('dispensings/:id/payment')
+  @Roles('pharmacist', 'accounts', 'nurse_accounts', 'admin')
   @ApiOperation({ summary: 'Process payment for a dispensing' })
   async processDispensingPayment(
     @Param('id') id: string,
