@@ -1838,3 +1838,52 @@ Bug ref:       services/ehr-service/src/controllers/telemedicine-webhook.control
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 47 | `telemedicine-webhook.controller.ts`'s Daily.co webhook secret check was fail-open (skipped entirely if unconfigured) and the route was unreachable in practice (blocked by the tenant-header requirement, same root cause as bug #45) | **Security + Functional** | Fixed |
+
+### Test 34 — SQL injection via custom report templates (backend, security)
+
+```
+Module:        Analytics & Reporting — custom report builder
+Platform:      Backend
+Role:          Any authenticated staff role (not admin-only)
+Context:       Grepped for raw SQL template literals with `${...}` interpolation across every
+               service, then checked each hit for whether the interpolated value could be
+               request-controlled rather than a hardcoded identifier. Nearly all were safe
+               (hardcoded column names with parameterized `$N` values, the standard
+               dynamic-UPDATE-builder pattern). One was not:
+               `report-builder.service.ts`'s `executeReportQuery()` built
+               `SELECT ${columns.join(', ')} FROM ${table} ${whereClause}` directly from
+               `report_templates.query_config`, a free-form JSONB field accepted verbatim via
+               `POST /analytics/templates` (`CreateReportTemplateDto.queryConfig` is
+               `@IsObject() @IsOptional()` — no further validation on its contents) and guarded
+               only by `@UseGuards(JwtAuthGuard)` at the controller level — ANY authenticated
+               user of ANY role could set `queryConfig.table`/`.columns` to arbitrary strings and
+               have them concatenated straight into a query with zero escaping. Confirmed live:
+               a crafted `table` value executed as a second statement, and a crafted `columns`
+               entry could subquery an unrelated table (e.g. `users.password_hash`) into the
+               report output — a full SQL injection reachable by any staff account.
+Fix:           Added a table whitelist (`REPORTABLE_TABLES`, currently `appointments`/`billing` —
+               the only two tables the existing date-filter logic already explicitly supports)
+               and a strict identifier regex for every requested column
+               (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`, matching the `SAFE_IDENTIFIER` pattern already used
+               in offline-sync.service.ts), both enforced in `executeReportQuery()` before the
+               query string is ever built. Rejects with `BadRequestException` on the first
+               violation.
+Steps to test: 1) Create a report template with `queryConfig.table` set to a statement-injection
+               payload, execute it — expect rejection.  2) Create one with a subquery-injection
+               `columns` entry, execute it — expect rejection.  3) Create a legitimate template
+               (`table: 'appointments', columns: ['id','status']`), execute it — expect real
+               data back.  4) Confirm the `patients` table row count is unaffected by the attempt.
+Actual result: Pass — both injection attempts rejected with a clear error, legitimate template
+               executed correctly and returned real appointment data, `patients` table untouched
+               (2255 rows, unchanged). `npx tsc --noEmit` clean. Test templates cleaned up after
+               verification.
+Status:        Fail (unauthenticated-by-role SQL injection, any staff account) → Fixed → Pass
+               (verified live with real injection payloads).
+Bug ref:       services/ehr-service/src/services/report-builder.service.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 9)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 48 | `report-builder.service.ts`'s custom report executor built raw SQL directly from an unvalidated free-form `query_config` JSONB field — any authenticated staff account (not just admins) could inject arbitrary SQL via `table`/`columns` | **Security (critical) — SQL injection** | Fixed |

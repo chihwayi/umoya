@@ -375,6 +375,13 @@ export class ReportBuilderService {
   /**
    * Execute the actual report query
    */
+  // queryConfig comes from report_templates.query_config, a free-form JSONB
+  // field any authenticated user can set via POST /analytics/templates —
+  // table/columns must be whitelisted/validated before ever reaching a raw
+  // SQL string, or this is a straightforward SQL injection.
+  private static readonly REPORTABLE_TABLES = new Set(['appointments', 'billing']);
+  private static readonly SAFE_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
   private async executeReportQuery(
     tenantDb: DataSource,
     queryConfig: Record<string, any>,
@@ -385,7 +392,18 @@ export class ReportBuilderService {
     // For now, we'll support basic table queries
 
     const table = queryConfig.table || 'appointments';
-    const columns = queryConfig.columns || ['*'];
+    if (!ReportBuilderService.REPORTABLE_TABLES.has(table)) {
+      throw new BadRequestException(`Unsupported report table: ${table}`);
+    }
+
+    const requestedColumns: any[] = queryConfig.columns || ['*'];
+    const columns = requestedColumns.map((c) => String(c));
+    for (const col of columns) {
+      if (col !== '*' && !ReportBuilderService.SAFE_IDENTIFIER.test(col)) {
+        throw new BadRequestException(`Invalid column name in report template: ${col}`);
+      }
+    }
+
     const whereConditions: string[] = [];
     const params: any[] = [];
 
