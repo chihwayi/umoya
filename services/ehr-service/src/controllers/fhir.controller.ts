@@ -171,23 +171,6 @@ export class FhirController {
     return this.fhirService.updatePatient(id, fhirPatient, tenantDb, tenantId);
   }
 
-  @Get('Patient/:id/everything')
-  @ApiOperation({ summary: 'Get all resources for a patient (Patient $everything operation)' })
-  @ApiResponse({ status: 200, description: 'FHIR bundle containing all patient resources' })
-  async getPatientEverything(
-    @Param('id') id: string,
-    @Headers('x-tenant-id') tenantId: string
-  ) {
-    if (!tenantId) {
-      throw new Error('Tenant ID is required in X-Tenant-ID header');
-    }
-    const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
-    if (!tenantDb) {
-      throw new Error(`Invalid tenant: ${tenantId}`);
-    }
-    return this.fhirService.getPatientEverything(id, tenantDb, tenantId);
-  }
-
   @Get('Observation')
   @ApiOperation({ summary: 'Search FHIR observations' })
   @ApiResponse({ status: 200, description: 'FHIR observation bundle' })
