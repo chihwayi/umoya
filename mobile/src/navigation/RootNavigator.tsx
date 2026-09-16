@@ -1,14 +1,20 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, ActivityIndicator, Text } from "react-native";
+import axios from "axios";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
-import { useAuthStore } from "../stores/useAuthStore";
+import { useAuthStore, Tenant } from "../stores/useAuthStore";
 import { useBadgeStore } from "../stores/useBadgeStore";
+import { useDeepLinkStore } from "../stores/useDeepLinkStore";
 import { AppState } from "react-native";
 import { registerPushToken, setupNotificationListeners, clearAppBadge } from "../services/pushNotifications";
-import { C } from "../design/tokens";
+import { TENANT_DISCOVERY_URL, API_BASE_URL, ensurePublicApiBaseUrl } from "../config/env";
+import { C, FONT } from "../design/tokens";
 import { CustomTabBar } from "./TabBar";
+import PreVisitIntakeScreen from "../screens/PreVisitIntakeScreen";
+import SatisfactionSurveyScreen from "../screens/SatisfactionSurveyScreen";
+import CheckInScreen from "../screens/CheckInScreen";
 
 import { TenantSelectScreen } from "../components/shared/TenantSelectScreen";
 import { LoginScreen } from "../components/shared/LoginScreen";
@@ -240,6 +246,7 @@ const PatientStackNavigator = () => (
     <PatientStack.Screen name="PHEducationCourse" component={EducationCourseScreen} options={{ headerShown: false }} />
     <PatientStack.Screen name="PHFamilyAccess" component={PatientFamilyAccessScreen} />
     <PatientStack.Screen name="PHQueueStatus" component={QueueStatusScreen} options={{ title: 'Queue Status' }} />
+    <PatientStack.Screen name="CheckIn" component={CheckInScreen} options={{ title: 'Check In' }} />
     <PatientStack.Screen name="PHBillPayment" component={BillPaymentScreen} options={{ title: 'Pay a Bill' }} />
     <PatientStack.Screen name="PHDischargeDocuments" component={DischargeDocumentsScreen} options={{ title: 'Discharge Documents' }} />
     <PatientStack.Screen name="PHReferralStatus" component={ReferralStatusScreen} options={{ title: 'My Referrals' }} />
@@ -256,8 +263,85 @@ const RoleRouter = () => {
   return <DoctorNavigator />;
 };
 
+// Pre-visit intake and satisfaction-survey links arrive via SMS/email before
+// the recipient has picked a clinic or logged in — the token is the
+// credential (pre-visit-intake.controller.ts / csat.controller.ts are
+// unguarded by design). Render the target screen directly, resolving the
+// tenant from the link's slug, ahead of the normal Tenant/Login/Lock gate.
+const DeepLinkGate = () => {
+  const pending = useDeepLinkStore((s) => s.pending);
+  const clearPending = useDeepLinkStore((s) => s.clear);
+  const { tenant, setTenant } = useAuthStore();
+  const [resolving, setResolving] = React.useState(true);
+  const [error, setError] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!pending) return;
+    if (tenant?.slug === pending.tenantSlug) {
+      setResolving(false);
+      return;
+    }
+    let cancelled = false;
+    setResolving(true);
+    setError(false);
+    axios
+      .get(`${TENANT_DISCOVERY_URL}/subdomain/${pending.tenantSlug}`, { timeout: 8000 })
+      .then(async (res) => {
+        if (cancelled) return;
+        const data = res.data;
+        const resolved: Tenant = {
+          id: data.id,
+          slug: data.subdomain,
+          name: data.name,
+          logoUrl: data.logoUrl,
+          baseUrl: ensurePublicApiBaseUrl(API_BASE_URL),
+        };
+        await setTenant(resolved);
+        if (!cancelled) setResolving(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError(true);
+          setResolving(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pending, tenant?.slug]);
+
+  if (!pending) return null;
+
+  if (resolving) {
+    return (
+      <View style={styles.deepLinkCenter}>
+        <ActivityIndicator color={C.teal} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.deepLinkCenter}>
+        <Text style={styles.deepLinkErrorText}>
+          This link couldn't be opened. It may have expired.
+        </Text>
+        <Text style={styles.deepLinkErrorLink} onPress={clearPending}>
+          Continue to Umoya
+        </Text>
+      </View>
+    );
+  }
+
+  if (pending.type === "intake") {
+    return <PreVisitIntakeScreen token={pending.token} onDone={clearPending} />;
+  }
+  return <SatisfactionSurveyScreen token={pending.token} onDone={clearPending} />;
+};
+
 export const RootNavigator = () => {
   const { jwt, tenant, isUnlocked, unlock, logout, clearTenant, role } = useAuthStore();
+  const pendingDeepLink = useDeepLinkStore((s) => s.pending);
   const navigation = useNavigation<any>();
 
   React.useEffect(() => {
@@ -284,6 +368,10 @@ export const RootNavigator = () => {
       cleanup();
     };
   }, [jwt, isUnlocked, role, navigation]);
+
+  if (pendingDeepLink) {
+    return <DeepLinkGate />;
+  }
 
   if (!tenant) {
     return <TenantSelectScreen onSelected={() => {}} />;
@@ -313,4 +401,7 @@ const styles = StyleSheet.create({
   unlocked: { flex: 1 },
   lockedUnderlay: { flex: 1 },
   lockOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 9999 },
+  deepLinkCenter: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, backgroundColor: C.bg },
+  deepLinkErrorText: { fontFamily: FONT.ui, fontSize: 14, color: C.textSecondary, textAlign: "center", marginBottom: 16 },
+  deepLinkErrorLink: { fontFamily: FONT.uiBd, fontSize: 14, color: C.teal },
 });

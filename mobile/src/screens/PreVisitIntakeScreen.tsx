@@ -15,9 +15,10 @@ import { C, FONT, RADIUS } from '../design/tokens';
 
 interface Props {
   token: string;
+  onDone?: () => void;
 }
 
-export default function PreVisitIntakeScreen({ token }: Props) {
+export default function PreVisitIntakeScreen({ token, onDone }: Props) {
   const [form, setForm] = useState<any>(null);
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [medications, setMedications] = useState('');
@@ -71,12 +72,22 @@ export default function PreVisitIntakeScreen({ token }: Props) {
           Your information has been sent to your care team.
           {form.appointment_time ? `\nSee you at ${form.appointment_time}!` : ''}
         </Text>
+        {onDone && (
+          <TouchableOpacity style={[styles.submitBtn, { marginTop: 24, width: '100%' }]} onPress={onDone}>
+            <Text style={styles.submitText}>Continue to Umoya</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
+      {onDone && (
+        <TouchableOpacity style={styles.closeBtn} onPress={onDone}>
+          <Text style={styles.closeBtnText}>Skip for now ✕</Text>
+        </TouchableOpacity>
+      )}
       <Text style={styles.heading}>Before Your Visit</Text>
       {form.appointment_date && (
         <Text style={styles.sub}>
@@ -159,6 +170,8 @@ export default function PreVisitIntakeScreen({ token }: Props) {
 
 const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: C.bg },
+  closeBtn:      { alignSelf: 'flex-end', marginBottom: 8 },
+  closeBtnText:  { fontSize: 13, color: C.textMuted },
   heading:       { fontFamily: FONT.uiBd, fontSize: 20, color: C.text, marginBottom: 4 },
   sub:           { fontSize: 13, color: C.textSecondary, marginBottom: 20 },
   label:         { fontSize: 13, color: C.text, fontFamily: FONT.uiBd, marginBottom: 4, marginTop: 14 },

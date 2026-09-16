@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Badge, Card, ScreenHeader } from '../ui';
@@ -59,6 +60,7 @@ function formatDateTime(appt: ApiAppointment): { date: string; time: string } {
 }
 
 const canCancel = (status: string) => ['scheduled', 'confirmed'].includes(status);
+const canCheckIn = (status: string) => ['scheduled', 'confirmed'].includes(status);
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -66,6 +68,7 @@ export const PatientAppointmentsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { user } = useAuthStore();
+  const navigation = useNavigation<any>();
 
   const [appointments, setAppointments] = useState<ApiAppointment[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -158,11 +161,27 @@ export const PatientAppointmentsScreen: React.FC = () => {
             <Text style={s.teleText}>Telemedicine</Text>
           </View>
         )}
-        {canCancel(item.status) && (
-          <TouchableOpacity testID={`patient-appointments-cancel-${item.id}`} style={s.cancelBtn} onPress={() => handleCancel(item.id)} activeOpacity={0.7}>
-            <Text style={s.cancelText}>{t('common.cancel')}</Text>
-          </TouchableOpacity>
-        )}
+        <View style={s.actionsRow}>
+          {canCheckIn(item.status) && (
+            <TouchableOpacity
+              testID={`patient-appointments-checkin-${item.id}`}
+              style={s.checkinBtn}
+              onPress={() => navigation.navigate('CheckIn', {
+                appointmentId: item.id,
+                appointmentTime: `${date}${time ? `  ·  ${time}` : ''}`,
+                doctorName: item.doctorName,
+              })}
+              activeOpacity={0.7}
+            >
+              <Text style={s.checkinText}>Check In</Text>
+            </TouchableOpacity>
+          )}
+          {canCancel(item.status) && (
+            <TouchableOpacity testID={`patient-appointments-cancel-${item.id}`} style={s.cancelBtn} onPress={() => handleCancel(item.id)} activeOpacity={0.7}>
+              <Text style={s.cancelText}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </Card>
     );
   };
@@ -271,8 +290,11 @@ const s = StyleSheet.create({
   statusText:  { fontFamily: FONT.uiBd, fontSize: 11 },
   teleBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   teleText:    { fontFamily: FONT.ui, fontSize: 11, color: C.teal },
-  cancelBtn:   { marginTop: 10, alignSelf: 'flex-start', paddingVertical: 4 },
+  actionsRow:  { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 10 },
+  cancelBtn:   { paddingVertical: 4 },
   cancelText:  { fontFamily: FONT.ui, fontSize: 12, color: C.red },
+  checkinBtn:  { paddingVertical: 4 },
+  checkinText: { fontFamily: FONT.uiBd, fontSize: 12, color: C.teal },
   empty:       { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 10 },
   emptyTitle:  { fontFamily: FONT.uiBd, fontSize: 16, color: C.textMuted },
   emptyBody:   { fontFamily: FONT.ui, fontSize: 13, color: C.textMuted, textAlign: 'center' },

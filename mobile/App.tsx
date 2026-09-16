@@ -1,6 +1,6 @@
 import './src/i18n';
 import React, { useEffect } from 'react';
-import { View, StyleSheet, StatusBar, Text, LogBox } from 'react-native';
+import { View, StyleSheet, StatusBar, Text, LogBox, Linking } from 'react-native';
 LogBox.ignoreAllLogs(true);
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -23,6 +23,7 @@ import {
 
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { useAuthStore } from './src/stores/useAuthStore';
+import { useDeepLinkStore, parseDeepLinkUrl } from './src/stores/useDeepLinkStore';
 import { buildApiClient } from './src/services/api';
 import { C, FONT } from './src/design/tokens';
 import { useAppPrivacyState, audit, suspectCompromisedEnvironment } from './src/utils/security';
@@ -72,6 +73,18 @@ export default function App() {
 
   useEffect(() => {
     hydrate();
+  }, []);
+
+  useEffect(() => {
+    const setPending = useDeepLinkStore.getState().setPending;
+    const handleUrl = (url: string | null) => {
+      if (!url) return;
+      const parsed = parseDeepLinkUrl(url);
+      if (parsed) setPending(parsed);
+    };
+    Linking.getInitialURL().then(handleUrl);
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {

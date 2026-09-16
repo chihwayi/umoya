@@ -16,7 +16,7 @@ export class PreVisitIntakeService {
 
   async sendPendingForms(tenantDb: DataSource, subdomain: string): Promise<void> {
     const appointments = await tenantDb.query(
-      `SELECT a.id, a.patient_id, a.appointment_date, a.appointment_time,
+      `SELECT a.id, a.patient_id, a.appointment_date,
               p.first_name, p.phone, p.preferred_language
        FROM appointments a
        JOIN patients p ON p.id = a.patient_id
@@ -57,7 +57,7 @@ export class PreVisitIntakeService {
   async getFormByToken(tenantDb: DataSource, rawToken: string): Promise<any> {
     const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const [form] = await tenantDb.query(
-      `SELECT pvif.*, a.appointment_date, a.appointment_time,
+      `SELECT pvif.*, a.appointment_date, a.appointment_date AS appointment_time,
               p.first_name, p.last_name, p.date_of_birth, p.address as current_address,
               p.phone, p.email
        FROM pre_visit_intake_forms pvif
@@ -157,14 +157,14 @@ export class PreVisitIntakeService {
 
   async sendReminders(tenantDb: DataSource, subdomain: string): Promise<void> {
     const pending = await tenantDb.query(
-      `SELECT pvif.id, pvif.patient_id, p.first_name, p.phone, a.appointment_time
+      `SELECT pvif.id, pvif.patient_id, p.first_name, p.phone, a.appointment_date AS appointment_time
        FROM pre_visit_intake_forms pvif
        JOIN patients p ON p.id = pvif.patient_id
        JOIN appointments a ON a.id = pvif.appointment_id
        WHERE pvif.completed_at IS NULL
          AND pvif.reminder_sent_at IS NULL
-         AND a.appointment_date = CURRENT_DATE
-         AND a.appointment_time::time < (now() + interval '2 hours')::time`,
+         AND a.appointment_date::date = CURRENT_DATE
+         AND a.appointment_date::time < (now() + interval '2 hours')::time`,
     );
 
     for (const form of pending) {

@@ -8,6 +8,7 @@ import { C, FONT, RADIUS } from '../design/tokens';
 
 interface Props {
   token: string;
+  onDone?: () => void;
 }
 
 function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -38,7 +39,7 @@ function NpsRow({ value, onChange }: { value: number; onChange: (v: number) => v
   );
 }
 
-export default function SatisfactionSurveyScreen({ token }: Props) {
+export default function SatisfactionSurveyScreen({ token, onDone }: Props) {
   const [survey, setSurvey] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
@@ -85,12 +86,22 @@ export default function SatisfactionSurveyScreen({ token }: Props) {
         <Text style={{ fontSize: 56 }}>🙏</Text>
         <Text style={styles.doneTitle}>Thank you!</Text>
         <Text style={styles.doneSub}>Your feedback helps us improve care for every patient.</Text>
+        {onDone && (
+          <TouchableOpacity style={[styles.submitBtn, { marginTop: 24, width: '100%' }]} onPress={onDone}>
+            <Text style={styles.submitText}>Continue to Umoya</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
+      {onDone && (
+        <TouchableOpacity style={styles.closeBtn} onPress={onDone}>
+          <Text style={styles.closeBtnText}>Skip for now ✕</Text>
+        </TouchableOpacity>
+      )}
       <Text style={styles.heading}>How was your visit?</Text>
       {survey?.encounter_date && (
         <Text style={styles.sub}>Visit on {new Date(survey.encounter_date).toLocaleDateString()}</Text>
@@ -135,6 +146,8 @@ export default function SatisfactionSurveyScreen({ token }: Props) {
 
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: C.bg },
+  closeBtn:     { alignSelf: 'flex-end', marginBottom: 8 },
+  closeBtnText: { fontSize: 13, color: C.textMuted },
   heading:      { fontFamily: FONT.uiBd, fontSize: 20, color: C.text, marginBottom: 4 },
   sub:          { fontSize: 13, color: C.textSecondary, marginBottom: 16 },
   label:        { fontFamily: FONT.uiBd, fontSize: 13, color: C.text, marginTop: 16 },

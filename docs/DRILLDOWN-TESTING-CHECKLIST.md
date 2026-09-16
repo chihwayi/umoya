@@ -3399,3 +3399,81 @@ Bug ref (deferred, not yet fixed):
 |---|---|---|---|
 | 90 | LabTest entity (lab_tests) and the raw-SQL lab_test_catalog/lab_test_components/lab_reference_ranges tables are two divergent data models for the same lab-test-catalog concept, and the live lab-ordering workflow (lab-order.service.ts) already reads from both simultaneously | **Data integrity (medium) -- fragmented catalog data model in the core ordering workflow, needs a reconciliation migration, not a quick fix** | Deferred -- backlog |
 | 91 | LabOrderSet entity and the "enhanced" lab-order-set controller both map to the same lab_order_sets table but are each depended on by a different, currently-live frontend modal (LabOrdersModal vs EnhancedLabOrderModal) | **Maintainability (low) -- duplicate backend access paths to one table, consolidation requires coordinated frontend + backend migration** | Deferred -- backlog |
+
+### Test 55 -- Mobile: wire up the 3 unwired deep-link/check-in screens, fix 2 more SQL column bugs (mobile + backend)
+
+```
+Module:        3 mobile screens flagged as orphaned in the earlier mobile/web parity audit:
+               CheckInScreen.tsx, PreVisitIntakeScreen.tsx, SatisfactionSurveyScreen.tsx --
+               all originally assumed to need deep-link infrastructure.
+Platform:      Mobile (React Native / Expo) + Backend (ehr-service)
+Role:          Patient
+Context:       Re-reading each screen + its backend controller first (rather than trusting the
+               earlier "unwired = needs deep links" label) showed only 2 of the 3 actually need
+               a deep link -- CheckInScreen is patient-initiated in-app (POST /checkin/token,
+               PatientJwtAuthGuard), not link-initiated, and just needed a normal navigation
+               entry point. PreVisitIntakeScreen and SatisfactionSurveyScreen genuinely need
+               deep links: they're opened from an SMS/email link sent before the patient has
+               picked a clinic or logged in, and the backend token (:token routes, unguarded by
+               design -- the token itself is the credential) is the only proof of identity.
+               RootNavigator's top level is a bare conditional-render tree
+               (!tenant -> TenantSelectScreen, !jwt -> LoginScreen, else -> RoleRouter), not a
+               Stack.Navigator wrapping named screens, so React Navigation's declarative
+               `linking` config can't resolve into it -- built an imperative path instead:
+               Linking.getInitialURL()/addEventListener('url') in App.tsx parses the URL into a
+               new useDeepLinkStore, and RootNavigator renders the target screen directly,
+               ahead of the Tenant/Login/Lock gate, when a link is pending.
+               Checked the actual link shape the backend sends (createAndSendForm() in
+               pre-visit-intake.service.ts, csat.service.ts) rather than inventing one:
+               https://<tenantSubdomain>.umoya.app/intake/<token> and .../survey/<token> --
+               tenant lives in the hostname's leftmost label, not the path. Parser uses the
+               WHATWG URL parser against hostname + pathname so it matches that shape (and the
+               equivalent umoya://<tenantSubdomain>.umoya.app/intake/<token> custom-scheme form
+               for QR codes), rather than a made-up umoya://intake/<slug>/<token> path shape
+               that would never match a real link.
+               Manually inserted a scratch token row and hit both endpoints against the live
+               Docker stack (GET/POST /intake/:token, GET/POST /csat/survey/:token) end-to-end
+               to verify -- caught the same "column doesn't exist" bug pattern fixed earlier
+               this session in checkin.service.ts, this time in pre-visit-intake.service.ts:
+               3 queries referenced a.appointment_time, which doesn't exist on `appointments`
+               (only appointment_date, a timestamptz). GET /intake/:token 500'd immediately.
+               csat.service.ts had no equivalent bug (grepped, clean).
+Fix:           mobile/src/stores/useDeepLinkStore.ts (new) -- pending-link state + URL parser.
+               mobile/App.tsx -- Linking cold-start + warm-start listeners.
+               mobile/src/navigation/RootNavigator.tsx -- DeepLinkGate component (resolves
+               tenant via GET /tenants/subdomain/:slug, calls setTenant(), renders
+               PreVisitIntakeScreen/SatisfactionSurveyScreen with the token) rendered ahead of
+               the Tenant/Login/Lock gate; also registered CheckIn as a normal PatientStack
+               route.
+               mobile/src/screens/PreVisitIntakeScreen.tsx, SatisfactionSurveyScreen.tsx --
+               added an optional onDone callback (used only in the deep-link path) with a
+               "Continue to Umoya" button on the done state and a "Skip for now" dismiss on the
+               form, so a deep-link session has a way back into the normal app.
+               mobile/src/components/patient/PatientAppointmentsScreen.tsx -- added a "Check In"
+               action on scheduled/confirmed appointments, navigating to the new CheckIn route.
+               services/ehr-service/src/services/pre-visit-intake.service.ts -- fixed all 3
+               a.appointment_time references (getFormByToken, sendPendingForms, sendReminders)
+               to use the real appointment_date column.
+Verified:      Live against the Docker stack: inserted a scratch pre_visit_intake_forms row and
+               csat_surveys row directly, confirmed GET+POST /api/intake/:token and GET+POST
+               /api/csat/survey/:token all succeed with X-Tenant-Id: e2e-clinic (previously the
+               intake GET 500'd on the missing column), and GET /api/tenants/subdomain/e2e-clinic
+               returns the shape the new DeepLinkGate expects. Both scratch rows deleted after
+               verification. Mobile: `npx tsc --noEmit` clean on every touched file (3
+               pre-existing, unrelated errors remain in DoctorRoundsScreen.tsx). Could not
+               device/simulator-test the actual `Linking` URL interception in this environment --
+               code-reviewed and the parser unit-verified against the exact link strings the
+               backend generates, but not exercised via a real deep-link tap.
+Known gap:     The https://<subdomain>.umoya.app links will not actually open the app on a real
+               device yet -- that needs iOS Associated Domains + Android App Links configured in
+               app.json AND an apple-app-site-association / assetlinks.json file hosted at the
+               real umoya.app domain, which needs DNS/hosting access outside this environment.
+               Deliberately left app.json unchanged rather than add a half-wired
+               associatedDomains entry with nothing hosted to back it -- the umoya:// custom
+               scheme (already registered) works today without that infra; the https universal
+               link is documented here as the remaining pre-launch task for whoever controls the
+               domain.
+Status:        Fixed and verified live (backend + endpoint round-trip). Deep-link URL
+               interception is code-complete but device-unverified. Universal-link (https)
+               activation blocked on external domain/hosting setup -- documented above.
+```
