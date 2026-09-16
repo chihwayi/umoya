@@ -18,9 +18,9 @@ export class QueueController {
   ) {
     const result = await this.queue.enqueue(req.tenantDb, body.patientId, body.appointmentId);
     const entry = await this.queue.getQueueEntry(req.tenantDb, body.patientId);
-    await this.gateway.broadcastQueueUpdate(body.patientId, entry);
+    await this.gateway.broadcastQueueUpdate(req.tenantId, body.patientId, entry);
     const fullQueue = await this.queue.getTodayQueue(req.tenantDb);
-    await this.gateway.broadcastNurseQueue(fullQueue);
+    await this.gateway.broadcastNurseQueue(req.tenantId, fullQueue);
     return result;
   }
 
@@ -45,10 +45,10 @@ export class QueueController {
     await this.queue.recalculateWaits(req.tenantDb);
     if (patientId) {
       const entry = await this.queue.getQueueEntry(req.tenantDb, patientId);
-      await this.gateway.broadcastQueueUpdate(patientId, entry ?? { queueId, status: body.status });
+      await this.gateway.broadcastQueueUpdate(req.tenantId, patientId, entry ?? { queueId, status: body.status });
     }
     const fullQueue = await this.queue.getTodayQueue(req.tenantDb);
-    await this.gateway.broadcastNurseQueue(fullQueue);
+    await this.gateway.broadcastNurseQueue(req.tenantId, fullQueue);
     return { ok: true };
   }
 }

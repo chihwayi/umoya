@@ -9,27 +9,21 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
 import { InboxItem } from '../entities/inbox-item.entity';
+import { authenticateSocket, getWsUser } from './ws-auth.util';
 
-/**
- * WebSocket gateway for real-time smart inbox notifications.
- *
- * Client connects to /inbox namespace and joins a room keyed by their userId:
- *   inbox:subscribe  { userId }   → joins room `user:{userId}`
- *
- * Server pushes:
- *   inbox:item       { item: InboxItem }   — new triaged item
- *   inbox:counts     { critical, urgent, routine, informational }  — badge counts
- *
- * Sprint 65 — Smart Inbox AI Triage
- */
 @WebSocketGateway({ namespace: '/inbox', cors: { origin: '*' } })
 export class InboxGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
   private readonly logger = new Logger(InboxGateway.name);
 
+  constructor(private readonly jwtService: JwtService) {}
+
   handleConnection(client: Socket) {
-    this.logger.log(`Inbox client connected: ${client.id}`);
+    const user = authenticateSocket(client, this.jwtService);
+    if (!user) return;
+    this.logger.log(`Inbox client connected: user=${user.id} tenant=${user.tenantId} socket=${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
@@ -37,22 +31,20 @@ export class InboxGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('inbox:subscribe')
-  handleSubscribe(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { userId: string },
-  ) {
-    if (!payload?.userId) return;
-    client.join(`user:${payload.userId}`);
-    this.logger.log(`User ${payload.userId} joined inbox room`);
+  handleSubscribe(@ConnectedSocket() client: Socket) {
+    const user = getWsUser(client);
+    if (!user) return;
+    client.join(`tenant:${user.tenantId}:user:${user.id}`);
+    this.logger.log(`User ${user.id} joined inbox room`);
   }
 
   /** Called by InboxTriageService to push a new item to the recipient. */
-  pushToUser(userId: string, item: InboxItem): void {
-    this.server.to(`user:${userId}`).emit('inbox:item', { item });
+  pushToUser(tenantId: string, userId: string, item: InboxItem): void {
+    this.server.to(`tenant:${tenantId}:user:${userId}`).emit('inbox:item', { item });
   }
 
   /** Push updated badge counts to a user. */
-  pushCounts(userId: string, counts: Record<string, number>): void {
-    this.server.to(`user:${userId}`).emit('inbox:counts', counts);
+  pushCounts(tenantId: string, userId: string, counts: Record<string, number>): void {
+    this.server.to(`tenant:${tenantId}:user:${userId}`).emit('inbox:counts', counts);
   }
 }

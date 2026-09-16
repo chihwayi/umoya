@@ -112,6 +112,7 @@ export class MortalityRiskService {
             severity: 'critical',
             message: `30-day mortality risk score: ${score}/100 (${band.toUpperCase()}) — immediate review recommended`,
             payload: { score, band, factors },
+            tenantId: subdomain,
           });
           await db.query(
             `UPDATE mortality_risk_scores SET alert_sent = true

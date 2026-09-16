@@ -137,6 +137,7 @@ export class TelemedicinePostcallService {
               severity: escalationLevel as any,
               message: `Telemedicine post-call escalation: ${escalation?.rationale ?? escalationLevel}`,
               payload: { eventId, soapNoteSnippet: soapNote.slice(0, 200) },
+              tenantId: subdomain,
             });
           }
         }

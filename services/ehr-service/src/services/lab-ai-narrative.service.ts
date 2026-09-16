@@ -133,6 +133,7 @@ export class LabAiNarrativeService {
           severity: 'critical',
           message: `Critical lab value: ${result.test_name} = ${result.value} ${result.unit ?? ''} (${result.flag})`,
           payload: { resultId, testName: result.test_name, value: result.value, flag: result.flag },
+          tenantId: subdomain,
         });
         await db.query(
           `UPDATE lab_ai_narratives SET alert_sent = true WHERE id = $1`,

@@ -9,20 +9,24 @@ import {
 } from '@nestjs/websockets';
 import { Logger, Optional } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
 import { AmbientService } from '../services/ambient.service';
 import { TenantService } from '../services/tenant.service';
 import { CdssDecisionLogService } from '../services/cdss-decision-log.service';
+import { authenticateSocket, getWsUser } from './ws-auth.util';
+
+const CLINICAL_ROLES = ['doctor', 'nurse', 'admin'];
 
 /**
  * WebSocket gateway for real-time ambient AI sessions.
  *
  * Event flow (client → server):
- *   ambient:start   { patientId, providerId, appointmentId?, tenantId }
- *   ambient:chunk   { sessionId, audio: base64, tenantId }
- *   ambient:pause   { sessionId, tenantId }
- *   ambient:resume  { sessionId, tenantId }
- *   ambient:action  { sessionId, category, itemId, action, tenantId }
- *   ambient:end     { sessionId, tenantId }
+ *   ambient:start   { patientId, providerId, appointmentId? }
+ *   ambient:chunk   { sessionId, audio: base64 }
+ *   ambient:pause   { sessionId }
+ *   ambient:resume  { sessionId }
+ *   ambient:action  { sessionId, category, itemId, action, patientId }
+ *   ambient:end     { sessionId }
  *
  * Event flow (server → client):
  *   ambient:started   { sessionId }
@@ -31,6 +35,10 @@ import { CdssDecisionLogService } from '../services/cdss-decision-log.service';
  *   ambient:error     { message }
  *
  * Sprint 63 — Ambient AI
+ *
+ * tenantId is always taken from the verified JWT on the socket, never from
+ * the client payload — this gateway used to let any unauthenticated client
+ * name an arbitrary tenantId and read/write that tenant's database.
  */
 @WebSocketGateway({ namespace: '/ambient', cors: { origin: '*' } })
 export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -38,13 +46,16 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
   private readonly logger = new Logger(AmbientGateway.name);
 
   constructor(
+    private readonly jwtService: JwtService,
     @Optional() private readonly ambientService?: AmbientService,
     @Optional() private readonly tenantService?: TenantService,
     @Optional() private readonly decisionLogService?: CdssDecisionLogService,
   ) {}
 
   handleConnection(client: Socket) {
-    this.logger.log(`Ambient client connected: ${client.id}`);
+    const user = authenticateSocket(client, this.jwtService);
+    if (!user) return;
+    this.logger.log(`Ambient client connected: user=${user.id} tenant=${user.tenantId} socket=${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
@@ -58,15 +69,17 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
       patientId: string;
       providerId: string;
       appointmentId?: string;
-      tenantId: string;
     },
   ) {
+    const user = getWsUser(client);
+    if (!user) { client.emit('ambient:error', { message: 'Unauthorized' }); return; }
+    if (!CLINICAL_ROLES.includes(user.role)) { client.emit('ambient:error', { message: 'Forbidden' }); return; }
     if (!this.ambientService || !this.tenantService) {
       client.emit('ambient:error', { message: 'Ambient service unavailable' });
       return;
     }
     try {
-      const db = await this.tenantService.getTenantDatabase(payload.tenantId);
+      const db = await this.tenantService.getTenantDatabase(user.tenantId);
       if (!db) { client.emit('ambient:error', { message: 'Tenant not found' }); return; }
 
       const session = await this.ambientService.startSession(
@@ -84,11 +97,12 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
   @SubscribeMessage('ambient:chunk')
   async handleChunk(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { sessionId: string; audio: string; tenantId: string },
+    @MessageBody() payload: { sessionId: string; audio: string },
   ) {
-    if (!this.ambientService || !this.tenantService) return;
+    const user = getWsUser(client);
+    if (!user || !this.ambientService || !this.tenantService) return;
     try {
-      const db = await this.tenantService.getTenantDatabase(payload.tenantId);
+      const db = await this.tenantService.getTenantDatabase(user.tenantId);
       if (!db) return;
 
       const result = await this.ambientService.processChunk(payload.sessionId, payload.audio, db);
@@ -109,11 +123,12 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
   @SubscribeMessage('ambient:pause')
   async handlePause(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { sessionId: string; tenantId: string },
+    @MessageBody() payload: { sessionId: string },
   ) {
-    if (!this.ambientService || !this.tenantService) return;
+    const user = getWsUser(client);
+    if (!user || !this.ambientService || !this.tenantService) return;
     try {
-      const db = await this.tenantService.getTenantDatabase(payload.tenantId);
+      const db = await this.tenantService.getTenantDatabase(user.tenantId);
       if (!db) return;
       await this.ambientService.pauseSession(payload.sessionId, db);
       client.emit('ambient:paused', { sessionId: payload.sessionId });
@@ -125,11 +140,12 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
   @SubscribeMessage('ambient:resume')
   async handleResume(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { sessionId: string; tenantId: string },
+    @MessageBody() payload: { sessionId: string },
   ) {
-    if (!this.ambientService || !this.tenantService) return;
+    const user = getWsUser(client);
+    if (!user || !this.ambientService || !this.tenantService) return;
     try {
-      const db = await this.tenantService.getTenantDatabase(payload.tenantId);
+      const db = await this.tenantService.getTenantDatabase(user.tenantId);
       if (!db) return;
       await this.ambientService.resumeSession(payload.sessionId, db);
       client.emit('ambient:resumed', { sessionId: payload.sessionId });
@@ -147,12 +163,14 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
       itemId: string;
       action: 'accepted' | 'dismissed';
       patientId: string;
-      tenantId: string;
     },
   ) {
+    const user = getWsUser(client);
+    if (!user) { client.emit('ambient:error', { message: 'Unauthorized' }); return; }
+    if (!CLINICAL_ROLES.includes(user.role)) { client.emit('ambient:error', { message: 'Forbidden' }); return; }
     if (!this.ambientService || !this.tenantService) return;
     try {
-      const db = await this.tenantService.getTenantDatabase(payload.tenantId);
+      const db = await this.tenantService.getTenantDatabase(user.tenantId);
       if (!db) return;
 
       await this.ambientService.recordProviderAction(
@@ -189,11 +207,12 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
   @SubscribeMessage('ambient:end')
   async handleEnd(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { sessionId: string; tenantId: string },
+    @MessageBody() payload: { sessionId: string },
   ) {
-    if (!this.ambientService || !this.tenantService) return;
+    const user = getWsUser(client);
+    if (!user || !this.ambientService || !this.tenantService) return;
     try {
-      const db = await this.tenantService.getTenantDatabase(payload.tenantId);
+      const db = await this.tenantService.getTenantDatabase(user.tenantId);
       if (!db) return;
 
       const session = await this.ambientService.endSession(payload.sessionId, db);

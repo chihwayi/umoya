@@ -761,7 +761,7 @@ export class PatientPortalController {
     }
 
     // Join consultation
-    return this.telemedicineService.joinConsultation(req.tenantDb, consultationId, { userId: patientId, role: 'patient' });
+    return this.telemedicineService.joinConsultation(req.tenantDb, consultationId, req.tenantId, { userId: patientId, role: 'patient' });
   }
 
   @Get('telemedicine/consultation/:consultationId/token')

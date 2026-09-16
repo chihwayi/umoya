@@ -11,6 +11,7 @@ export interface TriageInput {
   sourceId?: string;
   title: string;
   content: string;      // full text used for triage (preview will be truncated from this)
+  tenantId: string;
 }
 
 interface CdssTriageResult {
@@ -95,7 +96,7 @@ export class InboxTriageService {
     }
 
     // WebSocket push to the recipient
-    this.inboxGateway.pushToUser(input.userId, saved);
+    this.inboxGateway.pushToUser(input.tenantId, input.userId, saved);
 
     return saved;
   }

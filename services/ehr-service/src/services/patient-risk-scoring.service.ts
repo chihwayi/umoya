@@ -96,6 +96,7 @@ export class PatientRiskScoringService {
           severity: result.level === 'critical' ? 'critical' : 'urgent',
           message: `Proactive Risk Alert: Patient score ${result.score}/100 (${result.level.toUpperCase()})`,
           payload: { score: result.score, components: result.components },
+          tenantId: subdomain,
         });
         await db.query(
           `UPDATE patient_risk_scores SET alert_sent = true

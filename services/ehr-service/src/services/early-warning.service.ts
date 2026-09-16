@@ -439,6 +439,7 @@ export class EarlyWarningService {
         risk_level: score.riskLevel,
         recommended_actions: explanation.recommendedActions,
       },
+      tenantId: subdomain,
     });
 
     // Log to delivery log

@@ -182,6 +182,7 @@ export class FollowUpRecommendationService {
             severity: row.urgency === 'urgent' ? 'critical' : 'high',
             message: `Overdue follow-up: ${row.full_name} (MRN ${row.mrn}) — ` +
                      `was due ${new Date(row.appointment_due_by).toLocaleDateString()}`,
+            tenantId: tenant.subdomain,
           });
           await db.query(
             `UPDATE followup_recommendations

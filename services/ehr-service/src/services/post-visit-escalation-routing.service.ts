@@ -171,6 +171,7 @@ export class PostVisitEscalationRoutingService {
           escalationId,
           sourceService: 'PostVisitEscalationRoutingService',
         },
+        tenantId: subdomain,
       };
       try {
         const result = await this.alertDelivery.broadcastCriticalAlert(db, alertPayload);

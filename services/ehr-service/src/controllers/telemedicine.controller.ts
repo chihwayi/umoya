@@ -110,7 +110,7 @@ export class TelemedicineController {
     @Body() dto: JoinConsultationDto,
     @Req() req: RequestWithTenant,
   ) {
-    return this.telemedicineService.joinConsultation(req.tenantDb, id, dto);
+    return this.telemedicineService.joinConsultation(req.tenantDb, id, req.tenantId, dto);
   }
 
   @Post('consultations/:id/end')
@@ -120,7 +120,7 @@ export class TelemedicineController {
   @ApiResponse({ status: 200, description: 'Consultation ended successfully' })
   async endConsultation(@Param('id') id: string, @Req() req: RequestWithTenant) {
     const userId = (req.user as any)?.id || (req.user as any)?.userId;
-    return this.telemedicineService.endConsultation(req.tenantDb, id, userId);
+    return this.telemedicineService.endConsultation(req.tenantDb, id, req.tenantId, userId);
   }
 
   @Get('consultations/:id/meeting-url')

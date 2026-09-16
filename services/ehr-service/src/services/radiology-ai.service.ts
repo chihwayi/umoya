@@ -162,6 +162,7 @@ export class RadiologyAiService {
           severity: 'critical',
           message: `AI radiology finding: ${data.top_finding} (${Math.round((data.confidence || 0) * 100)}% confidence)`,
           payload: { studyId: study.id, findings: criticalFindings },
+          tenantId,
         }).catch((e: any) => { this.logger.warn(`Critical radiology alert broadcast failed: ${e?.message}`); });
       }
     } catch (e: any) {
@@ -270,6 +271,7 @@ export class RadiologyAiService {
           severity: urgency === 'CRITICAL' ? 'critical' : 'urgent',
           message: `Radiology AI: ${urgency} urgency finding for study ${studyId}`,
           payload: { studyId, urgency, confidence },
+          tenantId: tenantSubdomain,
         });
         await db.query(
           `UPDATE radiology_ai_findings SET alert_sent = true, alerted = true WHERE id = $1`,

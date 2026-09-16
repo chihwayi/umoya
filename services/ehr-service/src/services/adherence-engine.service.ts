@@ -109,6 +109,7 @@ export class AdherenceEngineService {
           severity: 'info',
           message,
           payload: { type: 'adherence_nudge', riskLevel },
+          tenantId: subdomain,
         });
       } catch (err: any) {
         this.logger.warn(`Nudge delivery failed for patient ${patientId}: ${err.message}`);

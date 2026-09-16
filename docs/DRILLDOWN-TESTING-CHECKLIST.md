@@ -3094,3 +3094,121 @@ Bug ref:       services/ehr-service/src/services/auth.service.ts,
 | 82 | ~35 CDSS/AI-backed endpoints, guideline search, streaming diagnosis, report export, and patient search all had no throttling beyond a loose 300/min global default despite being expensive (LLM cost/latency) or CPU-intensive (report generation) | **Security/cost (high) -- AI-cost and resource-exhaustion abuse** | Fixed |
 | 83 | POST /notifications/sms accepted an arbitrary destination phone number with zero validation, no rate limit, and no RBAC | **Security (critical) -- unrestricted SMS-pumping fraud and harassment vector** | Fixed |
 | 84 | hipaa-audit.service.ts's getAuditLogs() had no upper cap on the requested result-set size | **Security (low) -- unbounded audit-log query** | Fixed |
+
+### Test 52 -- WebSocket gateways: zero connection authentication across all 6 gateways, unauthenticated cross-tenant DB writes (backend, security)
+
+```
+Module:        All 6 NestJS WebSocket gateways: CriticalAlertGateway (/alerts),
+               InboxGateway (/inbox), VoiceTranscriptionGateway (/voice),
+               AmbientGateway (/ambient), QueueGateway (/queue), TelemedicineGateway
+               (/telemedicine)
+Platform:      Backend
+Role:          N/A (pre-auth connection-level vulnerability)
+Context:       Every REST route this session hardened with JwtAuthGuard/RolesGuard sits on a
+               completely separate connection/auth lifecycle from @WebSocketGateway classes --
+               none of that RBAC work touched the 6 gateway files at all. Audited all 6 by
+               reading them in full rather than trusting a single severity claim.
+               Found: zero authentication on connect (handleConnection did nothing, or didn't
+               even exist) across all 6, and every one trusted a client-supplied
+               userId/tenantId/patientId straight out of the socket message payload for room
+               addressing and, in the worst case, tenant DB resolution.
+               Worst offender -- AmbientGateway: every handler (ambient:start/chunk/pause/
+               resume/action/end) took a client-supplied `tenantId` and called
+               tenantService.getTenantDatabase(payload.tenantId) directly, meaning an
+               unauthenticated client could resolve and read/write ANY tenant's database by
+               naming its subdomain. ambient:action's handleProviderAction() performs a REAL,
+               unauthenticated DB write -- it persists an accept/dismiss decision on an
+               AI-suggested clinical order/diagnosis and can fake a clinician's approval in the
+               CDSS decision-log feedback loop, for any tenant, with no auth at all.
+               TelemedicineGateway's tele:join took `userId` and `role` straight from the
+               payload with no verification -- any client could impersonate any doctor/patient
+               and join any consultation by naming its id, with the server broadcasting that
+               spoofed identity to the real other participant as legitimate.
+               QueueGateway had no handleConnection at all (no auth hook to even attach to);
+               `join_nurses` let anyone join a global unauthenticated nurse-queue broadcast room.
+               InboxGateway's inbox:subscribe joined `user:${payload.userId}` directly from the
+               client -- any client could read any user's clinical inbox stream by naming their
+               id.
+               VoiceTranscriptionGateway had no auth at all, letting any client free-ride on the
+               (real, costly) transcription service; downgraded the initial audit's overstated
+               claim that it directly injects fake clinical actions after reading the code --
+               it only emits a parsed suggestion back to the client, no DB write.
+               CriticalAlertGateway's sendToUser(userId, payload) joined/addressed rooms by
+               `user:${userId}` alone with no tenant scoping, meaning if two tenants ever had
+               colliding user ids the wrong tenant's staff could receive another tenant's
+               critical clinical alert.
+Fix:           Added a shared services/ehr-service/src/gateways/ws-auth.util.ts helper
+               (extractWsToken/authenticateSocket/getWsUser) used by all 6 gateways --
+               verifies the same JWT (same secret, same JwtService) REST auth requires, reading
+               the token from socket.handshake.auth.token, an Authorization header, or a query
+               param, and disconnects the socket if missing/invalid. All 6 gateways now call
+               this in handleConnection and use ONLY the verified identity's id/tenantId/role
+               for every room join, broadcast target, and (for Ambient) tenant DB resolution --
+               client-supplied tenantId/userId/role in message payloads is no longer trusted
+               anywhere. Room naming tenant-scoped throughout (e.g. `tenant:{tenantId}:user:
+               {userId}`, `consult:{tenantId}:{consultationId}`, `tenant:{tenantId}:patient-
+               {patientId}`). AmbientGateway's ambient:start/ambient:action additionally require
+               a clinical role (doctor/nurse/admin). QueueGateway's join_nurses now requires a
+               clinical role. TelemedicineGateway's tele:join/leave/quality/issue now derive
+               userId/role from the verified token, never the payload.
+               This changed several gateway method signatures (sendToUser, pushToUser/
+               pushCounts, broadcastQueueUpdate/broadcastNurseQueue, broadcastToConsultation/
+               broadcastToUser, joinConsultation/endConsultation) to take an explicit tenantId
+               -- threaded through every caller across 9 alert-producing services
+               (radiology-ai, lab-ai-narrative, post-visit-escalation-routing, early-warning,
+               telemedicine-postcall, adherence-engine, patient-risk-scoring,
+               followup-recommendation, oi-early-warning, mortality-risk, proactive-ai), the
+               inbox-triage/patient-messaging pair, the queue controller, and the
+               telemedicine service/controller/postvisit-bridge chain.
+Verification:  npx tsc --noEmit clean across the whole service after every caller was updated.
+               Restarted umoya-ehr-service and used a real socket.io-client (installed
+               temporarily inside the container, removed after) against all 6 live namespaces
+               with a real JWT obtained from POST /api/auth/login for admin@e2e-clinic.com:
+               every namespace disconnected an unauthenticated connection and accepted the
+               authenticated one. Additionally connected authenticated to /ambient and emitted
+               ambient:start with a spoofed `tenantId: 'some-other-tenant-i-do-not-belong-to'`
+               in the payload -- it was ignored and the handler resolved the REAL e2e-clinic
+               tenant database (confirmed by hitting a real DB NOT NULL constraint on
+               ambient_sessions.started_at, rather than the old "Tenant not found" error a
+               bogus subdomain would have produced), proving the payload's tenantId can no
+               longer steer tenant resolution.
+Actual result: Pass on all checks. All 6 gateways reject unauthenticated sockets and accept
+               valid tokens; Ambient's cross-tenant DB-resolution bypass is closed; no new
+               errors in docker logs after restart; npx tsc --noEmit clean.
+Status:        Fail (all 6 WebSocket gateways accepted unauthenticated connections and trusted
+               client-supplied identity/tenant IDs; Ambient allowed unauthenticated cross-tenant
+               DB writes) -> Fixed -> Pass (verified live against the running Docker stack).
+Bug ref:       services/ehr-service/src/gateways/ws-auth.util.ts (new),
+               services/ehr-service/src/gateways/critical-alert.gateway.ts,
+               services/ehr-service/src/gateways/inbox.gateway.ts,
+               services/ehr-service/src/gateways/voice-transcription.gateway.ts,
+               services/ehr-service/src/gateways/ambient.gateway.ts,
+               services/ehr-service/src/gateways/queue.gateway.ts,
+               services/ehr-service/src/gateways/telemedicine.gateway.ts,
+               services/ehr-service/src/services/alert-delivery.service.ts,
+               services/ehr-service/src/services/inbox-triage.service.ts,
+               services/ehr-service/src/services/patient-messaging.service.ts,
+               services/ehr-service/src/services/proactive-ai.service.ts,
+               services/ehr-service/src/services/telemedicine.service.ts,
+               services/ehr-service/src/services/telemedicine-postvisit-bridge.service.ts,
+               services/ehr-service/src/services/radiology-ai.service.ts,
+               services/ehr-service/src/services/lab-ai-narrative.service.ts,
+               services/ehr-service/src/services/post-visit-escalation-routing.service.ts,
+               services/ehr-service/src/services/early-warning.service.ts,
+               services/ehr-service/src/services/telemedicine-postcall.service.ts,
+               services/ehr-service/src/services/adherence-engine.service.ts,
+               services/ehr-service/src/services/patient-risk-scoring.service.ts,
+               services/ehr-service/src/services/followup-recommendation.service.ts,
+               services/ehr-service/src/services/oi-early-warning.service.ts,
+               services/ehr-service/src/services/mortality-risk.service.ts,
+               services/ehr-service/src/controllers/queue.controller.ts,
+               services/ehr-service/src/controllers/telemedicine.controller.ts,
+               services/ehr-service/src/controllers/patient-portal.controller.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 28)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 85 | All 6 WebSocket gateways accepted unauthenticated connections with zero JWT verification, trusting client-supplied userId/role/patientId from message payloads for room addressing and impersonation-prone actions (telemedicine tele:join, inbox subscriptions, queue nurse broadcasts) | **Security (critical) -- unauthenticated real-time PHI access and identity spoofing over WebSocket** | Fixed |
+| 86 | AmbientGateway resolved the tenant database directly from a client-supplied `tenantId` in every message payload (start/chunk/pause/resume/action/end), and ambient:action performed a real unauthenticated DB write faking a clinician's accept/dismiss decision on an AI-suggested order or diagnosis for any tenant | **Security (critical) -- unauthenticated cross-tenant database read/write via WebSocket** | Fixed |

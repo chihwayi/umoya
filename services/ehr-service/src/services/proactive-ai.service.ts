@@ -284,12 +284,12 @@ export class ProactiveAiService {
 
     for (const member of careTeam) {
       if (member.user_id) {
-        this.alertGateway.sendToUser(member.user_id, payload);
+        this.alertGateway.sendToUser(member.user_id, ctx.tenantId, payload);
       }
     }
 
     if (ctx.triggeredByUserId) {
-      this.alertGateway.sendToUser(ctx.triggeredByUserId, payload);
+      this.alertGateway.sendToUser(ctx.triggeredByUserId, ctx.tenantId, payload);
     }
   }
 

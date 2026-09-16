@@ -10,20 +10,24 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
+import { authenticateSocket, getWsUser } from './ws-auth.util';
 
 /**
  * TelemedicineGateway — Sprint 105
  *
  * Namespace: /telemedicine
  *
- * Client → Server events:
- *   tele:join     { consultationId, userId, role: 'doctor'|'patient', displayName? }
- *   tele:leave    { consultationId, userId }
- *   tele:quality  { consultationId, userId, role, quality: 'excellent'|'good'|'fair'|'poor' }
- *   tele:issue    { consultationId, userId, issueType, description }
+ * Client → Server events (userId/role come from the verified JWT, never the
+ * payload — this previously let any connected client impersonate any
+ * doctor/patient by naming their id in tele:join):
+ *   tele:join     { consultationId, displayName? }
+ *   tele:leave    { consultationId }
+ *   tele:quality  { consultationId, quality: 'excellent'|'good'|'fair'|'poor' }
+ *   tele:issue    { consultationId, issueType, description }
  *   tele:ping     { consultationId } → server emits tele:pong back to caller
  *
- * Server → Client events (broadcast to room `consult:{consultationId}`):
+ * Server → Client events (broadcast to room `consult:{tenantId}:{consultationId}`):
  *   tele:participant_joined   { userId, role, displayName, timestamp }
  *   tele:participant_left     { userId, role, timestamp }
  *   tele:quality_update       { userId, role, quality, timestamp }
@@ -33,8 +37,8 @@ import { Server, Socket } from 'socket.io';
  *   tele:recording_ready      { sessionId, hasRecording }
  *
  * Usage from service layer:
- *   gateway.broadcastToConsultation(id, 'tele:participant_joined', payload)
- *   gateway.broadcastToUser(userId, 'tele:consultation_ended', payload)
+ *   gateway.broadcastToConsultation(tenantId, id, 'tele:participant_joined', payload)
+ *   gateway.broadcastToUser(tenantId, userId, 'tele:consultation_ended', payload)
  */
 @WebSocketGateway({
   namespace: '/telemedicine',
@@ -52,23 +56,27 @@ export class TelemedicineGateway
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(TelemedicineGateway.name);
 
+  constructor(private readonly jwtService: JwtService) {}
+
   // userId → Set<socketId>
   private readonly userSockets = new Map<string, Set<string>>();
-  // socketId → { consultationId, userId, role }
-  private readonly socketMeta = new Map<string, { consultationId: string; userId: string; role: string }>();
+  // socketId → { consultationId, userId, role, tenantId }
+  private readonly socketMeta = new Map<string, { consultationId: string; userId: string; role: string; tenantId: string }>();
 
   afterInit(server: Server) {
     this.logger.log('TelemedicineGateway initialised on /telemedicine');
   }
 
   handleConnection(client: Socket) {
-    this.logger.debug(`Telemedicine WS connected: ${client.id}`);
+    const user = authenticateSocket(client, this.jwtService);
+    if (!user) return;
+    this.logger.debug(`Telemedicine WS connected: user=${user.id} tenant=${user.tenantId} socket=${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
     const meta = this.socketMeta.get(client.id);
     if (meta) {
-      const { consultationId, userId, role } = meta;
+      const { consultationId, userId, role, tenantId } = meta;
       this.socketMeta.delete(client.id);
 
       const sockets = this.userSockets.get(userId);
@@ -78,7 +86,7 @@ export class TelemedicineGateway
       }
 
       // Broadcast leave event so the other participant knows
-      this.server.to(`consult:${consultationId}`).emit('tele:participant_left', {
+      this.server.to(`consult:${tenantId}:${consultationId}`).emit('tele:participant_left', {
         userId,
         role,
         timestamp: new Date().toISOString(),
@@ -92,21 +100,23 @@ export class TelemedicineGateway
   @SubscribeMessage('tele:join')
   handleJoin(
     @ConnectedSocket() client: Socket,
-    @MessageBody()
-    payload: { consultationId: string; userId: string; role: 'doctor' | 'patient'; displayName?: string },
+    @MessageBody() payload: { consultationId: string; displayName?: string },
   ) {
-    const { consultationId, userId, role, displayName } = payload;
+    const user = getWsUser(client);
+    if (!user) return { status: 'unauthorized' };
+    const { consultationId, displayName } = payload;
+    const { id: userId, role, tenantId } = user;
 
-    client.join(`consult:${consultationId}`);
-    client.join(`user:${userId}`);
+    client.join(`consult:${tenantId}:${consultationId}`);
+    client.join(`tenant:${tenantId}:user:${userId}`);
 
-    this.socketMeta.set(client.id, { consultationId, userId, role });
+    this.socketMeta.set(client.id, { consultationId, userId, role, tenantId });
     const existing = this.userSockets.get(userId) ?? new Set();
     existing.add(client.id);
     this.userSockets.set(userId, existing);
 
     // Broadcast to room so the other participant sees the join
-    this.server.to(`consult:${consultationId}`).emit('tele:participant_joined', {
+    this.server.to(`consult:${tenantId}:${consultationId}`).emit('tele:participant_joined', {
       userId,
       role,
       displayName: displayName ?? null,
@@ -114,18 +124,21 @@ export class TelemedicineGateway
     });
 
     this.logger.log(`tele:join — ${role} ${userId} joined consultation ${consultationId}`);
-    return { status: 'joined', consultationId, room: `consult:${consultationId}` };
+    return { status: 'joined', consultationId, room: `consult:${tenantId}:${consultationId}` };
   }
 
   @SubscribeMessage('tele:leave')
   handleLeave(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { consultationId: string; userId: string },
+    @MessageBody() payload: { consultationId: string },
   ) {
-    const { consultationId, userId } = payload;
+    const user = getWsUser(client);
+    if (!user) return { status: 'unauthorized' };
+    const { consultationId } = payload;
+    const { id: userId, tenantId } = user;
     const meta = this.socketMeta.get(client.id);
 
-    client.leave(`consult:${consultationId}`);
+    client.leave(`consult:${tenantId}:${consultationId}`);
     this.socketMeta.delete(client.id);
 
     const sockets = this.userSockets.get(userId);
@@ -134,9 +147,9 @@ export class TelemedicineGateway
       if (!sockets.size) this.userSockets.delete(userId);
     }
 
-    this.server.to(`consult:${consultationId}`).emit('tele:participant_left', {
+    this.server.to(`consult:${tenantId}:${consultationId}`).emit('tele:participant_left', {
       userId,
-      role: meta?.role ?? 'unknown',
+      role: meta?.role ?? user.role,
       timestamp: new Date().toISOString(),
     });
 
@@ -146,16 +159,15 @@ export class TelemedicineGateway
   @SubscribeMessage('tele:quality')
   handleQuality(
     @ConnectedSocket() client: Socket,
-    @MessageBody()
-    payload: {
-      consultationId: string;
-      userId: string;
-      role: 'doctor' | 'patient';
-      quality: 'excellent' | 'good' | 'fair' | 'poor';
-    },
+    @MessageBody() payload: { consultationId: string; quality: 'excellent' | 'good' | 'fair' | 'poor' },
   ) {
-    this.server.to(`consult:${payload.consultationId}`).emit('tele:quality_update', {
-      ...payload,
+    const user = getWsUser(client);
+    if (!user) return { status: 'unauthorized' };
+    this.server.to(`consult:${user.tenantId}:${payload.consultationId}`).emit('tele:quality_update', {
+      consultationId: payload.consultationId,
+      userId: user.id,
+      role: user.role,
+      quality: payload.quality,
       timestamp: new Date().toISOString(),
     });
     return { status: 'ok' };
@@ -164,16 +176,15 @@ export class TelemedicineGateway
   @SubscribeMessage('tele:issue')
   handleIssue(
     @ConnectedSocket() client: Socket,
-    @MessageBody()
-    payload: {
-      consultationId: string;
-      userId: string;
-      issueType: string;
-      description: string;
-    },
+    @MessageBody() payload: { consultationId: string; issueType: string; description: string },
   ) {
-    this.server.to(`consult:${payload.consultationId}`).emit('tele:technical_issue', {
-      ...payload,
+    const user = getWsUser(client);
+    if (!user) return { status: 'unauthorized' };
+    this.server.to(`consult:${user.tenantId}:${payload.consultationId}`).emit('tele:technical_issue', {
+      consultationId: payload.consultationId,
+      userId: user.id,
+      issueType: payload.issueType,
+      description: payload.description,
       timestamp: new Date().toISOString(),
     });
     return { status: 'ok' };
@@ -184,17 +195,18 @@ export class TelemedicineGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { consultationId: string },
   ) {
+    if (!getWsUser(client)) return { status: 'unauthorized' };
     client.emit('tele:pong', { consultationId: payload.consultationId, ts: Date.now() });
     return { status: 'ok' };
   }
 
   // ── Service → Clients (used by TelemedicineService & bridge) ─────────────────
 
-  broadcastToConsultation(consultationId: string, event: string, payload: any) {
-    this.server.to(`consult:${consultationId}`).emit(event, payload);
+  broadcastToConsultation(tenantId: string, consultationId: string, event: string, payload: any) {
+    this.server.to(`consult:${tenantId}:${consultationId}`).emit(event, payload);
   }
 
-  broadcastToUser(userId: string, event: string, payload: any) {
-    this.server.to(`user:${userId}`).emit(event, payload);
+  broadcastToUser(tenantId: string, userId: string, event: string, payload: any) {
+    this.server.to(`tenant:${tenantId}:user:${userId}`).emit(event, payload);
   }
 }

@@ -7,7 +7,9 @@ import {
 } from '@nestjs/websockets';
 import { Logger, Optional } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
 import { TranscriptionService } from '../services/transcription.service';
+import { authenticateSocket, getWsUser } from './ws-auth.util';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -23,11 +25,16 @@ export class VoiceTranscriptionGateway implements OnGatewayConnection, OnGateway
   private readonly logger = new Logger(VoiceTranscriptionGateway.name);
   private audioBuffers = new Map<string, Buffer[]>();
 
-  constructor(@Optional() private readonly transcriptionService?: TranscriptionService) {}
+  constructor(
+    @Optional() private readonly transcriptionService: TranscriptionService | undefined,
+    private readonly jwtService: JwtService,
+  ) {}
 
   handleConnection(client: Socket) {
+    const user = authenticateSocket(client, this.jwtService);
+    if (!user) return;
     this.audioBuffers.set(client.id, []);
-    this.logger.log(`Voice client connected: ${client.id}`);
+    this.logger.log(`Voice client connected: user=${user.id} tenant=${user.tenantId} socket=${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
@@ -38,8 +45,9 @@ export class VoiceTranscriptionGateway implements OnGatewayConnection, OnGateway
   @SubscribeMessage('audio_chunk')
   async handleAudioChunk(
     client: Socket,
-    payload: { audio: string; format?: string; tenantId?: string },
+    payload: { audio: string; format?: string },
   ) {
+    if (!getWsUser(client)) return;
     try {
       const buffer = Buffer.from(payload.audio, 'base64');
       const buffers = this.audioBuffers.get(client.id) || [];
@@ -58,6 +66,7 @@ export class VoiceTranscriptionGateway implements OnGatewayConnection, OnGateway
 
   @SubscribeMessage('audio_end')
   async handleAudioEnd(client: Socket) {
+    if (!getWsUser(client)) return;
     const buffers = this.audioBuffers.get(client.id) || [];
     if (buffers.length > 0) {
       await this.processAndEmit(client, buffers);

@@ -300,6 +300,7 @@ export class TelemedicineService {
   async joinConsultation(
     tenantDb: DataSource,
     consultationId: string,
+    tenantId: string,
     dto: JoinConsultationDto,
   ) {
     this.ensureTenantDb(tenantDb);
@@ -339,7 +340,7 @@ export class TelemedicineService {
     );
 
     // Broadcast join event — other participant sees this in real time
-    this.teleGateway?.broadcastToConsultation(consultationId, 'tele:participant_joined', {
+    this.teleGateway?.broadcastToConsultation(tenantId, consultationId, 'tele:participant_joined', {
       userId: dto.userId,
       role: dto.role,
       timestamp: new Date().toISOString(),
@@ -351,7 +352,7 @@ export class TelemedicineService {
   /**
    * End consultation
    */
-  async endConsultation(tenantDb: DataSource, id: string, userId?: string) {
+  async endConsultation(tenantDb: DataSource, id: string, tenantId: string, userId?: string) {
     this.ensureTenantDb(tenantDb);
 
     const consultation = await this.getConsultation(tenantDb, id);
@@ -435,7 +436,7 @@ export class TelemedicineService {
     }
 
     // Broadcast consultation_ended to both participants via WebSocket
-    this.teleGateway?.broadcastToConsultation(id, 'tele:consultation_ended', {
+    this.teleGateway?.broadcastToConsultation(tenantId, id, 'tele:consultation_ended', {
       consultationId: id,
       endedAt: actualEndTime.toISOString(),
       durationMinutes,
@@ -448,7 +449,7 @@ export class TelemedicineService {
     );
 
     // Bridge → auto-create post-visit session + attach recording (async, non-blocking)
-    this.postVisitBridge?.onConsultationEnded(tenantDb, {
+    this.postVisitBridge?.onConsultationEnded(tenantDb, tenantId, {
       ...result[0],
       doctor_name: consultation.doctor_name,
       patient_name: consultation.patient_name,

@@ -35,7 +35,7 @@ export class TelemedicinePostVisitBridgeService {
    * Entry point called by TelemedicineService.endConsultation().
    * Runs asynchronously — never throws back to the caller.
    */
-  async onConsultationEnded(tenantDb: DataSource, consultation: ConsultationRow): Promise<void> {
+  async onConsultationEnded(tenantDb: DataSource, tenantId: string, consultation: ConsultationRow): Promise<void> {
     try {
       const sessionId = await this.createPostVisitSession(tenantDb, consultation);
       this.logger.log(
@@ -43,7 +43,7 @@ export class TelemedicinePostVisitBridgeService {
       );
 
       // Recording processing runs async — do not block the HTTP response
-      this.fetchAndAttachRecording(tenantDb, consultation, sessionId).catch(e =>
+      this.fetchAndAttachRecording(tenantDb, tenantId, consultation, sessionId).catch(e =>
         this.logger.warn(
           `Recording attachment failed for session ${sessionId}: ${e?.message}`,
         ),
@@ -93,6 +93,7 @@ export class TelemedicinePostVisitBridgeService {
 
   private async fetchAndAttachRecording(
     tenantDb: DataSource,
+    tenantId: string,
     c: ConsultationRow,
     sessionId: string,
   ): Promise<void> {
@@ -109,7 +110,7 @@ export class TelemedicinePostVisitBridgeService {
       this.logger.warn(
         `No recording available for consultation ${c.id} after retries — session ${sessionId} will proceed without recording`,
       );
-      this.teleGateway?.broadcastToConsultation(c.id, 'tele:postvisit_ready', {
+      this.teleGateway?.broadcastToConsultation(tenantId, c.id, 'tele:postvisit_ready', {
         sessionId,
         hasRecording: false,
       });
@@ -154,7 +155,7 @@ export class TelemedicinePostVisitBridgeService {
     ).catch((e: any) => this.logger.warn(`Update of consultation ${c.id} recording URL failed: ${e?.message}`));
 
     // Notify both participants the post-visit summary (with recording) is ready
-    this.teleGateway?.broadcastToConsultation(c.id, 'tele:postvisit_ready', {
+    this.teleGateway?.broadcastToConsultation(tenantId, c.id, 'tele:postvisit_ready', {
       sessionId,
       hasRecording: true,
     });

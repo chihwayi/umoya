@@ -62,6 +62,7 @@ export class PatientMessagingService {
             sourceId: saved.id,
             title: subject || 'Patient message',
             content: message,
+            tenantId,
           },
           messageRepository.manager.connection,
         )

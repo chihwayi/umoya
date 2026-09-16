@@ -142,6 +142,7 @@ export class OiEarlyWarningService {
             oi_type: alert.alertType,
             guideline_ref: alert.guidelineRef,
           },
+          tenantId: subdomain,
         });
 
         // Log delivery attempts
