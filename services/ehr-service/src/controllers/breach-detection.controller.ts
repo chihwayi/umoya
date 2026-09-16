@@ -1,14 +1,22 @@
 import {
-  Controller, Get, Post, Patch, Param, Body, Query, Req, UseGuards, ForbiddenException,
+  Controller, Get, Post, Patch, Param, Body, Query, Req, UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { BreachDetectionService } from '../services/breach-detection.service';
 import { BackupService } from '../services/backup.service';
 import { PotrazNotificationService } from '../services/potraz-notification.service';
 
+// Breach anomalies, audit-chain verification, backup/DR operations, and
+// POTRAZ regulator notification — every route here is admin-only. Only
+// backup/run had its own manual role check before; the rest of the
+// controller (including creating/closing breach incidents and notifying
+// the regulator) had none.
 @Controller('security')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin', 'super_admin')
 export class BreachDetectionController {
   constructor(
     private readonly breachDetection: BreachDetectionService,
@@ -43,8 +51,6 @@ export class BreachDetectionController {
 
   @Post('backup/run')
   async runBackup(@Req() req: Request) {
-    const { user } = req as any;
-    if (user?.role !== 'admin') throw new ForbiddenException('Admin only');
     const tenantId = req.headers['x-tenant-id'] as string;
     return this.backup.backupTenant(tenantId, `umoya_${tenantId}`);
   }

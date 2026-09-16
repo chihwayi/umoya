@@ -54,6 +54,7 @@ const EDDashboard = lazy(() => import('./pages/EDDashboard'));
 const BedManagementDashboard = lazy(() => import('./pages/BedManagementDashboard'));
 const AdmittedPatientPage = lazy(() => import('./pages/AdmittedPatientPage'));
 const ORDashboard = lazy(() => import('./pages/ORDashboard'));
+const TheatreDashboard = lazy(() => import('./pages/TheatreDashboard'));
 const CathLabDashboard = lazy(() => import('./pages/CathLabDashboard'));
 const CathLabAiPanel = lazy(() => import('./pages/CathLabAiPanel'));
 const IcuDashboard   = lazy(() => import('./pages/IcuDashboard'));
@@ -119,6 +120,18 @@ const CrvsDashboard = lazy(() => import('./pages/CrvsDashboard'));
 const NtdDashboard = lazy(() => import('./pages/NtdDashboard'));
 const SurveillanceDashboard = lazy(() => import('./pages/SurveillanceDashboard'));
 const StoreroomPage = lazy(() => import('./pages/StoreroomPage'));
+const CohortBuilder = lazy(() => import('./pages/CohortBuilder'));
+const TrainingDashboard = lazy(() => import('./pages/TrainingDashboard'));
+const EmpowermentDashboard = lazy(() => import('./pages/EmpowermentDashboard'));
+const PharmacovigilancePage = lazy(() => import('./pages/PharmacovigilancePage'));
+const ResearchDayPortal = lazy(() => import('./pages/ResearchDayPortal'));
+const SecurityDashboardPage = lazy(() => import('./pages/SecurityDashboardPage').then(m => ({ default: m.SecurityDashboardPage })));
+const SmsCampaignPage = lazy(() => import('./pages/SmsCampaignPage'));
+const SupportGroupsPage = lazy(() => import('./pages/SupportGroupsPage'));
+const SurvivalAnalysisPage = lazy(() => import('./pages/SurvivalAnalysisPage'));
+const CsatDashboard = lazy(() => import('./pages/CsatDashboard'));
+const NurseCheckinDashboard = lazy(() => import('./pages/NurseCheckinDashboard'));
+const StockBalancingDashboard = lazy(() => import('./pages/StockBalancingDashboard'));
 
 const TenantScopedNhifDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -167,6 +180,69 @@ const TenantScopedMessagingDashboard: React.FC = () => {
   const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
   if (!tenantSlug) return null;
   return <MessagingDashboard tenantSlug={tenantSlug} token={token} />;
+};
+
+const TenantScopedCohortBuilder: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <CohortBuilder token={token} tenantSlug={tenantSlug} />;
+};
+
+const TenantScopedTrainingDashboard: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <TrainingDashboard token={token} tenantSlug={tenantSlug} />;
+};
+
+const TenantScopedEmpowermentDashboard: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <EmpowermentDashboard token={token} tenantSlug={tenantSlug} />;
+};
+
+const TenantScopedPharmacovigilancePage: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <PharmacovigilancePage token={token} tenantSlug={tenantSlug} />;
+};
+
+const TenantScopedResearchDayPortal: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <ResearchDayPortal token={token} tenantSlug={tenantSlug} />;
+};
+
+const TenantScopedSecurityDashboardPage: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <SecurityDashboardPage token={token} tenantSlug={tenantSlug} />;
+};
+
+const TenantScopedSmsCampaignPage: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <SmsCampaignPage token={token} tenantSlug={tenantSlug} />;
+};
+
+const TenantScopedSupportGroupsPage: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <SupportGroupsPage token={token} tenantSlug={tenantSlug} />;
+};
+
+const TenantScopedSurvivalAnalysisPage: React.FC = () => {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const token = localStorage.getItem('ehr_token') || localStorage.getItem('token') || '';
+  if (!tenantSlug) return null;
+  return <SurvivalAnalysisPage token={token} tenantSlug={tenantSlug} />;
 };
 
 const TENANT_SUBSCRIPTION_CACHE_PREFIX = 'umoya-tenant-subscription:';
@@ -803,6 +879,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="operating_room">
                   <ORDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/theatre"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="operating_room">
+                  <TheatreDashboard />
                 </RoleProtectedRoute>
               }
             />
@@ -1445,6 +1529,102 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
                   <TenantScopedMessagingDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/cohort-builder"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedCohortBuilder />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/survival-analysis"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedSurvivalAnalysisPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/training"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedTrainingDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/empowerment"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedEmpowermentDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/support-groups"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedSupportGroupsPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/pharmacovigilance"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin', 'pharmacist']}>
+                  <TenantScopedPharmacovigilancePage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/research-day"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedResearchDayPortal />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/security"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin']}>
+                  <TenantScopedSecurityDashboardPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/sms-campaigns"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <TenantScopedSmsCampaignPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/csat"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']}>
+                  <CsatDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/nurse-checkin"
+              element={
+                <RoleProtectedRoute allowedRoles={['nurse', 'admin', 'receptionist']}>
+                  <NurseCheckinDashboard />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/stock-balancing"
+              element={
+                <RoleProtectedRoute allowedRoles={['pharmacist', 'admin']}>
+                  <StockBalancingDashboard />
                 </RoleProtectedRoute>
               }
             />

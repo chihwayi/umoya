@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Baby, AlertTriangle, Heart } from 'lucide-react';
+import { Baby, AlertTriangle, Heart, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../services/api';
+import NicuAdvancedPanel from './NicuAdvancedPanel';
 
 const nicuBadgeColor = (adm: any): string =>
   adm.is_elbw ? '#C62828' : adm.is_vlbw ? '#E8614D' : adm.is_premature ? '#F0954A' : '#1B6B3A';
@@ -14,6 +15,7 @@ export default function NicuDashboard() {
   const [census, setCensus]   = useState<any[]>([]);
   const [dash, setDash]       = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -84,7 +86,12 @@ export default function NicuDashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {census.map((adm: any) => (
-            <NicuCard key={adm.id} adm={adm} />
+            <NicuCard
+              key={adm.id}
+              adm={adm}
+              expanded={expandedId === adm.id}
+              onToggle={() => setExpandedId(expandedId === adm.id ? null : adm.id)}
+            />
           ))}
         </div>
       )}
@@ -106,7 +113,7 @@ function StatCard({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-function NicuCard({ adm }: { adm: any }) {
+function NicuCard({ adm, expanded, onToggle }: { adm: any; expanded: boolean; onToggle: () => void }) {
   const color        = nicuBadgeColor(adm);
   const label        = nicuBadgeLabel(adm);
   const kmcHrs       = Number(adm.kmc_hours_today ?? 0);
@@ -116,8 +123,8 @@ function NicuCard({ adm }: { adm: any }) {
 
   return (
     <div
-      className="rounded-xl p-4 transition-shadow hover:shadow-lg"
-      style={{ background: '#0D1829', border: `1px solid ${color}44` }}
+      className="rounded-xl p-4 transition-shadow hover:shadow-lg xl:col-span-1"
+      style={{ background: '#0D1829', border: `1px solid ${color}44`, gridColumn: expanded ? '1 / -1' : undefined }}
     >
       {/* Top row — badge + incubator code */}
       <div className="flex items-center justify-between mb-2">
@@ -178,6 +185,23 @@ function NicuCard({ adm }: { adm: any }) {
               style={{ width: `${kmcPct}%`, background: '#0AA98A' }}
             />
           </div>
+        </div>
+      )}
+
+      <button
+        onClick={onToggle}
+        className="mt-3 w-full flex items-center justify-center gap-1 text-xs font-semibold rounded-lg py-1.5"
+        style={{ color: '#3B9EFF', background: '#3B9EFF14' }}
+      >
+        {expanded ? <>Hide advanced care <ChevronUp size={14} /></> : <>Advanced care (drugs, PN, screening, NAS) <ChevronDown size={14} /></>}
+      </button>
+
+      {expanded && (
+        // NicuAdvancedPanel is styled for a light background (hardcoded light
+        // colors internally) — wrap it in white rather than the page's dark
+        // theme so its text/table styling stays legible.
+        <div className="mt-3 -mx-4 -mb-4 rounded-b-xl overflow-hidden p-4" style={{ background: '#ffffff', borderTop: '1px solid #1C2E45' }}>
+          <NicuAdvancedPanel admissionId={adm.id} patientId={adm.patient_id} />
         </div>
       )}
     </div>

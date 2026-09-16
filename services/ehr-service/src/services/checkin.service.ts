@@ -69,7 +69,7 @@ export class CheckinService {
     const appointment = tokenRow.appointment_id
       ? (
           await tenantDb.query(
-            `SELECT id, appointment_date, appointment_time, provider_id, visit_type
+            `SELECT id, appointment_date, appointment_date AS appointment_time, doctor_id, appointment_type AS visit_type
              FROM appointments WHERE id = $1`,
             [tokenRow.appointment_id],
           )
@@ -91,18 +91,18 @@ export class CheckinService {
   async getTodaysQueue(tenantDb: DataSource, providerId?: string): Promise<any[]> {
     return tenantDb.query(
       `SELECT
-         a.id, a.appointment_time, a.visit_type, a.actual_checkin_at, a.status,
+         a.id, a.appointment_date AS appointment_time, a.appointment_type AS visit_type, a.actual_checkin_at, a.status,
          p.first_name, p.last_name, p.patient_number AS mrn,
          EXTRACT(EPOCH FROM (now() - a.actual_checkin_at)) / 60 AS wait_minutes
        FROM appointments a
        JOIN patients p ON p.id = a.patient_id
        WHERE DATE(a.appointment_date) = CURRENT_DATE
          AND a.status IN ('checked_in', 'scheduled')
-         AND ($1::uuid IS NULL OR a.provider_id = $1)
+         AND ($1::uuid IS NULL OR a.doctor_id = $1)
        ORDER BY
          CASE a.status WHEN 'checked_in' THEN 0 ELSE 1 END,
          a.actual_checkin_at ASC NULLS LAST,
-         a.appointment_time ASC`,
+         a.appointment_date ASC`,
       [providerId ?? null],
     );
   }

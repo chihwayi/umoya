@@ -131,6 +131,13 @@ const ORDashboard: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => navigate(`/ehr/${tenantSlug}/theatre`)}
+                  className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
+                >
+                  Theatre Schedule
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowPreferenceCards(true)}
                   className="flex items-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
                 >
