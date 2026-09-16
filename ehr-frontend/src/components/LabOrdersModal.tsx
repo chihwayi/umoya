@@ -21,10 +21,7 @@ interface LabTest {
   loincCode?: string;
   category: string;
   specimenType: string;
-  unit?: string;
-  referenceRangeGeneral?: string;
-  referenceRangeMale?: string;
-  referenceRangeFemale?: string;
+  cost?: number;
 }
 
 interface LabOrderSet {
@@ -32,8 +29,26 @@ interface LabOrderSet {
   setName: string;
   setCode: string;
   description?: string;
-  testIds: string[];
 }
+
+// lab_test_catalog / lab_order_sets rows come back snake_case from the raw-SQL
+// backend (lab-test-catalog.controller.ts, lab-order-set-enhanced.controller.ts)
+const mapCatalogTest = (row: any): LabTest => ({
+  id: row.id,
+  testName: row.test_name,
+  testCode: row.test_code || '',
+  loincCode: row.loinc_code,
+  category: row.category,
+  specimenType: row.specimen_type,
+  cost: row.cost != null ? Number(row.cost) : undefined,
+});
+
+const mapOrderSet = (row: any): LabOrderSet => ({
+  id: row.id,
+  setName: row.set_name,
+  setCode: row.set_code,
+  description: row.description,
+});
 
 interface SelectedTest {
   testId: string;
@@ -85,13 +100,13 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
   const loadTests = useCallback(async () => {
     try {
       setLoadingTests(true);
-      const response = await ehrApi.getLabTests(
-        selectedCategory === 'all' ? undefined : selectedCategory,
-        undefined,
-        token,
+      const response = await ehrApi.getLabTestCatalog(
         tenantSlug,
+        token,
+        selectedCategory === 'all' ? undefined : selectedCategory,
+        true,
       );
-      setTests(response.data || []);
+      setTests((response.data?.tests || []).map(mapCatalogTest));
     } catch (error) {
       console.error('Failed to load tests:', error);
       setTests([]);
@@ -102,8 +117,8 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
 
   const loadOrderSets = useCallback(async () => {
     try {
-      const response = await ehrApi.getLabOrderSets(undefined, token, tenantSlug);
-      setOrderSets(response.data || []);
+      const response = await ehrApi.getEnhancedOrderSets(tenantSlug, token, undefined, true);
+      setOrderSets((response.data?.orderSets || []).map(mapOrderSet));
     } catch (error) {
       console.error('Failed to load order sets:', error);
       setOrderSets([]);
@@ -113,13 +128,12 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
   const searchTests = useCallback(async () => {
     try {
       setLoadingTests(true);
-      const response = await ehrApi.getLabTests(
-        selectedCategory === 'all' ? undefined : selectedCategory,
-        searchTerm,
-        token,
-        tenantSlug,
-      );
-      setTests(response.data || []);
+      const response = await ehrApi.searchLabTests(tenantSlug, token, searchTerm);
+      let mapped = (response.data?.tests || []).map(mapCatalogTest);
+      if (selectedCategory !== 'all') {
+        mapped = mapped.filter((t: LabTest) => t.category === selectedCategory);
+      }
+      setTests(mapped);
     } catch (error) {
       console.error('Failed to search tests:', error);
     } finally {
@@ -180,18 +194,18 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
 
   const handleAddOrderSet = async (orderSet: LabOrderSet) => {
     try {
-      const response = await ehrApi.getLabOrderSetById(orderSet.id, token, tenantSlug);
-      const { tests: setTests } = response.data;
-      
-      const newTests: SelectedTest[] = setTests.map((test: LabTest) => ({
+      const response = await ehrApi.getEnhancedOrderSetById(tenantSlug, token, orderSet.id);
+      const setTests = response.data?.tests || [];
+
+      const newTests: SelectedTest[] = setTests.map((test: any) => ({
         testId: test.id,
-        testName: test.testName,
-        testCode: test.testCode || '',
+        testName: test.test_name,
+        testCode: test.test_code || '',
         category: test.category,
-        specimenType: test.specimenType,
+        specimenType: test.specimen_type,
         instructions: `Part of ${orderSet.setName} panel`,
-        loincCode: test.loincCode,
-        cost: (test as any).cost,
+        loincCode: test.loinc_code,
+        cost: test.cost != null ? Number(test.cost) : undefined,
       }));
 
       // Merge with existing, avoiding duplicates
@@ -221,7 +235,7 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
       category: test.category,
       specimenType: test.specimenType,
       loincCode: test.loincCode,
-      cost: (test as any).cost,
+      cost: test.cost,
     }]);
     setShowTestSearch(false);
     setSearchTerm('');
@@ -481,9 +495,9 @@ const LabOrdersModal: React.FC<LabOrdersModalProps> = ({ open, onClose, onSaved,
                           <div className="text-xs text-slate-600">
                             {test.testCode} {test.loincCode && `• LOINC: ${test.loincCode}`} • {test.category} • {test.specimenType}
                           </div>
-                          {test.referenceRangeGeneral && (
+                          {test.cost != null && test.cost > 0 && (
                             <div className="text-xs text-slate-500 mt-1">
-                              Ref Range: {test.referenceRangeGeneral}
+                              Cost: ${test.cost.toFixed(2)}
                             </div>
                           )}
                         </button>

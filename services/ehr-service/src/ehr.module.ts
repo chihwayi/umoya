@@ -92,12 +92,9 @@ import { LanguageModule } from './settings/language.module';
 import { CulturalModule } from './cultural/cultural.module';
 import { MobileMoneyController } from './controllers/mobile-money.controller';
 import { ChwController } from './controllers/chw.controller';
-import { LabTestController } from './controllers/lab-test.controller';
 import { LabTestCatalogController } from './controllers/lab-test-catalog.controller';
-import { LabOrderSetController } from './controllers/lab-order-set.controller';
 import { LabOrderSetEnhancedController } from './controllers/lab-order-set-enhanced.controller';
 import { LabCriticalAlertController } from './controllers/lab-critical-alert.controller';
-import { CriticalAlertController } from './controllers/critical-alert.controller';
 import { DrugController } from './controllers/drug.controller';
 import { HivController } from './controllers/hiv.controller';
 import { PsychosocialController } from './controllers/psychosocial.controller';
@@ -421,12 +418,9 @@ import { EpiService } from './services/epi.service';
 import { OutbreakService } from './services/outbreak.service';
 import { MobileMoneyService } from './services/mobile-money.service';
 import { ChwService } from './services/chw.service';
-import { LabTestService } from './services/lab-test.service';
 import { LabTestCatalogService } from './services/lab-test-catalog.service';
-import { LabOrderSetService } from './services/lab-order-set.service';
 import { LabOrderSetEnhancedService } from './services/lab-order-set-enhanced.service';
 import { LabCriticalAlertService } from './services/lab-critical-alert.service';
-import { CriticalAlertService } from './services/critical-alert.service';
 import { DrugService } from './services/drug.service';
 import { HivService } from './services/hiv.service';
 import { LabResultsMatchingService } from './services/lab-results-matching.service';
@@ -795,12 +789,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OutbreakController,
     MobileMoneyController,
     ChwController,
-    LabTestController,
     LabTestCatalogController,
-    LabOrderSetController,
     LabOrderSetEnhancedController,
     LabCriticalAlertController,
-    CriticalAlertController,
     DrugController,
     HivController,
     PsychosocialController,
@@ -1032,12 +1023,9 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OutbreakService,
     MobileMoneyService,
     ChwService,
-    LabTestService,
     LabTestCatalogService,
-    LabOrderSetService,
     LabOrderSetEnhancedService,
     LabCriticalAlertService,
-    CriticalAlertService,
     DrugService,
     HivService,
     LabResultsMatchingService,

@@ -2,9 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException, Optional } 
 import { randomUUID } from 'crypto';
 import { DataSource, DeepPartial } from 'typeorm';
 import { LabOrder, LabOrderStatus } from '../entities/lab-order.entity';
-import { LabTest } from '../entities/lab-test.entity';
-import { CriticalAlertService } from './critical-alert.service';
-import { CriticalValueType } from '../entities/critical-result-alert.entity';
+import { LabCriticalAlertService } from './lab-critical-alert.service';
 import { Patient } from '../entities/patient.entity';
 import { FinanceService } from './finance.service';
 import { PAYMENT_STATUS } from '../constants/payment-status';
@@ -18,7 +16,7 @@ export class LabOrderService {
   private readonly logger = new Logger(LabOrderService.name);
 
   constructor(
-    private criticalAlertService: CriticalAlertService,
+    private labCriticalAlertService: LabCriticalAlertService,
     private financeService: FinanceService,
     private terminologyService: TerminologyService,
     private readonly cdssHookService: CdssHookService,
@@ -701,23 +699,6 @@ export class LabOrderService {
     };
   }
 
-  async addResults(id: string, resultsDto: any, tenantDb: DataSource, reviewedById: string): Promise<LabOrder> {
-    const labOrderRepository = tenantDb.getRepository(LabOrder);
-    
-    const labOrder = await labOrderRepository.findOne({ where: { id } });
-    if (!labOrder) {
-      throw new NotFoundException('Lab order not found');
-    }
-    
-    labOrder.results = this.withResultIds(resultsDto.results);
-    labOrder.interpretation = resultsDto.interpretation;
-    labOrder.reviewedById = reviewedById;
-    labOrder.reviewedAt = new Date();
-    labOrder.status = LabOrderStatus.COMPLETED;
-
-    return labOrderRepository.save(labOrder);
-  }
-
   private withResultIds(results: any[] | undefined): any[] {
     if (!Array.isArray(results)) return results as any;
     return results.map((result) => (result.id ? result : { ...result, id: randomUUID() }));
@@ -880,10 +861,9 @@ export class LabOrderService {
 
   async submitResults(id: string, resultsDto: any, tenantDb: DataSource, reviewedById: string, tenantId?: string): Promise<LabOrder> {
     const labOrderRepository = tenantDb.getRepository(LabOrder);
-    const testRepository = tenantDb.getRepository(LabTest);
     const patientRepository = tenantDb.getRepository(Patient);
-    
-    const labOrder = await labOrderRepository.findOne({ 
+
+    const labOrder = await labOrderRepository.findOne({
       where: { id },
       relations: ['patient']
     });
@@ -897,43 +877,32 @@ export class LabOrderService {
 
       const patient = await patientRepository.findOne({ where: { id: labOrder.patientId } });
       const results = resultsDto.results || labOrder.results;
-      
-      // Check for critical values and create alerts
+
+      // Check for critical values against the lab_test_components reference
+      // ranges (age/gender-aware) and generate lab_critical_alerts rows --
+      // this is the table CriticalResultAlertPanel.tsx actually reads from.
       let hasCriticalResult = false;
       if (results && Array.isArray(results)) {
-        for (const result of results) {
-          if (result.testCode && result.value) {
-            // Find test by test code
-            const test = await testRepository.findOne({ 
-              where: { testCode: result.testCode, isActive: true } 
-            });
-            
-            if (test) {
-              const numericValue = parseFloat(result.value);
-              if (!isNaN(numericValue)) {
-                const criticalCheck = await this.checkCriticalValue(test, numericValue);
-                
-                if (criticalCheck.isCritical) {
-                  hasCriticalResult = true;
-                  const alertMessage = `Critical ${criticalCheck.type} value: ${result.testName} = ${result.value} ${result.unit || ''}`;
+        const componentResults = results
+          .filter((result: any) => result.testCode && result.value)
+          .map((result: any) => ({
+            component_code: result.testCode,
+            component_name: result.testName,
+            value: result.value,
+            test_catalog_id: labOrder.testCatalogId,
+          }));
 
-                  await this.criticalAlertService.createAlert({
-                    labOrderId: labOrder.id,
-                    patientId: labOrder.patientId,
-                    orderingProviderId: labOrder.orderingProviderId,
-                    testCode: result.testCode,
-                    testName: result.testName || test.testName,
-                    resultValue: String(result.value),
-                    criticalValueType: criticalCheck.type ?? CriticalValueType.CRITICAL,
-                    alertMessage
-                  }, tenantDb);
-                }
-              }
-            }
-          }
+        if (componentResults.length > 0) {
+          const { generated } = await this.labCriticalAlertService.checkAndGenerateAlerts(
+            tenantDb,
+            labOrder.id,
+            componentResults,
+            reviewedById,
+          );
+          hasCriticalResult = generated > 0;
         }
       }
-      
+
       labOrder.results = this.withResultIds(results);
       labOrder.interpretation = resultsDto.interpretation || labOrder.interpretation;
       labOrder.attachments = resultsDto.attachments || labOrder.attachments;
@@ -956,9 +925,8 @@ export class LabOrderService {
     const completedOrder = await labOrderRepository.save(labOrder);
 
     // Notify the ordering clinician — results were previously only ever
-    // discoverable by manually reopening the order (or, for critical values,
-    // by a CriticalResultAlert row that nothing ever surfaced). Lab -> Doctor/
-    // Nurse was a dead-end write with no read-side signal.
+    // discoverable by manually reopening the order. Lab -> Doctor/Nurse was
+    // a dead-end write with no read-side signal.
     if (this.staffNotifications && tenantId && completedOrder.orderingProviderId) {
       const testNames = Array.isArray(results)
         ? results.map((r: any) => r.testName).filter(Boolean).join(', ')
@@ -991,21 +959,6 @@ export class LabOrderService {
     // ── end kit deduction ────────────────────────────────────────────────────
 
     return completedOrder;
-  }
-
-  private async checkCriticalValue(
-    test: LabTest,
-    value: number,
-  ): Promise<{ isCritical: boolean; type: CriticalValueType | null }> {
-    if (test.criticalHigh && value > test.criticalHigh) {
-      return { isCritical: true, type: CriticalValueType.HIGH };
-    }
-    
-    if (test.criticalLow && value < test.criticalLow) {
-      return { isCritical: true, type: CriticalValueType.LOW };
-    }
-    
-    return { isCritical: false, type: null };
   }
 
   async updateStatus(id: string, status: LabOrderStatus, tenantDb: DataSource): Promise<LabOrder> {

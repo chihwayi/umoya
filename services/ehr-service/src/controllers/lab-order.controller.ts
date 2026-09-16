@@ -34,26 +34,6 @@ export class LabOrderController {
     return this.labOrderService.findAll(query, req.tenantDb);
   }
 
-  @Put(':id/results')
-  @Roles('lab_tech', 'doctor', 'admin')
-  @ApiOperation({ summary: 'Add lab results' })
-  async addResults(@Param('id') id: string, @Body() resultsDto: any, @Request() req: RequestWithTenant) {
-    const updated = await this.labOrderService.addResults(id, resultsDto, req.tenantDb, (req.user as any)?.userId ?? (req.user as any)?.id);
-
-    // ── PROACTIVE TRIGGER — pass fresh lab results ──
-    if (updated?.patientId) {
-      this.proactiveAiService.triggerAnalysis({
-        patientId: updated.patientId,
-        tenantId: req.tenantId,
-        triggeredByUserId: (req.user as any)?.userId,
-        triggerType: 'labs',
-        freshLabs: resultsDto.results || [],
-      }).catch((e: any) => this.logger.warn(`Lab results proactive analysis trigger failed: ${e?.message}`));
-    }
-
-    return updated;
-  }
-
   @Get('patient/:patientId/results')
   @ApiOperation({ summary: 'Get completed lab results for a patient' })
   async getPatientResults(@Param('patientId') patientId: string, @Request() req: RequestWithTenant) {

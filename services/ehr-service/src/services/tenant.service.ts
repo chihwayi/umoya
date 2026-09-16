@@ -7,9 +7,7 @@ import { Appointment } from '../entities/appointment.entity';
 import { MedicalRecord } from '../entities/medical-record.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { LabOrder } from '../entities/lab-order.entity';
-import { LabTest } from '../entities/lab-test.entity';
 import { LabOrderSet } from '../entities/lab-order-set.entity';
-import { CriticalResultAlert } from '../entities/critical-result-alert.entity';
 import { Bill } from '../entities/billing.entity';
 import { Vitals } from '../entities/vitals.entity';
 import { TriageAssessment } from '../entities/triage-assessment.entity';
@@ -741,9 +739,7 @@ export class TenantService {
         Order,
         Problem,
         Allergy,
-        LabTest,
         LabOrderSet,
-        CriticalResultAlert,
         Drug,
         DrugInteraction,
         PatientMedication,

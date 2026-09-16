@@ -3396,70 +3396,6 @@ export const ehrApi = {
     return { data: response.data };
   },
 
-  // Lab Test Catalog API
-  getLabTests: async (category?: string, search?: string, token?: string, tenantSlug?: string) => {
-    const response = await ehrAxios.get('/lab-tests', {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      },
-      params: { category, search }
-    });
-    return { data: response.data };
-  },
-
-  getLabTestById: async (id: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(`/lab-tests/${id}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return { data: response.data };
-  },
-
-  seedLabTests: async (token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post('/lab-tests/seed', {}, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return { data: response.data };
-  },
-
-  // Lab Order Sets API
-  getLabOrderSets: async (category?: string, token?: string, tenantSlug?: string) => {
-    const response = await ehrAxios.get('/lab-order-sets', {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      },
-      params: { category }
-    });
-    return { data: response.data };
-  },
-
-  getLabOrderSetById: async (id: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(`/lab-order-sets/${id}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return { data: response.data };
-  },
-
-  seedLabOrderSets: async (token: string, tenantSlug: string) => {
-    const response = await ehrAxios.post('/lab-order-sets/seed', {}, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return { data: response.data };
-  },
-
   // Enhanced Lab Test Catalog API
   getLabTestCatalog: async (tenantSlug: string, token: string, category?: string, active?: boolean) => {
     const response = await ehrAxios.get('/lab/test-catalog', {
@@ -3609,47 +3545,6 @@ export const ehrApi = {
 
   checkAndGenerateAlerts: async (tenantSlug: string, token: string, data: any) => {
     const response = await ehrAxios.post('/lab/critical-alerts/check-and-generate', data, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return { data: response.data };
-  },
-
-  // Critical Alerts API
-  getPendingCriticalAlerts: async (token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get('/critical-alerts/pending', {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return { data: response.data };
-  },
-
-  getPatientCriticalAlerts: async (patientId: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get(`/critical-alerts/patient/${patientId}`, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return { data: response.data };
-  },
-
-  acknowledgeCriticalAlert: async (alertId: string, notes: string | undefined, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.put(`/critical-alerts/${alertId}/acknowledge`, { notes }, {
-      headers: {
-        'X-Tenant-ID': tenantSlug,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    return { data: response.data };
-  },
-
-  dismissCriticalAlert: async (alertId: string, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.put(`/critical-alerts/${alertId}/dismiss`, {}, {
       headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`

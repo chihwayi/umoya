@@ -3397,8 +3397,9 @@ Bug ref (deferred, not yet fixed):
 
 | # | Bug | Severity | Status |
 |---|---|---|---|
-| 90 | LabTest entity (lab_tests) and the raw-SQL lab_test_catalog/lab_test_components/lab_reference_ranges tables are two divergent data models for the same lab-test-catalog concept, and the live lab-ordering workflow (lab-order.service.ts) already reads from both simultaneously | **Data integrity (medium) -- fragmented catalog data model in the core ordering workflow, needs a reconciliation migration, not a quick fix** | Deferred -- backlog |
-| 91 | LabOrderSet entity and the "enhanced" lab-order-set controller both map to the same lab_order_sets table but are each depended on by a different, currently-live frontend modal (LabOrdersModal vs EnhancedLabOrderModal) | **Maintainability (low) -- duplicate backend access paths to one table, consolidation requires coordinated frontend + backend migration** | Deferred -- backlog |
+| 90 | LabTest entity (lab_tests) and the raw-SQL lab_test_catalog/lab_test_components/lab_reference_ranges tables are two divergent data models for the same lab-test-catalog concept, and the live lab-ordering workflow (lab-order.service.ts) already reads from both simultaneously | **Data integrity (medium) -- fragmented catalog data model in the core ordering workflow, needs a reconciliation migration, not a quick fix** | Fixed -- see Test 56 |
+| 91 | LabOrderSet entity and the "enhanced" lab-order-set controller both map to the same lab_order_sets table but are each depended on by a different, currently-live frontend modal (LabOrdersModal vs EnhancedLabOrderModal) | **Maintainability (low) -- duplicate backend access paths to one table, consolidation requires coordinated frontend + backend migration** | Fixed -- see Test 56 |
+| 92 | Critical lab-value alerting was completely non-functional in production: submitResults() looked up the critical-value thresholds in the empty lab_tests table (0 rows, bug #90) so the check silently never fired, and even when a duplicate unused route (addResults()) or a fixed lookup did fire, alerts were written to critical_result_alerts, a table the live doctor-facing panel (CriticalResultAlertPanel.tsx) never reads -- it reads lab_critical_alerts instead | **Patient safety (critical) -- dangerous/critical lab values were silently never surfaced to any clinician** | Fixed -- see Test 56 |
 
 ### Test 55 -- Mobile: wire up the 3 unwired deep-link/check-in screens, fix 2 more SQL column bugs (mobile + backend)
 
@@ -3476,4 +3477,119 @@ Known gap:     The https://<subdomain>.umoya.app links will not actually open th
 Status:        Fixed and verified live (backend + endpoint round-trip). Deep-link URL
                interception is code-complete but device-unverified. Universal-link (https)
                activation blocked on external domain/hosting setup -- documented above.
+```
+
+### Test 56 -- Lab catalog/order-set consolidation (bugs #90-91): fixed, plus a live patient-safety gap found along the way (bug #92)
+
+```
+Module:        Follow-up to Test 54's deferred architectural-debt findings #90 (lab test
+               catalog fragmentation) and #91 (lab order sets duplicate backend paths) --
+               user asked to do the actual migration/consolidation work.
+Platform:      Backend (ehr-service) + Web (ehr-frontend)
+Role:          Doctor / Lab tech
+Context:       Before touching anything, checked which data model was actually live in the
+               e2e-clinic tenant DB rather than assuming both were equally used: lab_tests
+               (LabTest entity) had 0 rows and lab_order_sets.test_ids was '[]' on every one
+               of the 4 real order sets -- the "basic" LabTest/LabOrderSet API path
+               (lab-test.controller.ts, lab-order-set.controller.ts) was completely dead in
+               production. lab_test_catalog (11 rows) + lab_test_components (12 rows, with
+               real critical_low/critical_high/reference_range data) + lab_order_set_items
+               (28 rows) -- the "enhanced" raw-SQL path -- was the live, populated model.
+Findings:      1. lab-order.service.ts's submitResults() checked for critical lab values by
+                  looking up the test in the LabTest entity (table: lab_tests) -- always
+                  empty, so the check silently never fired for any lab result, ever.
+               2. Even fixing that lookup wouldn't have been enough: the alert it would have
+                  written goes through CriticalAlertService into critical_result_alerts, but
+                  the only live, rendered critical-alerts UI (CriticalResultAlertPanel.tsx,
+                  mounted in DoctorDashboard.tsx) reads from lab_critical_alerts via a
+                  completely separate, already-correct service (LabCriticalAlertService,
+                  lab-critical-alert.service.ts) that does real age/gender-aware reference-
+                  range lookups against lab_test_components+lab_reference_ranges -- but was
+                  never called from the results-submission flow, only reachable via a manual
+                  POST nothing in the frontend calls. Net effect: critical/panic lab values
+                  (e.g. potassium 7.8 mEq/L) were silently never surfaced to any clinician,
+                  regardless of which of the two "critical alert" subsystems you looked at.
+               3. A third, entirely separate results-submission code path existed:
+                  addResults() / PUT /lab-orders/:id/results -- with a lab_tech/doctor/admin
+                  role guard, a Swagger doc entry, and zero critical-value checking of any
+                  kind. Confirmed zero callers anywhere in ehr-frontend/mobile/patient-portal
+                  (the real frontend calls PUT /lab-orders/:id/submit-results ->
+                  submitResults()) -- a live, callable, unsafe trap route with no consumer.
+               4. CriticalAlertService/CriticalResultAlert (critical_result_alerts table) had
+                  zero frontend callers even before this fix (getPendingCriticalAlerts,
+                  getPatientCriticalAlerts, acknowledgeCriticalAlert, dismissCriticalAlert in
+                  ehr-frontend/src/services/api.ts were all already orphaned) -- confirming
+                  it was dead weight, not a second legitimate consumer to preserve.
+               5. LabOrdersModal.tsx (patient-facing lab-order UI, live in
+                  AppointmentActions.tsx/AdmittedPatientPage.tsx/DoctorDashboard.tsx) called
+                  getLabTests/getLabOrderSets/getLabOrderSetById -- all three hitting the dead
+                  lab_tests/empty-test_ids endpoints, meaning test search and quick-order-sets
+                  silently returned nothing for any doctor using this modal in production.
+Fix:           services/ehr-service/src/services/lab-order.service.ts -- submitResults() now
+               calls LabCriticalAlertService.checkAndGenerateAlerts() (injected in place of
+               CriticalAlertService) instead of the dead inline LabTest lookup; removed the
+               now-unused private checkCriticalValue() method and the addResults() method.
+               services/ehr-service/src/controllers/lab-order.controller.ts -- removed the
+               orphaned PUT :id/results route (addResults).
+               Deleted entirely (all confirmed zero remaining references):
+               lab-test.controller.ts, lab-test.service.ts, entities/lab-test.entity.ts,
+               lab-order-set.controller.ts, lab-order-set.service.ts (the basic/testIds
+               path -- LabOrderSet the TypeORM entity itself is KEPT, since it's still the
+               only mechanism that creates the lab_order_sets table the enhanced path writes
+               into), critical-alert.controller.ts, critical-alert.service.ts,
+               entities/critical-result-alert.entity.ts.
+               services/ehr-service/src/ehr.module.ts -- removed all of the above from the
+               controllers/providers arrays; services/ehr-service/src/services/tenant.service.ts
+               -- removed LabTest and CriticalResultAlert from the tenant-DB TypeORM entity
+               sync list (LabOrderSet kept).
+               ehr-frontend/src/components/LabOrdersModal.tsx -- loadTests/searchTests now
+               call getLabTestCatalog/searchLabTests (lab_test_catalog), loadOrderSets/
+               handleAddOrderSet now call getEnhancedOrderSets/getEnhancedOrderSetById
+               (lab_order_sets + lab_order_set_items), with snake_case-to-camelCase mapper
+               functions since the raw-SQL endpoints don't camelCase their responses; dropped
+               the now-nonexistent per-panel reference-range display in favour of a cost
+               display (which the catalog table actually has).
+               ehr-frontend/src/services/api.ts -- removed the now-dead getLabTests,
+               getLabTestById, seedLabTests, getLabOrderSets, getLabOrderSetById,
+               seedLabOrderSets, getPendingCriticalAlerts, getPatientCriticalAlerts,
+               acknowledgeCriticalAlert, dismissCriticalAlert client functions.
+Verified:      npx tsc --noEmit clean on both services/ehr-service and ehr-frontend. Rebuilt
+               and restarted both Docker images (neither container has a source volume mount,
+               so a plain restart does not pick up source changes -- confirmed this the hard
+               way when an initial live test against a stale image showed no alert generated).
+               Live against the Docker stack: created a real lab order via POST /api/lab-orders
+               against the BMP catalog test, submitted PUT .../submit-results with potassium
+               7.8 mEq/L (catalog critical_high 6.5) -- a lab_critical_alerts row was created
+               (severity "critical", critical_range ">= 6.5000") and immediately visible via
+               GET /api/lab/critical-alerts/pending, the exact endpoint
+               CriticalResultAlertPanel.tsx polls. Repeated with a normal value (4.2) on a
+               second order and confirmed zero alerts generated (no false positive). Confirmed
+               via docker logs that the deleted routes (/api/lab-tests, /api/lab-order-sets,
+               /api/critical-alerts) are no longer mapped after restart. All scratch lab
+               orders/alerts deleted after verification; test-account password hashes reset
+               to their original values afterward, matching this session's established
+               test-data convention.
+               Browser: logged into the live ehr-frontend as doctor@e2e-clinic.com and
+               reached the Doctor Dashboard / Appointment Management pages successfully, but
+               could not click through into LabOrdersModal itself -- clicking "View Patient"
+               from an appointment hit a pre-existing, unrelated bug (a runaway refetch loop
+               on the patient-profile page, 250+ requests to GET /api/patients/:id before the
+               browser killed it with ERR_INSUFFICIENT_RESOURCES) that blocked navigation to
+               any patient detail view. Flagged separately (not fixed here, out of scope of
+               this lab-catalog task) rather than silently worked around. LabOrdersModal.tsx's
+               new endpoint calls were instead verified by matching its request/response
+               shapes byte-for-byte against the live GET /api/lab/test-catalog,
+               /api/lab/test-catalog/search, /api/lab/order-sets-enhanced, and
+               /api/lab/order-sets-enhanced/:id responses (real 11-row catalog, real 4-row/
+               28-item order sets) -- same data the modal's mapper functions consume.
+Status:        Fixed and verified live for the backend + critical-alert path (the
+               patient-safety-critical part). Frontend LabOrdersModal.tsx fix is
+               type-clean and contract-verified against live endpoint responses, but not
+               click-tested in-browser due to an unrelated pre-existing bug blocking that
+               navigation path (separately flagged).
+Bug ref:       services/ehr-service/src/services/lab-order.service.ts,
+               services/ehr-service/src/controllers/lab-order.controller.ts,
+               services/ehr-service/src/services/lab-critical-alert.service.ts,
+               ehr-frontend/src/components/LabOrdersModal.tsx,
+               ehr-frontend/src/services/api.ts.
 ```
