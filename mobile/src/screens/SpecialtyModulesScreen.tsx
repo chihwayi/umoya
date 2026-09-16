@@ -84,6 +84,13 @@ const DOCTOR_GROUPS: ModuleGroup[] = [
       { route: 'OemRtw',              label: 'Return to Work',        icon: 'check', needsPatient: true },
     ],
   },
+  {
+    title: 'Care Coordination',
+    items: [
+      { route: 'WardRound',         label: 'Ward Round',         icon: 'bed' },
+      { route: 'OverdueFollowUps',  label: 'Overdue Follow-Ups', icon: 'clock' },
+    ],
+  },
 ];
 
 const NURSE_GROUPS: ModuleGroup[] = [
@@ -128,6 +135,13 @@ const NURSE_GROUPS: ModuleGroup[] = [
     items: [
       { route: 'DialysisSession',   label: 'Dialysis Sessions', icon: 'flask', needsPatient: true },
       { route: 'TransportDispatch', label: 'Transport Dispatch', icon: 'phone' },
+    ],
+  },
+  {
+    title: 'Care Coordination',
+    items: [
+      { route: 'WardRound',         label: 'Ward Round',         icon: 'bed' },
+      { route: 'OverdueFollowUps',  label: 'Overdue Follow-Ups', icon: 'clock' },
     ],
   },
 ];

@@ -61,7 +61,13 @@ export class ReferralController {
   @ApiQuery({ name: 'endDate', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiResponse({ status: 200, description: 'Referrals retrieved successfully' })
-  async getReferrals(@Query() filters: any, @Req() req: RequestWithTenant) {
+  async getReferrals(@Query() filters: any, @Req() req: RequestWithTenant & { user: any }) {
+    // No @Roles restriction on this route — a patient-role token can reach
+    // it too. Without this, an unfiltered call (as the mobile referral
+    // status screen makes) would return every patient's referrals tenant-wide.
+    if (String(req.user?.role || '').toLowerCase() === 'patient') {
+      filters = { ...filters, patientId: req.user?.sub || req.user?.id };
+    }
     return this.referralService.getReferrals(filters, req.tenantDb);
   }
 

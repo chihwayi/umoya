@@ -73,6 +73,11 @@ import { PatientEducationScreen } from "../components/patient/PatientEducationSc
 import { EducationCourseScreen } from "../components/patient/EducationCourseScreen";
 import { PatientFamilyAccessScreen } from "../components/patient/PatientFamilyAccessScreen";
 import QueueStatusScreen from "../screens/QueueStatusScreen";
+import BillPaymentScreen from "../screens/BillPaymentScreen";
+import DischargeDocumentsScreen from "../screens/DischargeDocumentsScreen";
+import ReferralStatusScreen from "../screens/ReferralStatusScreen";
+import OverdueFollowUpsScreen from "../screens/OverdueFollowUpsScreen";
+import WardRoundScreen from "../screens/WardRoundScreen";
 
 import ReportsNavigator from "./ReportsNavigator";
 
@@ -136,6 +141,8 @@ const DoctorNavigator = () => (
     <DoctorStack.Screen name="Antibiogram" component={AntibiogramSummaryScreen} options={{ title: 'Antibiogram', headerShown: true }} />
     <DoctorStack.Screen name="OccupationalMedicine" component={OccupationalMedicineScreen} options={{ title: 'Occ. Medicine', headerShown: true }} />
     <DoctorStack.Screen name="OemRtw" component={OemRtwScreen} options={{ title: 'Return to Work', headerShown: true }} />
+    <DoctorStack.Screen name="OverdueFollowUps" component={OverdueFollowUpsScreen} options={{ title: 'Overdue Follow-Ups', headerShown: true }} />
+    <DoctorStack.Screen name="WardRound" component={WardRoundScreen} options={{ title: 'Ward Round', headerShown: true }} />
     <DoctorStack.Screen name="SpecialtyModules">
       {() => <SpecialtyModulesScreen role="doctor" />}
     </DoctorStack.Screen>
@@ -182,6 +189,8 @@ const NurseNavigator = () => (
     <NurseStack.Screen name="DialysisSession" component={DialysisSessionScreen} options={{ title: 'Dialysis Sessions', headerShown: true }} />
     <NurseStack.Screen name="CultureSensitivity" component={CultureSensitivityScreen} options={{ title: 'Culture & Sensitivity', headerShown: true }} />
     <NurseStack.Screen name="TransportDispatch" component={TransportDispatchScreen} options={{ title: 'Transport Dispatch', headerShown: true }} />
+    <NurseStack.Screen name="OverdueFollowUps" component={OverdueFollowUpsScreen} options={{ title: 'Overdue Follow-Ups', headerShown: true }} />
+    <NurseStack.Screen name="WardRound" component={WardRoundScreen} options={{ title: 'Ward Round', headerShown: true }} />
     <NurseStack.Screen name="SpecialtyModules">
       {() => <SpecialtyModulesScreen role="nurse" />}
     </NurseStack.Screen>
@@ -231,6 +240,9 @@ const PatientStackNavigator = () => (
     <PatientStack.Screen name="PHEducationCourse" component={EducationCourseScreen} options={{ headerShown: false }} />
     <PatientStack.Screen name="PHFamilyAccess" component={PatientFamilyAccessScreen} />
     <PatientStack.Screen name="PHQueueStatus" component={QueueStatusScreen} options={{ title: 'Queue Status' }} />
+    <PatientStack.Screen name="PHBillPayment" component={BillPaymentScreen} options={{ title: 'Pay a Bill' }} />
+    <PatientStack.Screen name="PHDischargeDocuments" component={DischargeDocumentsScreen} options={{ title: 'Discharge Documents' }} />
+    <PatientStack.Screen name="PHReferralStatus" component={ReferralStatusScreen} options={{ title: 'My Referrals' }} />
     <PatientStack.Screen name="GrowthMeasurement" component={GrowthMeasurementScreen as any} options={{ title: 'Growth Measurement' }} />
     <PatientStack.Screen name="MmdSchedule" component={MmdScheduleScreen as any} options={{ title: 'MMD Schedule' }} />
     <PatientStack.Screen name="AccountSettings" component={AccountSettingsScreen} />

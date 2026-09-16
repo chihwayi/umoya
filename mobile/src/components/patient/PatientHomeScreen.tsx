@@ -23,6 +23,9 @@ export function PatientHomeScreen({ navigation }: Props) {
     { label: t("nav.messages"),      route: "PHMessages",     icon: "chat"     as const, accent: C.teal,   inTabs: false },
     { label: t("nav.education"),     route: "PHEducation",    icon: "book"     as const, accent: C.green,  inTabs: false },
     { label: t("nav.queueStatus"),   route: "PHQueueStatus",  icon: "clock"    as const, accent: C.blue,   inTabs: false },
+    { label: t("nav.payBill"),       route: "PHBillPayment",  icon: "wallet"   as const, accent: C.green,  inTabs: false },
+    { label: t("nav.dischargeDocuments"), route: "PHDischargeDocuments", icon: "download" as const, accent: C.violet, inTabs: false },
+    { label: t("nav.referrals"),     route: "PHReferralStatus", icon: "share"  as const, accent: C.coral,  inTabs: false },
   ];
 
   const goTo = (route: string, inTabs: boolean) => {
