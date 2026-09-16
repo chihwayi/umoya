@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, User, Calendar,
@@ -75,14 +75,14 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const { tenantSlug, patientId } = useParams<{ tenantSlug: string; patientId: string }>();
   const navigate = useNavigate();
   const { showError } = useNotification();
-  const currentUser = (() => {
+  const currentUser = useMemo(() => {
     try {
       const userData = localStorage.getItem('ehr_user');
       return userData ? JSON.parse(userData) : null;
     } catch {
       return null;
     }
-  })();
+  }, []);
   
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
