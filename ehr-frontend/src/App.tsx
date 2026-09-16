@@ -91,8 +91,6 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const PopulationHealthDashboard = lazy(() => import('./pages/PopulationHealthDashboard'));
 const PracticeManagementDashboard = lazy(() => import('./pages/PracticeManagementDashboard'));
 const PriorAuthorizationDashboard = lazy(() => import('./pages/PriorAuthorizationDashboard'));
-const PatientPortalLogin = lazy(() => import('./pages/PatientPortalLogin'));
-const PatientPortalDashboard = lazy(() => import('./pages/PatientPortalDashboard'));
 const CampaignsDashboard = lazy(() => import('./pages/CampaignsDashboard'));
 const MultiCurrencyMedicalAidDashboard = lazy(() => import('./pages/MultiCurrencyMedicalAidDashboard'));
 const ImmunizationDashboard = lazy(() => import('./pages/ImmunizationDashboard'));
@@ -411,22 +409,6 @@ function App() {
               <Route path="/unavailable" element={<ModuleUnavailablePage />} />
               <Route path="/:tenantSlug" element={<TenantRedirect />} />
               <Route path="/:tenantSlug/login" element={<TenantRedirect />} />
-              <Route
-                path="/portal/:tenantSlug/login"
-                element={
-                  <TenantScopedModuleRoute moduleKey="patient_portal">
-                    <PatientPortalLogin />
-                  </TenantScopedModuleRoute>
-                }
-              />
-              <Route
-                path="/portal/:tenantSlug"
-                element={
-                  <TenantScopedModuleRoute moduleKey="patient_portal">
-                    <PatientPortalDashboard />
-                  </TenantScopedModuleRoute>
-                }
-              />
               <Route path="/ehr/:tenantSlug" element={<EHRLogin />} />
               <Route path="/ehr/:tenantSlug/impersonate" element={<ImpersonationLanding />} />
               <Route path="/ehr/:tenantSlug/change-password" element={<ChangePassword />} />

@@ -58,7 +58,6 @@ const ROUTE_MODULE_MATCHERS: Array<{ pathPart: string; moduleKey: string }> = [
   { pathPart: 'diabetes', moduleKey: 'diabetes' },
   { pathPart: 'telemedicine', moduleKey: 'telemedicine' },
   { pathPart: 'population-health', moduleKey: 'population_health' },
-  { pathPart: 'patient-portal', moduleKey: 'patient_portal' },
   { pathPart: 'post-visit', moduleKey: 'patient_portal' },
 ];
 
