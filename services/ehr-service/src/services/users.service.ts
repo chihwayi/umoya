@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException, ConflictException, Optional, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity';
 import { CreateUserDto, UpdateUserDto } from '../dto/users.dto';
 import { NotificationCenterService } from './notification-center.service';
+import { AuthService } from './auth.service';
 
 @Injectable()
 export class UsersService {
@@ -11,6 +13,7 @@ export class UsersService {
 
   constructor(
     @Optional() private readonly notificationCenterService?: NotificationCenterService,
+    @Optional() private readonly authService?: AuthService,
   ) {}
   async getAllUsers(tenantDb: DataSource, role?: string): Promise<User[]> {
     const userRepository = tenantDb.getRepository(User);
@@ -106,10 +109,17 @@ export class UsersService {
   async deactivateUser(id: string, tenantDb: DataSource): Promise<{ message: string }> {
     const userRepository = tenantDb.getRepository(User);
     const user = await this.getUserById(id, tenantDb);
-    
+
     user.isActive = false;
     await userRepository.save(user);
-    
+
+    // JWTs are stateless — flipping isActive alone does nothing to a
+    // token already issued. Revoke every active session so a deactivated
+    // account can't keep using its existing token until natural expiry.
+    if (this.authService) {
+      await this.authService.revokeAllSessionsForUser(id, tenantDb, 'account_deactivated');
+    }
+
     return { message: 'User deactivated successfully' };
   }
 
@@ -130,14 +140,25 @@ export class UsersService {
   async resetPassword(id: string, tenantDb: DataSource): Promise<{ message: string; tempPassword: string }> {
     const userRepository = tenantDb.getRepository(User);
     const user = await this.getUserById(id, tenantDb);
-    
-    // Generate new temporary password
-    const tempPassword = Math.random().toString(36).slice(-8);
+
+    // Math.random() is not cryptographically secure — its output is
+    // predictable given enough samples (V8's xorshift128+ PRNG has been
+    // publicly demonstrated as reversible from observed outputs), which
+    // matters here because the result becomes a real login credential.
+    // crypto.randomBytes is the CSPRNG this needs.
+    const tempPassword = randomBytes(9).toString('base64url').slice(0, 12);
     const passwordHash = await bcrypt.hash(tempPassword, 10);
-    
+
     user.passwordHash = passwordHash;
     user.mustChangePassword = true;
     user.passwordChangedAt = null;
+
+    // A password reset should also cut off any session started under the
+    // old, potentially-compromised password — same rationale as
+    // deactivateUser() above.
+    if (this.authService) {
+      await this.authService.revokeAllSessionsForUser(id, tenantDb, 'password_reset');
+    }
     
     await userRepository.save(user);
     

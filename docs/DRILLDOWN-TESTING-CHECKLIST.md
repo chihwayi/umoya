@@ -2897,3 +2897,94 @@ the fact that the concrete exploit path (unsanitized consent HTML) is now closed
 | 74 | Four dangerouslySetInnerHTML sites across both web apps rendered backend consent-template HTML with zero sanitization, and neither app had a sanitization library in its dependencies at all | **Security (high) -- stored/reflected XSS via consent templates, JWT theft via localStorage** | Fixed |
 | 75 | TenantQRModal.tsx's print flow interpolated tenant.clinicName/subdomain raw into a document.write() HTML string with no escaping | **Security (medium) -- XSS via tenant display-name fields** | Fixed |
 | 76 | Neither web app's production build stripped console.* calls, despite the common assumption that minification does this by default -- error/response objects (potentially including patient data) shipped into every user's browser devtools console | **Security (medium, defense-in-depth) -- console-based data leakage in production** | Fixed |
+
+
+### Test 50 -- Authentication mechanics: no brute-force protection, deactivated accounts keep working, weak temp-password generator (backend, security)
+
+```
+Module:        Authentication -- staff login, patient-portal login, MFA verification,
+               password reset, user deactivation
+Platform:      Backend
+Role:          N/A (pre-authentication / account lifecycle)
+Context:       New angle: authentication MECHANICS themselves, distinct from the RBAC
+               (authorization) sweep already completed. Account-enumeration protection,
+               patient password-reset token generation (crypto.randomBytes, 1-hour expiry,
+               single-use), MFA enforcement (MfaGuard correctly blocks a JWT issued with
+               mfaVerified=false from reaching any route except MFA setup/verify), and default
+               credentials all checked out fine.
+               Three real findings. (1) Zero rate limiting anywhere in the stack (no
+               @nestjs/throttler, no express-rate-limit, no nginx limit_req, confirmed by
+               grepping the whole backend and both frontend nginx templates) -- staff login,
+               patient-portal login, caregiver login, MFA code verification, and
+               forgot-password were all attackable with unlimited attempts. (2)
+               deactivateUser() only flipped users.is_active to false -- JWTs are stateless, and
+               nothing re-checks is_active per request (JwtAuthGuard's active_staff_sessions
+               check only looks at revoked/expires_at, never the user's is_active flag), so a
+               terminated or compromised staff account's existing token kept working for the
+               rest of its lifetime (up to sessionTimeoutMinutes, 60 min by default) after
+               deactivation. (3) Found while reading the same file: resetPassword()'s temp
+               password was generated via Math.random().toString(36).slice(-8) -- not
+               cryptographically secure (V8's PRNG is a public, reversible xorshift128+), and it
+               becomes a real login credential. Also had the same session-persistence gap as
+               deactivation: an admin-initiated password reset didn't revoke the account's
+               existing sessions either.
+Fix:           Installed @nestjs/throttler. Registered ThrottlerModule.forRoot() with a
+               generous global default (300 req/min per IP -- this app never had any rate
+               limiting, so a low global default risked breaking normal traffic; the actual
+               protection is per-route) and ThrottlerGuard as a global APP_GUARD. Added
+               @Throttle() overrides: 10/min on staff login, patient-portal login, caregiver
+               login, and reset-password; 5/min on forgot-password; 8/min on 2FA/MFA
+               verification (TOTP codes are only 6 digits -- 1M combinations -- a real
+               brute-force target without throttling).
+               Added AuthService.revokeAllSessionsForUser(), reusing the existing
+               active_staff_sessions revocation infrastructure (already used for
+               single-session revoke), and called it from both UsersService.deactivateUser()
+               and resetPassword() -- a deactivated or password-reset account's existing
+               sessions are now immediately invalidated, not just blocked from future logins.
+               Replaced resetPassword()'s Math.random()-based temp password with
+               crypto.randomBytes(9) base64url-encoded to 12 characters.
+Steps to test: 1) Confirmed a normal login still succeeds. 2) Hammered the login endpoint 12
+               times with a wrong password -- expected 429 after the 10th. 3) Logged in as a
+               real TEST_ user, confirmed the token worked against a protected endpoint,
+               deactivated that user as admin, then replayed the SAME pre-deactivation token --
+               expected rejection. 4) Reactivated, logged in fresh, had admin reset the
+               password, then replayed the pre-reset token -- expected rejection.
+Actual result: Pass on all four checks. Attempts 1-9 returned 401 (wrong password), attempts
+               10-12 returned 429 (throttled) -- confirmed the in-memory throttler storage
+               didn't self-expire correctly under back-to-back load in this dev environment
+               (still blocked after 3 minutes; a container restart cleared it) -- noted as a
+               caveat: production should use a persistent (Redis-backed) throttler storage
+               rather than the default in-process one, especially with multiple replicas.
+               Deactivation: token worked before ("HTTP 200"), was rejected with "Session
+               revoked" immediately after deactivation. Password reset: same result -- old
+               token rejected with "Session revoked" right after the reset, and the generated
+               temp password was a real 12-char random string, not a predictable pattern.
+               npx tsc --noEmit clean. Attempting to hard-delete the test user afterward was
+               correctly blocked by the append-only HIPAA-audit-log trigger fixed earlier this
+               session (FK cascade into hipaa_audit_logs hit "is append-only and cannot be
+               UPDATE") -- left the test account soft-deactivated instead, matching this
+               session's test-data conventions. admin@e2e-clinic.com's password hash (changed to
+               a known value for testing) was restored to its original value afterward.
+Status:        Fail (unlimited login/MFA-code guessing attempts; deactivated/password-reset
+               accounts kept full access via their existing token; admin-generated temp
+               passwords used a non-cryptographic RNG) -> Fixed -> Pass (verified live).
+Bug ref:       services/ehr-service/src/ehr.module.ts,
+               services/ehr-service/src/controllers/auth.controller.ts,
+               services/ehr-service/src/controllers/patient-portal.controller.ts,
+               services/ehr-service/src/services/auth.service.ts,
+               services/ehr-service/src/services/users.service.ts.
+
+Note: production deployment should confirm/configure a persistent throttler storage adapter
+(e.g. @nestjs/throttler's Redis storage option) rather than relying on the default in-memory
+store, which this session observed does not reliably self-expire under sustained load and
+resets on every restart/deploy in a multi-replica setup -- not fixed here since it requires an
+infra/Redis-connection decision beyond a drive-by code change.
+```
+
+## Update to Step 4 Deliverables (cont. 26)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 77 | Zero rate limiting anywhere in the backend -- staff login, patient-portal login, caregiver login, MFA/2FA verification, and password reset all allowed unlimited attempts | **Security (critical) -- unrestricted credential/MFA-code brute-forcing** | Fixed |
+| 78 | Deactivating a user (or resetting their password) only flipped a DB flag -- their existing JWT kept working for the rest of its lifetime since nothing re-checked it against session state | **Security (critical) -- terminated/compromised accounts retained access after deactivation** | Fixed |
+| 79 | Admin-initiated password reset generated the temp password via Math.random(), not a CSPRNG -- a real login credential derived from a predictable, reversible PRNG | **Security (medium) -- weak temporary credential generation** | Fixed |

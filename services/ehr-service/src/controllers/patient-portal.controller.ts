@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Body, UseGuards, Req, Query, Param, Delete, Res, Logger, NotFoundException, BadRequestException, UploadedFile, UseInterceptors, UnauthorizedException } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { JwtService } from '@nestjs/jwt';
@@ -89,6 +90,9 @@ export class PatientPortalController {
     return this.patientAuthService.assessRegistration(registerDto, req.tenantId);
   }
 
+  // No rate limiting existed on this endpoint — unlimited password-guessing
+  // attempts against any patient account.
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('login')
   @ApiOperation({ summary: 'Patient portal login', description: 'Login to patient portal' })
   @ApiResponse({ status: 200, description: 'Login successful' })
@@ -105,6 +109,9 @@ export class PatientPortalController {
     return this.patientAuthService.verifyEmail(token, req.tenantId);
   }
 
+  // Unthrottled, this endpoint could be hammered to enumerate/DOS or to spam
+  // reset emails at an arbitrary rate.
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Post('forgot-password')
   @ApiOperation({ summary: 'Request password reset', description: 'Request password reset email' })
   @ApiResponse({ status: 200, description: 'Reset email sent if account exists' })
@@ -112,6 +119,7 @@ export class PatientPortalController {
     return this.patientAuthService.requestPasswordReset(resetDto, req.tenantId);
   }
 
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('reset-password')
   @ApiOperation({ summary: 'Reset password', description: 'Reset password using reset token' })
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
@@ -2665,6 +2673,7 @@ export class PatientPortalController {
     return { message: 'Password set successfully. You can now log in.' };
   }
 
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('caregiver/login')
   @ApiOperation({ summary: 'Caregiver portal login using family access credentials' })
   async caregiverLogin(

@@ -308,6 +308,24 @@ export class AuthService {
     );
   }
 
+  // JWTs are stateless — deactivating a user only flips a DB flag that
+  // nothing re-checks per-request. Without this, a terminated/compromised
+  // staff account's existing token keeps working until it naturally
+  // expires. Called from UsersService.deactivateUser().
+  async revokeAllSessionsForUser(userId: string, tenantDb: DataSource, reason = 'account_deactivated'): Promise<void> {
+    await tenantDb.query(
+      `
+        UPDATE active_staff_sessions
+        SET revoked = true,
+            revoked_at = NOW(),
+            revoked_reason = $2
+        WHERE user_id = $1
+          AND revoked = false
+      `,
+      [userId, reason],
+    );
+  }
+
   private async issueStaffJwt(
     user: User,
     tenantDb: DataSource,

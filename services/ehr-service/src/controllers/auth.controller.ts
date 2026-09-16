@@ -1,4 +1,5 @@
 import { BadRequestException, Controller, Post, Body, UseGuards, Request, Get, Put, Param } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { AuthService } from '../services/auth.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -12,6 +13,10 @@ import { SkipMfa } from '../decorators/skip-mfa.decorator';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  // No rate limiting existed anywhere on this endpoint — an attacker could
+  // make unlimited password-guessing attempts. 10/min per IP is generous
+  // enough for a legitimate user mistyping a password a few times.
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('login')
   @ApiOperation({ summary: 'EHR user login with password change check' })
   @ApiResponse({ status: 200, description: 'Login successful' })
@@ -120,6 +125,9 @@ export class AuthController {
     return { message: '2FA disabled successfully' };
   }
 
+  // TOTP codes are 6 digits (1M combinations) — without throttling, brute
+  // forcing one within its 30s validity window is a practical attack.
+  @Throttle({ default: { ttl: 60000, limit: 8 } })
   @Post('2fa/complete-login')
   @ApiOperation({ summary: 'Complete login with TOTP code after requiresTwoFactor' })
   async complete2FALogin(@Request() req: RequestWithTenant, @Body() body: { tempToken: string; code: string }) {
@@ -152,6 +160,7 @@ export class AuthController {
     return { message: 'MFA enabled successfully', token, accessToken: token };
   }
 
+  @Throttle({ default: { ttl: 60000, limit: 8 } })
   @UseGuards(JwtAuthGuard)
   @SkipMfa()
   @Post('mfa/verify')

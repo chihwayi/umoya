@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MulterModule } from '@nestjs/platform-express';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -689,6 +690,12 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     // test (the installed @nestjs/schedule version has no runtime
     // disable-scheduling option, so this must be an import-time condition).
     ...(process.env.NODE_ENV === 'test' ? [] : [ScheduleModule.forRoot()]),
+    // Global default is intentionally generous (this app has no rate
+    // limiting anywhere today) so normal API traffic is unaffected — the
+    // login/password-reset endpoints override it with a much stricter
+    // per-route @Throttle() to stop credential brute-forcing, which is
+    // the actual gap this closes.
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
     PassportModule,
     MulterModule.register({
       dest: './uploads',
@@ -1364,6 +1371,10 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     {
       provide: APP_GUARD,
       useClass: MfaGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
     {
       provide: APP_INTERCEPTOR,
