@@ -1,6 +1,7 @@
 import {
   Controller, Post, Body, Param, Res, Query, Request, UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
@@ -11,9 +12,12 @@ import { MonthlyReportBundleService } from '../services/monthly-report-bundle.se
 
 // A-004/MOAS-20: bulk tenant-wide report export (PDF/XLSX/CSV/monthly
 // bundle) — admin-level, same reasoning as module-reports.controller.ts.
+// PDF/XLSX/ZIP generation is CPU-intensive; throttled to stop a compromised
+// or scripted admin session from hammering it into a resource-exhaustion DoS.
 @Controller('tenants/:tenantId/exports')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
+@Throttle({ default: { ttl: 60000, limit: 10 } })
 export class ReportExportController {
   constructor(
     private readonly exportSvc: ReportExportService,

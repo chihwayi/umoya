@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Delete, Param, Body, Query, UseInterceptors, UploadedFile, UseGuards, Request } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -61,6 +62,10 @@ export class KnowledgeController {
    * Mobile guideline search — proxies to CDSS searchGuidelines.
    * Called by mobile CdssService.guidelineSearch().
    */
+  // Proxies to CDSS's vector-search + synthesis — a real LLM/compute cost
+  // per call, and unthrottled it could consume the entire global rate-limit
+  // budget on its own.
+  @Throttle({ default: { ttl: 60000, limit: 30 } })
   @Post('search')
   @ApiOperation({ summary: 'Search clinical guidelines (mobile)' })
   async searchGuidelines(

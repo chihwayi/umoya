@@ -70,7 +70,8 @@ export class AuthController {
       (req.user as any)?.userId ?? (req.user as any)?.id,
       changePasswordDto.oldPassword,
       changePasswordDto.newPassword,
-      req.tenantDb
+      req.tenantDb,
+      (req.user as any)?.jti,
     );
     
     return { message: 'Password changed successfully' };
@@ -88,7 +89,8 @@ export class AuthController {
     await this.authService.forcePasswordChange(
       (req.user as any)?.userId ?? (req.user as any)?.id,
       body.newPassword,
-      req.tenantDb
+      req.tenantDb,
+      (req.user as any)?.jti,
     );
     
     return { message: 'Password changed successfully' };

@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query, Logger } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
@@ -31,6 +32,10 @@ export class PatientController {
     return this.patientService.getAllPatients(req.tenantDb, pageNum, limitNum);
   }
 
+  // Generous enough for legitimate search-as-you-type (staff commonly fire
+  // this on every keystroke), but bounded to stop a script from exhausting
+  // the DB connection pool with unlimited ILIKE queries.
+  @Throttle({ default: { ttl: 60000, limit: 90 } })
   @Get('search')
   @ApiOperation({ summary: 'Search patients' })
   @ApiQuery({ name: 'q', required: true, type: String })
@@ -39,6 +44,7 @@ export class PatientController {
     return this.patientService.searchPatients(query, req.tenantDb);
   }
 
+  @Throttle({ default: { ttl: 60000, limit: 90 } })
   @Get('search/advanced')
   @ApiOperation({ summary: 'Advanced patient search with filters' })
   @ApiQuery({ name: 'searchTerm', required: false, type: String })

@@ -678,7 +678,9 @@ export class HipaaAuditService {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const limit = filters.limit || 100;
+    // No cap previously — a caller passing limit=999999 got exactly that in
+    // one query against an append-only, ever-growing table.
+    const limit = Math.min(filters.limit || 100, 1000);
     const offset = filters.offset || 0;
 
     const [logs, countResult] = await Promise.all([

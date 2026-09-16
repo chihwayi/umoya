@@ -2988,3 +2988,109 @@ infra/Redis-connection decision beyond a drive-by code change.
 | 77 | Zero rate limiting anywhere in the backend -- staff login, patient-portal login, caregiver login, MFA/2FA verification, and password reset all allowed unlimited attempts | **Security (critical) -- unrestricted credential/MFA-code brute-forcing** | Fixed |
 | 78 | Deactivating a user (or resetting their password) only flipped a DB flag -- their existing JWT kept working for the rest of its lifetime since nothing re-checked it against session state | **Security (critical) -- terminated/compromised accounts retained access after deactivation** | Fixed |
 | 79 | Admin-initiated password reset generated the temp password via Math.random(), not a CSPRNG -- a real login credential derived from a predictable, reversible PRNG | **Security (medium) -- weak temporary credential generation** | Fixed |
+
+
+### Test 51 -- Session/token depth + non-auth rate limiting + SMS-spam abuse (backend, security)
+
+```
+Module:        Self-service password change, session cleanup, CDSS/AI endpoints, guideline
+               search, streaming diagnosis, report export, patient search, SMS notifications,
+               HIPAA audit-log query cap
+Platform:      Backend
+Role:          N/A (session lifecycle, cost/DoS abuse, notification abuse)
+Context:       Follow-up to Test 50 (bugs #77-79), going deeper on session/token mechanics and
+               combining with rate limiting on non-auth endpoints, audit-log query DoS, and
+               notification-provider abuse. JWT secret handling (validated at startup, no
+               fail-open fallback), token expiry, refresh-token replay (none exist -- stateless
+               JWT only), session fixation (fresh randomUUID jti per login), and the audit-log
+               table's indexing/write-path cost all checked out fine.
+               Found and fixed: (1) self-service changePassword()/forcePasswordChange() had the
+               exact same gap just fixed for admin-initiated reset/deactivate in Test 50 --
+               changing your own password didn't revoke your other sessions, so a stolen token
+               stayed valid even after the legitimate owner "secured" their account by changing
+               the password. (2) active_staff_sessions has no cleanup -- a row is inserted on
+               every login with no retention policy, growing unboundedly and eventually
+               degrading the per-request session lookup every authenticated request makes.
+               (3) Every CDSS/AI-backed endpoint (~35 routes: diagnosis assist, drug
+               interactions, guideline search, streaming differential-on-keypress, etc.) had
+               zero throttling beyond the generic 300/min global default -- each call is a real
+               LLM inference with real cost and latency, so a script could run up the AI
+               provider bill or exhaust CDSS capacity for legitimate clinical users. (4) Report
+               export (PDF/XLSX/CSV/monthly bundle -- CPU-intensive generation) and patient
+               search (unbounded ILIKE queries) had the same gap, lower severity. (5) CRITICAL:
+               POST /notifications/sms took an arbitrary `phone` field straight from the request
+               body with zero validation it belonged to any patient/user in the tenant, no rate
+               limit, and no RBAC -- any authenticated staff account of any role could send SMS
+               to any phone number, unlimited times: real per-message provider cost (SMS-pumping
+               fraud) and a harassment vector, all attributed only to "staff member sent SMS"
+               with no per-target audit trail. Confirmed unused by any frontend but still a live,
+               directly-callable attack surface. (6) getAuditLogs() had no upper cap on the
+               `limit` filter -- a caller could request an arbitrarily large result set from the
+               append-only audit table in one query.
+Fix:           Added AuthService.revokeOtherSessionsForUser() (keeps the session making the
+               change alive, revokes every other session for that user -- different from
+               revokeAllSessionsForUser used for admin actions, where there's no "current
+               session" to preserve) and wired it into both changePassword() and
+               forcePasswordChange(), threading the JWT's own jti through from the controller.
+               Added SessionCleanupService, a new nightly @Cron job (matching the existing
+               CareGapSchedulerService per-tenant iteration pattern) deleting
+               active_staff_sessions rows expired more than 30 days ago. Added a class-level
+               @Throttle (30/min) to cdss.controller.ts covering all ~35 routes at once, plus
+               matching throttles on knowledge.controller.ts's guideline search (30/min) and
+               streaming-diagnosis.controller.ts (60/min, since the frontend intentionally fires
+               it on every debounced keypress). Added @Throttle to report-export.controller.ts
+               (10/min, class-level) and patient.controller.ts's two search routes (90/min --
+               generous enough for real search-as-you-type). Rewrote POST /notifications/sms to
+               require a patientId and resolve the destination phone server-side from that
+               patient's own record (added NotificationsService.sendSmsToPatient()) instead of
+               trusting a client-supplied number; added matching @Throttle (15/min) to all five
+               notification-send routes. Capped hipaa-audit.service.ts's getAuditLogs() limit
+               parameter at 1000 regardless of what's requested (getPatientAccessReport was
+               already safely bounded -- single-patient scope + hardcoded LIMIT 100 -- no change
+               needed there).
+Steps to test: Logged in twice as the same TEST_ user to get two independent sessions/tokens.
+               Confirmed both worked, then used session B to self-service change the password.
+               Checked session A (untouched) was rejected with "Session revoked" while session B
+               (the one that made the change) kept working. Attempted POST /notifications/sms
+               with a raw phone number (old contract) -- expected rejection; then with a real
+               patientId -- expected success with the phone resolved from that patient's record.
+               Fired 35 concurrent requests at POST /cdss/guidelines/search (limit 30/min) to
+               confirm the class-level throttle actually engages under real load (a first,
+               sequential attempt didn't trigger it at all, since each real CDSS call takes
+               ~2.7s and 32 sequential calls naturally spread past the 60s window -- switched to
+               firing them concurrently to actually saturate the limit within the window).
+Actual result: Pass on all checks. Session A: "Session revoked" immediately after B's password
+               change. Session B: still returned 200 with full profile data. SMS: raw-phone
+               payload rejected with "patientId is required" (400); patientId-based call
+               succeeded and resolved to the real patient's phone number, cost, and network.
+               CDSS throttle: 15 of 35 concurrent requests succeeded (201), 20 correctly
+               rejected (429) -- confirms the class-level @Throttle is live across the whole
+               controller under real concurrent load. npx tsc --noEmit clean. No new errors in
+               docker logs. Test account left soft-deactivated afterward.
+Status:        Fail (self-service password change left other sessions valid; unbounded session
+               table growth; ~40 expensive/sensitive endpoints unthrottled beyond a loose global
+               default; arbitrary-destination unlimited SMS sending; uncapped audit-log query
+               size) -> Fixed -> Pass (verified live, including under real concurrent load).
+Bug ref:       services/ehr-service/src/services/auth.service.ts,
+               services/ehr-service/src/controllers/auth.controller.ts,
+               services/ehr-service/src/services/session-cleanup.service.ts (new),
+               services/ehr-service/src/ehr.module.ts,
+               services/ehr-service/src/controllers/cdss.controller.ts,
+               services/ehr-service/src/controllers/knowledge.controller.ts,
+               services/ehr-service/src/controllers/streaming-diagnosis.controller.ts,
+               services/ehr-service/src/controllers/report-export.controller.ts,
+               services/ehr-service/src/controllers/patient.controller.ts,
+               services/ehr-service/src/controllers/notifications.controller.ts,
+               services/ehr-service/src/services/notifications.service.ts,
+               services/ehr-service/src/services/hipaa-audit.service.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 27)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 80 | Self-service password change didn't revoke a compromised account's other active sessions (same gap as admin reset/deactivate, fixed in Test 50) | **Security (critical) -- stolen token stayed valid after the owner "secured" their account** | Fixed |
+| 81 | active_staff_sessions grows unboundedly with no cleanup, eventually degrading the per-request session-validity lookup every authenticated request makes | **Reliability (medium) -- unbounded table growth / slow-burn DoS** | Fixed |
+| 82 | ~35 CDSS/AI-backed endpoints, guideline search, streaming diagnosis, report export, and patient search all had no throttling beyond a loose 300/min global default despite being expensive (LLM cost/latency) or CPU-intensive (report generation) | **Security/cost (high) -- AI-cost and resource-exhaustion abuse** | Fixed |
+| 83 | POST /notifications/sms accepted an arbitrary destination phone number with zero validation, no rate limit, and no RBAC | **Security (critical) -- unrestricted SMS-pumping fraud and harassment vector** | Fixed |
+| 84 | hipaa-audit.service.ts's getAuditLogs() had no upper cap on the requested result-set size | **Security (low) -- unbounded audit-log query** | Fixed |

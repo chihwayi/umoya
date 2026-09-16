@@ -357,6 +357,7 @@ import { CdssDecisionLogService } from './services/cdss-decision-log.service';
 import { CdssOutcomeBatchService } from './services/cdss-outcome-batch.service';
 import { NurseTaskService } from './services/nurse-task.service';
 import { CareGapSchedulerService } from './services/care-gap-scheduler.service';
+import { SessionCleanupService } from './services/session-cleanup.service';
 import { AmbientService } from './services/ambient.service';
 import { AmbientGateway } from './gateways/ambient.gateway';
 import { AppointmentPrecharterService } from './services/appointment-precharter.service';
@@ -1280,6 +1281,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CdssOutcomeBatchService,
     NurseTaskService,
     CareGapSchedulerService,
+    SessionCleanupService,
     PatientIntelligenceService,
     AmbientService,
     AppointmentPrecharterService,

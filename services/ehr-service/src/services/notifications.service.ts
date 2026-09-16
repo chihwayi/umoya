@@ -79,6 +79,20 @@ export class NotificationsService {
     };
   }
 
+  // Resolves the destination number server-side from the patient record —
+  // the controller no longer accepts a raw phone number from the caller.
+  async sendSmsToPatient(patientId: string, message: string, tenantDb: DataSource, network?: string) {
+    const patientRepo = tenantDb.getRepository(Patient);
+    const patient = await patientRepo.findOne({ where: { id: patientId } });
+    if (!patient) {
+      throw new Error('Patient not found');
+    }
+    if (!patient.phone) {
+      throw new Error('Patient has no phone number on file');
+    }
+    return this.sendSms({ phone: patient.phone, message, network }, tenantDb);
+  }
+
   async sendAppointmentReminder(appointmentId: string, tenantDb: DataSource) {
     const appointmentRepo = tenantDb.getRepository(AppointmentSimple);
     const appointment = await appointmentRepo.findOne({

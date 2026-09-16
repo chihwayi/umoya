@@ -103,9 +103,9 @@ export class AuthService {
     };
   }
 
-  async changePassword(userId: string, oldPassword: string, newPassword: string, tenantDb: DataSource) {
+  async changePassword(userId: string, oldPassword: string, newPassword: string, tenantDb: DataSource, currentJti?: string) {
     const userRepository = tenantDb.getRepository(User);
-    
+
     const user = await userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -126,11 +126,18 @@ export class AuthService {
     user.passwordChangedAt = new Date();
 
     await userRepository.save(user);
+
+    // A password change is exactly the moment a compromised account's
+    // other sessions need to be cut off — admin-initiated reset already did
+    // this; self-service change previously didn't, leaving a stolen token
+    // valid for the rest of its lifetime even after the owner "secured"
+    // their account.
+    await this.revokeOtherSessionsForUser(userId, currentJti, tenantDb, 'password_changed');
   }
 
-  async forcePasswordChange(userId: string, newPassword: string, tenantDb: DataSource) {
+  async forcePasswordChange(userId: string, newPassword: string, tenantDb: DataSource, currentJti?: string) {
     const userRepository = tenantDb.getRepository(User);
-    
+
     const user = await userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -145,6 +152,8 @@ export class AuthService {
     user.passwordChangedAt = new Date();
 
     await userRepository.save(user);
+
+    await this.revokeOtherSessionsForUser(userId, currentJti, tenantDb, 'password_changed');
   }
 
   async validateUser(payload: any): Promise<any> {
@@ -324,6 +333,35 @@ export class AuthService {
       `,
       [userId, reason],
     );
+  }
+
+  // Same rationale as revokeAllSessionsForUser, but for self-service password
+  // changes: keep the session the user is actively changing their password
+  // from alive (so they aren't immediately logged out of their own request),
+  // while killing every other session — the whole point of changing a
+  // password after a suspected compromise is to cut off access elsewhere.
+  async revokeOtherSessionsForUser(
+    userId: string,
+    currentJti: string | undefined,
+    tenantDb: DataSource,
+    reason = 'password_changed',
+  ): Promise<void> {
+    if (currentJti) {
+      await tenantDb.query(
+        `
+          UPDATE active_staff_sessions
+          SET revoked = true,
+              revoked_at = NOW(),
+              revoked_reason = $3
+          WHERE user_id = $1
+            AND jwt_jti != $2
+            AND revoked = false
+        `,
+        [userId, currentJti, reason],
+      );
+    } else {
+      await this.revokeAllSessionsForUser(userId, tenantDb, reason);
+    }
   }
 
   private async issueStaffJwt(

@@ -1,9 +1,15 @@
 import { UseGuards, Controller, Post, Body, Headers, Res, Get, Query, Request } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { StreamingDiagnosisService } from '../services/streaming-diagnosis.service';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
+// Each call triggers a real LLM inference. The frontend debounces at 800ms,
+// but that's a client-side courtesy, not an enforced limit — a fast typist
+// (or a script bypassing the debounce entirely) can still exceed it, so cap
+// server-side too.
+@Throttle({ default: { ttl: 60000, limit: 60 } })
 @Controller('diagnosis')
 @UseGuards(JwtAuthGuard)
 export class StreamingDiagnosisController {

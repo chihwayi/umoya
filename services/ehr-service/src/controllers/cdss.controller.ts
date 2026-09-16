@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Body, Param, UseGuards, Request, Logger, UseInterceptors, UploadedFile, HttpException, HttpStatus } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { CdssService } from '../services/cdss.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -8,10 +9,17 @@ import { Roles } from '../decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadSecurityService } from '../services/upload-security.service';
 
+// Every route here triggers a real LLM call in the CDSS service (cost and
+// capacity per request) — unthrottled, a script could run up the AI
+// provider bill or exhaust CDSS capacity for legitimate clinical users.
+// The generic 300/min global default is far too loose for calls this
+// expensive; this class-level override tightens it for the whole
+// controller (applies to every route unless a method overrides it).
 @ApiTags('Clinical Decision Support System')
 @ApiSecurity('tenant-key')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Throttle({ default: { ttl: 60000, limit: 30 } })
 @Controller('cdss')
 export class CdssController {
   private readonly logger = new Logger(CdssController.name);
