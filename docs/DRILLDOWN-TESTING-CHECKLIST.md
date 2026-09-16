@@ -3302,3 +3302,100 @@ Bug ref:       services/ehr-service/src/services/post-visit-grounded-llm.service
 | 87 | post-visit-grounded-llm.service.ts's LLM response cache was keyed only by SHA256(prompt), with no tenant component -- identical prompts from different tenants could return each other's cached diagnoses/recommendations | **Security (critical) -- cross-tenant clinical data leak via shared in-memory cache** | Fixed |
 | 88 | medical-aid-api.service.ts's Axios client and OAuth2 token caches were keyed only by medicalAidName_providerType, with no tenant component -- two tenants configuring the same medical-aid provider could share cached credentials | **Security (high) -- cross-tenant credential reuse for external medical-aid API calls** | Fixed |
 | 89 | 8 file-upload controllers (registration-ai, patient-portal voice, registration-intelligence, migration, terminology, knowledge, dicom, provider-messaging) had no Multer fileSize limit, allowing unbounded-size uploads | **Reliability (medium) -- unauthenticated-scale memory/disk exhaustion via unbounded file upload** | Fixed |
+
+### Test 54 -- Backend "duplicate subsystem" audit: 7 false positives, 2 real architectural-debt items deferred (backend, pre-launch review)
+
+```
+Module:        9 controller pairs/groups flagged by an earlier broad-strokes backend audit as
+               "duplicate subsystems" on the strength of similar names or a shared URL prefix:
+               lab test catalog, lab order sets, OR management (theatre vs operating-room --
+               already resolved in Test [wiring pass], both are real distinct features and both
+               are now routed), consent (3 controllers), medical-aid integration vs medical-aid
+               API, malaria (2 controllers), immunisation vs immunization, risk domain (3
+               controllers), NCD complications (2 controllers).
+Platform:      Backend
+Role:          N/A (architecture/code-quality review, not a live vulnerability sweep)
+Context:       Before merging or deleting anything, read every flagged pair's actual routes,
+               backing service, and underlying table/entity rather than trusting the name
+               match -- the OR/theatre pair earlier in this pass looked identical on paper but
+               turned out to be two genuinely distinct, both-live features (a lightweight daily
+               schedule view vs a full safety-checklist case-management system), so the same
+               false-positive risk applied here.
+Findings:      7 of 9 are NOT real duplicates:
+               - malaria.controller.ts / malaria-episode.controller.ts and
+                 ncd-complication.controller.ts / ncd-complications.controller.ts: two controller
+                 CLASSES sharing one @Controller() prefix, contributing entirely non-overlapping
+                 sub-routes (e.g. /malaria/episodes vs /malaria/surveillance). No route
+                 collision, no risk -- just split across two files, a style choice only.
+               - medical-aid-integration.controller.ts (/medical-aid) vs
+                 medical-aid-api.controller.ts (/medical-aid-api): different layers -- one is the
+                 internal claims lifecycle (providers/eligibility/claims/remittances), the other
+                 configures the external per-scheme API connector (credentials, webhook
+                 receiver). Complementary, not duplicate.
+               - immunisation.controller.ts (/immunisation, British spelling) vs
+                 immunization.controller.ts (/immunizations, American spelling): different
+                 features that happen to share a near-identical name -- the British-spelled one
+                 is EPI/cold-chain/AEFI programme surveillance (backs the live, routed
+                 EpiDashboard.tsx), the American-spelled one is point-of-care
+                 administer/schedule/forecast/HL7-VXU clinical charting. Both genuinely used.
+               - predictive-risk / proactive-risk / pro-risk controllers (all under /risk):
+                 three different algorithms against three different tables --
+                 patient_early_warning_scores/patient_risk_scores (vitals/NEWS2-based acute
+                 deterioration), risk_outreach_tasks (PRO-questionnaire-derived outreach), and a
+                 separate ML deterioration/readmission service. Confusingly similar route names
+                 (e.g. high-risk-patients vs patients/high-risk), not the same feature.
+               - consent.controller.ts / consent-records.controller.ts / digital-consent.
+                 controller.ts: three distinct mechanisms -- staff-managed consent
+                 templates/lifecycle (the main one), a lightweight consent-grant + teleconsult-
+                 to-EHR bridge (consent-records, confirmed zero call sites in ehr-frontend/
+                 mobile/patient-portal -- looks like an unconnected server-to-server integration
+                 point for a third-party telehealth partner rather than dead code, so left
+                 alone rather than deleted), and unauthenticated token-based external consent-
+                 signing links (digital-consent, for pre-visit forms sent via SMS/email).
+               2 ARE real architectural debt, confirmed by reading the underlying tables --
+               but neither is safely fixable in a quick pass:
+               (1) Lab test catalog: lab-test.controller.ts's LabTest TypeORM entity and
+                   lab-test-catalog.controller.ts's raw-SQL lab_test_catalog/
+                   lab_test_components/lab_reference_ranges tables are genuinely different data
+                   models for the same concept (test name, category, reference ranges) -- and
+                   critically, lab-order.service.ts (the live ordering workflow) reads from
+                   BOTH within the same file for different purposes (LabTest for basic lookups,
+                   lab_test_catalog for cost/component/reference-range detail), meaning the core
+                   lab-ordering feature already depends on both models simultaneously.
+               (2) Lab order sets: LabOrderSet entity (lab-order-set.controller.ts) and the
+                   "enhanced" raw-SQL controller (lab-order-set-enhanced.controller.ts) map to
+                   the SAME lab_order_sets table (confirmed via @Entity('lab_order_sets')), but
+                   two SEPARATE, currently-live frontend modals depend on one side each --
+                   LabOrdersModal.tsx (basic, used in AppointmentActions.tsx,
+                   AdmittedPatientPage.tsx, DoctorDashboard.tsx) and EnhancedLabOrderModal.tsx
+                   (enhanced, used in DoctorDashboard.tsx) -- so a backend-only merge would
+                   silently break whichever modal loses its endpoint.
+Fix:           None applied -- both real items need a deliberate migration/consolidation
+               decision (which data model is canonical, how to backfill/reconcile the other,
+               and for item 2, which frontend modal to keep or how to merge their UX) rather
+               than a same-session code delete. Recommending a dedicated sprint for each,
+               scoped as: (1) reconcile LabTest vs lab_test_catalog into one model, migrate
+               lab-order.service.ts's two data-access paths onto it; (2) pick one lab-order-set
+               implementation as canonical, migrate the losing frontend modal's callers onto it,
+               then delete the other controller/service pair.
+Actual result: 7 pairs cleared with no action needed (verified not duplicates). 2 pairs
+               confirmed as real architectural debt and logged here as backlog items rather
+               than risk a broken feature this close to launch.
+Status:        Investigated -> 7/9 not duplicates (no action) -> 2/9 real debt, deferred
+               (documented, not fixed).
+Bug ref (deferred, not yet fixed):
+               services/ehr-service/src/controllers/lab-test.controller.ts,
+               services/ehr-service/src/controllers/lab-test-catalog.controller.ts,
+               services/ehr-service/src/services/lab-order.service.ts,
+               services/ehr-service/src/controllers/lab-order-set.controller.ts,
+               services/ehr-service/src/controllers/lab-order-set-enhanced.controller.ts,
+               ehr-frontend/src/components/LabOrdersModal.tsx,
+               ehr-frontend/src/components/EnhancedLabOrderModal.tsx.
+```
+
+## Update to Step 4 Deliverables (cont. 30)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 90 | LabTest entity (lab_tests) and the raw-SQL lab_test_catalog/lab_test_components/lab_reference_ranges tables are two divergent data models for the same lab-test-catalog concept, and the live lab-ordering workflow (lab-order.service.ts) already reads from both simultaneously | **Data integrity (medium) -- fragmented catalog data model in the core ordering workflow, needs a reconciliation migration, not a quick fix** | Deferred -- backlog |
+| 91 | LabOrderSet entity and the "enhanced" lab-order-set controller both map to the same lab_order_sets table but are each depended on by a different, currently-live frontend modal (LabOrdersModal vs EnhancedLabOrderModal) | **Maintainability (low) -- duplicate backend access paths to one table, consolidation requires coordinated frontend + backend migration** | Deferred -- backlog |
