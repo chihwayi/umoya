@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   FileText, Check, XCircle, Clock, Download, Printer, Mail, Ban,
   User, Calendar, MapPin, Monitor, Shield
 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
@@ -210,9 +211,9 @@ const ConsentViewer: React.FC<ConsentViewerProps> = ({
 
       {/* Consent Content */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-8">
-        <div 
+        <div
           className="prose prose-slate prose-sm sm:prose-base max-w-none"
-          dangerouslySetInnerHTML={{ __html: consent.content }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(consent.content) }}
         />
       </div>
 

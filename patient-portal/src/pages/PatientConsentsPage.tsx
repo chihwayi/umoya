@@ -4,6 +4,7 @@ import {
   CheckCircle, XCircle, Clock, Download, AlertTriangle,
   Eye, Edit3, Calendar, Shield, ArrowLeft
 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientPortalApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
@@ -348,7 +349,7 @@ const PatientConsentsPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-6">
               {/* Consent Content */}
               <div className="bg-gray-50 rounded-xl p-6 mb-6">
-                <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: selectedConsent.content }} />
+                <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedConsent.content) }} />
               </div>
 
               {/* Signature Section (only for pending) */}

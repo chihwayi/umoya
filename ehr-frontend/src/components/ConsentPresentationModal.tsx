@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, User, Calendar, CheckCircle, XCircle, X, Shield } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { useNotification } from './GlobalNotification';
 import SignaturePad from './SignaturePad';
 import ICD10Picker from './ICD10Picker';
@@ -181,9 +182,9 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
               {/* Consent Content */}
               <div className="bg-white border border-slate-200 rounded-lg p-6">
                 <h4 className="text-lg font-bold text-slate-900 mb-4">{template.title}</h4>
-                <div 
+                <div
                   className="prose prose-sm max-w-none text-slate-700"
-                  dangerouslySetInnerHTML={{ __html: template.content }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(template.content) }}
                 />
               </div>
 

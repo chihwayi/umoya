@@ -187,12 +187,19 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
   const handlePrint = () => {
     const win = window.open('', '_blank', 'width=800,height=900');
     if (!win) return;
+    // tenant.clinicName/subdomain are interpolated straight into an HTML
+    // string below — escape them so a clinic name containing markup (e.g.
+    // `</title><script>...`) can't break out and execute in this print tab.
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const safeClinicName = escapeHtml(tenant.clinicName);
+    const safeSubdomain = escapeHtml(tenant.subdomain);
     win.document.write(`
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>${tenant.clinicName} — Umoya QR</title>
+  <title>${safeClinicName} — Umoya QR</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -290,8 +297,8 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
     <span></span>
     <img src="${qrUrl}" alt="QR Code" crossorigin="anonymous" />
   </div>
-  <div class="clinic-name">${tenant.clinicName}</div>
-  <div class="subdomain">${tenant.subdomain}.umoya.health</div>
+  <div class="clinic-name">${safeClinicName}</div>
+  <div class="subdomain">${safeSubdomain}.umoya.health</div>
   <div class="divider"></div>
   <div class="scan-hint">Scan to access this clinic on the Umoya app</div>
   <div class="steps-box">

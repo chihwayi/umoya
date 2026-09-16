@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Check, XCircle, Clock, AlertTriangle } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import SignaturePad from './SignaturePad';
@@ -235,9 +236,9 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
 
       {/* Consent Content */}
       <div className="bg-white rounded-xl border border-slate-200 p-8">
-        <div 
+        <div
           className="prose prose-slate max-w-none"
-          dangerouslySetInnerHTML={{ __html: renderedContent }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderedContent) }}
         />
       </div>
 

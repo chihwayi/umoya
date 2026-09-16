@@ -1,17 +1,6 @@
 module.exports = {
   webpack: {
-    configure: (webpackConfig, { env, paths }) => {
-      // Keep dev server responsive in Docker by skipping heavy TS type-check worker.
-      webpackConfig.plugins = (webpackConfig.plugins || []).filter(
-        (plugin) => plugin?.constructor?.name !== 'ForkTsCheckerWebpackPlugin',
-      );
-
-      // Enable top-level await support
-      webpackConfig.experiments = {
-        ...webpackConfig.experiments,
-        topLevelAwait: true,
-      };
-
+    configure: (webpackConfig, { env }) => {
       // Strip console.* calls from production bundles — CRA's default
       // Terser config does NOT do this, so error objects/response payloads
       // logged during development (some of which can include patient data)

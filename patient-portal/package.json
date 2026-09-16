@@ -9,21 +9,23 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
+    "@types/dompurify": "^3.0.5",
     "@types/jest": "^27.5.2",
     "@types/node": "^16.18.126",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.22",
     "axios": "^1.13.2",
+    "date-fns": "^4.1.0",
+    "dompurify": "^3.4.15",
     "i18next": "^23.0.0",
     "i18next-browser-languagedetector": "^7.0.0",
     "i18next-http-backend": "^2.0.0",
-    "react-i18next": "^14.0.0",
-    "date-fns": "^4.1.0",
     "lucide-react": "^0.555.0",
     "postcss": "^8.5.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-i18next": "^14.0.0",
     "react-router-dom": "^7.9.6",
     "react-scripts": "5.0.1",
     "recharts": "^3.5.1",
@@ -33,7 +35,7 @@
   },
   "scripts": {
     "start": "PORT=3015 react-scripts start",
-    "build": "react-scripts build",
+    "build": "craco build",
     "test": "react-scripts test",
     "lint": "eslint \"src/**/*.{js,jsx,ts,tsx}\"",
     "eject": "react-scripts eject"
@@ -44,11 +46,14 @@
       "react-app/jest"
     ],
     "rules": {
-      "@typescript-eslint/no-unused-vars": ["warn", {
-        "argsIgnorePattern": "^_",
-        "varsIgnorePattern": "^_",
-        "caughtErrorsIgnorePattern": "^_"
-      }]
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          "argsIgnorePattern": "^_",
+          "varsIgnorePattern": "^_",
+          "caughtErrorsIgnorePattern": "^_"
+        }
+      ]
     }
   },
   "browserslist": {

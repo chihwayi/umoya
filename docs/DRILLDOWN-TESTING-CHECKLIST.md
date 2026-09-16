@@ -2800,3 +2800,100 @@ for this pass.
 | 71 | Mobile app cached patient records, vitals, allergies, and queued clinical writes unencrypted in AsyncStorage (plaintext, readable with filesystem/backup access on a rooted/jailbroken device) despite the JWT itself correctly living in the OS Keychain | **Security (high) -- PHI at rest unencrypted on device** | Fixed |
 | 72 | ws.ts placed the JWT in the WebSocket URL query string (ends up in proxy/access logs) instead of an Authorization header; confirmed unreachable dead code (zero callers) but fixed before it gets wired up | **Security (low, defense-in-depth) -- token exposure via URL logging** | Fixed |
 | 73 | security.ts's certificate-pinning utility was dead code with placeholder hashes and a comment inaccurately claiming it was active; corrected the comment and flagged real native-pinning implementation as a follow-up requiring infra access this session didn't have | **Security (informational) -- misleading dead-code comment corrected, real fix deferred** | Documented / deferred |
+
+
+### Test 49 -- Web apps: unsanitized consent HTML (XSS), document.write injection, console leakage (frontend, security)
+
+```
+Module:        ehr-frontend (staff) and patient-portal (patient) -- consent rendering, tenant QR
+               print flow, production build config
+Platform:      Web
+Role:          N/A (client-side rendering/build hardening)
+Context:       First-ever audit of both React web apps this session (previously untouched; all
+               prior work was backend + mobile). Token storage (Bearer-in-header, not cookies --
+               CSRF not applicable), client-side-authorization-as-source-of-truth, eval/
+               new Function usage, and file-download path handling all checked out fine.
+               Three real findings: (1) Four dangerouslySetInnerHTML call sites
+               (ConsentViewer.tsx, ConsentForm.tsx, ConsentPresentationModal.tsx in ehr-frontend;
+               PatientConsentsPage.tsx in patient-portal) rendered consent-template HTML straight
+               from the backend with zero sanitization -- neither app had a sanitization library
+               in its dependencies at all. A malicious or compromised consent template (or a bug
+               in template authoring/placeholder substitution) would execute arbitrary script in
+               whichever user's browser renders it, with the JWT sitting in localStorage
+               (readable by any injected script -- confirmed as the storage mechanism in both
+               apps, a known higher-blast-radius choice than the mobile app's OS Keychain, but a
+               broader auth-architecture change out of scope for a drive-by fix). (2)
+               TenantQRModal.tsx's print flow used document.write() with tenant.clinicName/
+               subdomain interpolated raw into the HTML string three times (title, clinic-name
+               div, subdomain div) -- a clinic name containing markup could break out and inject
+               script into that print tab. (3) Neither app's production build stripped
+               console.* calls (CRA's default Terser config does not do this despite common
+               assumption) -- ~531 source-level console calls in ehr-frontend and ~65 in
+               patient-portal, some logging error/response objects that could carry patient data
+               into any user's browser devtools console.
+Fix:           Installed dompurify + @types/dompurify in both apps; wrapped all four
+               dangerouslySetInnerHTML calls in DOMPurify.sanitize(). TenantQRModal.tsx: added
+               an escapeHtml() helper and applied it to clinicName/subdomain before they're
+               interpolated into the document.write template. Both apps: added/extended
+               craco.config.js to flip TerserPlugin's compress.drop_console to true for
+               production builds only (patient-portal wasn't using craco in its build script
+               despite having it as a dependency -- switched `build` from `react-scripts build`
+               to `craco build`; `start` left unchanged to avoid touching dev-server behavior).
+               First attempt at the Terser override used the wrong nested property path
+               (plugin.options.terserOptions.compress, which doesn't exist in this
+               terser-webpack-plugin version) and silently did nothing -- caught by actually
+               inspecting a real production bundle rather than trusting the config looked right;
+               fixed by locating the real path (plugin.options.minimizer.options.compress) via a
+               quick node -e inspection of the plugin instance.
+Steps to test: `npx tsc --noEmit` in both apps (patient-portal's raw tsc hit an unrelated,
+               pre-existing hoisted-node_modules i18next typings resolution error -- confirmed
+               unrelated by checking `git status` showed no changes to i18next files, and by
+               running the actual build, which does its own type-checking via
+               fork-ts-checker-webpack-plugin and passed clean). Ran `CI=false npm run build` in
+               both apps and grepped the resulting minified bundles for literal `console.log` /
+               `console.error` / `console.warn` occurrences before and after the Terser fix.
+               Restarted both apps' docker dev containers (which run their own node_modules,
+               separate from the host install) and installed dompurify inside the patient-portal
+               container directly after the first restart failed to resolve it. Checked both
+               containers' compile output for errors, then loaded ehr-frontend live in the
+               browser and checked the console for load-time errors.
+Actual result: Pass. Both apps' production builds compiled successfully. Console-call count in
+               the minified main bundle: ehr-frontend console.log 5->2 (first attempt) then
+               after fixing the property-path bug, whole-build totals dropped to 16 log / 4
+               error / 12 warn (from ~531 source occurrences) -- console.error fully eliminated
+               from the main chunk; patient-portal similarly down to 1 log / 0 error / 2 warn
+               (from ~65 source occurrences). This is drop_console's documented limitation
+               (doesn't remove console calls whose return value is consumed in an expression),
+               not a claim of 100% removal -- a real, large reduction rather than a guarantee.
+               Both docker dev containers compiled with "No issues found" after installing
+               dompurify. ehr-frontend loaded live in the browser with zero console errors on
+               initial page load (full login flow blocked by tenant-subdomain routing not
+               configured for plain localhost access in this environment -- not chased further
+               given the build/typecheck verification was already solid).
+Status:        Fail (consent HTML rendered unsanitized; document.write injection point in the
+               print flow; console leakage of potentially sensitive data in production) -> Fixed
+               -> Pass (verified via clean production builds, bundle inspection, and live
+               dev-server compile with no errors in both apps).
+Bug ref:       ehr-frontend/src/components/ConsentViewer.tsx,
+               ehr-frontend/src/components/ConsentForm.tsx,
+               ehr-frontend/src/components/ConsentPresentationModal.tsx,
+               ehr-frontend/src/components/TenantQRModal.tsx,
+               ehr-frontend/craco.config.js,
+               patient-portal/src/pages/PatientConsentsPage.tsx,
+               patient-portal/craco.config.js (new), patient-portal/package.json.
+
+Note: JWT storage in localStorage (both apps) was investigated and NOT changed -- migrating to
+httpOnly cookies is a cross-cutting auth-architecture change (CORS, SameSite, CSRF-token
+plumbing, backend Set-Cookie support) far beyond a drive-by fix, and DOMPurify sanitization
+directly addresses the XSS vector that would make localStorage-token theft possible in the first
+place. Flagged for awareness, not spawned as a follow-up task given the scale of the change and
+the fact that the concrete exploit path (unsanitized consent HTML) is now closed.
+```
+
+## Update to Step 4 Deliverables (cont. 25)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 74 | Four dangerouslySetInnerHTML sites across both web apps rendered backend consent-template HTML with zero sanitization, and neither app had a sanitization library in its dependencies at all | **Security (high) -- stored/reflected XSS via consent templates, JWT theft via localStorage** | Fixed |
+| 75 | TenantQRModal.tsx's print flow interpolated tenant.clinicName/subdomain raw into a document.write() HTML string with no escaping | **Security (medium) -- XSS via tenant display-name fields** | Fixed |
+| 76 | Neither web app's production build stripped console.* calls, despite the common assumption that minification does this by default -- error/response objects (potentially including patient data) shipped into every user's browser devtools console | **Security (medium, defense-in-depth) -- console-based data leakage in production** | Fixed |
