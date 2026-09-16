@@ -1180,7 +1180,10 @@ export const PatientHealthScreen: React.FC = () => {
         {tab === "imaging"   && <ImagingTab patientId={user?.patientMrn ?? user?.id ?? ""} />}
         {tab === "services"  && <ServicesTab />}
         {tab === "documents" && <DocumentsTab docs={docs} loading={loading} />}
-        {tab === "wellbeing" && <WellbeingTab patientId={user?.patientMrn ?? user?.id ?? ""} />}
+        {/* /cultural/summary/:patientId is looked up by the real patient UUID,
+            not the human-readable MRN — unlike the imaging/conditions/allergies
+            calls above, which only use patientId as an existence gate. */}
+        {tab === "wellbeing" && <WellbeingTab patientId={user?.id ?? ""} />}
       </View>
     </View>
   );

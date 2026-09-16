@@ -1,47 +1,56 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { io, Socket } from 'socket.io-client';
+import * as SecureStore from 'expo-secure-store';
 import { api } from '../services/api';
 import { C, FONT, RADIUS, SHADOW } from '../design/tokens';
+import { useAuthStore } from '../stores/useAuthStore';
 
 const EHR_WS_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/api$/, '');
 
-interface Props {
-  patientId: string;
-}
-
-export default function QueueStatusScreen({ patientId }: Props) {
+export default function QueueStatusScreen() {
+  const { user } = useAuthStore();
+  // clinic_queue.patient_id is the real UUID FK, not the human-readable MRN.
+  const patientId = user?.id ?? '';
   const [entry, setEntry] = useState<any | null>(null);
   const [yourTurn, setYourTurn] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    let socket: Socket | null = null;
+    let cancelled = false;
+
     // Load initial state via REST in case WS is slow
     api.get(`/queue/patient/${patientId}`).then((r: any) => {
       if (r?.data) setEntry(r.data);
     }).catch(() => {});
 
-    const socket: Socket = io(`${EHR_WS_URL}/queue`, { transports: ['websocket'] });
+    (async () => {
+      const token = await SecureStore.getItemAsync('umoya_jwt');
+      if (cancelled || !token) return;
 
-    socket.on('connect', () => {
-      socket.emit('subscribe', { patientId });
-    });
+      socket = io(`${EHR_WS_URL}/queue`, { transports: ['websocket'], auth: { token } });
 
-    socket.on('queue_update', (data: any) => {
-      setEntry(data);
-    });
+      socket.on('connect', () => {
+        socket!.emit('subscribe', { patientId });
+      });
 
-    socket.on('your_turn', () => {
-      setYourTurn(true);
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.08, duration: 400, useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 1, duration: 400, useNativeDriver: true }),
-        ]),
-      ).start();
-    });
+      socket.on('queue_update', (data: any) => {
+        setEntry(data);
+      });
 
-    return () => { socket.disconnect(); };
+      socket.on('your_turn', () => {
+        setYourTurn(true);
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(pulse, { toValue: 1.08, duration: 400, useNativeDriver: true }),
+            Animated.timing(pulse, { toValue: 1, duration: 400, useNativeDriver: true }),
+          ]),
+        ).start();
+      });
+    })();
+
+    return () => { cancelled = true; socket?.disconnect(); };
   }, [patientId]);
 
   if (yourTurn) {

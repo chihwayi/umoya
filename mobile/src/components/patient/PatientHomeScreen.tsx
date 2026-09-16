@@ -22,6 +22,7 @@ export function PatientHomeScreen({ navigation }: Props) {
     { label: t("nav.bills"),         route: "PHBills",        icon: "wallet"   as const, accent: C.amber,  inTabs: true  },
     { label: t("nav.messages"),      route: "PHMessages",     icon: "chat"     as const, accent: C.teal,   inTabs: false },
     { label: t("nav.education"),     route: "PHEducation",    icon: "book"     as const, accent: C.green,  inTabs: false },
+    { label: t("nav.queueStatus"),   route: "PHQueueStatus",  icon: "clock"    as const, accent: C.blue,   inTabs: false },
   ];
 
   const goTo = (route: string, inTabs: boolean) => {

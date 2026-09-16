@@ -72,6 +72,7 @@ import { PatientQuestionnaireDetailScreen } from "../components/patient/PatientQ
 import { PatientEducationScreen } from "../components/patient/PatientEducationScreen";
 import { EducationCourseScreen } from "../components/patient/EducationCourseScreen";
 import { PatientFamilyAccessScreen } from "../components/patient/PatientFamilyAccessScreen";
+import QueueStatusScreen from "../screens/QueueStatusScreen";
 
 import ReportsNavigator from "./ReportsNavigator";
 
@@ -229,6 +230,7 @@ const PatientStackNavigator = () => (
     <PatientStack.Screen name="PHEducation" component={PatientEducationScreen} />
     <PatientStack.Screen name="PHEducationCourse" component={EducationCourseScreen} options={{ headerShown: false }} />
     <PatientStack.Screen name="PHFamilyAccess" component={PatientFamilyAccessScreen} />
+    <PatientStack.Screen name="PHQueueStatus" component={QueueStatusScreen} options={{ title: 'Queue Status' }} />
     <PatientStack.Screen name="GrowthMeasurement" component={GrowthMeasurementScreen as any} options={{ title: 'Growth Measurement' }} />
     <PatientStack.Screen name="MmdSchedule" component={MmdScheduleScreen as any} options={{ title: 'MMD Schedule' }} />
     <PatientStack.Screen name="AccountSettings" component={AccountSettingsScreen} />
