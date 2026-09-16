@@ -223,7 +223,7 @@ export class ProviderMessagingController {
 
   // Add Attachment
   @Post(':id/attachments')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024 } }))
   async addAttachment(
     @Param('id') messageId: string,
     @UploadedFile() file: any,

@@ -23,7 +23,7 @@ export class KnowledgeController {
   @Post('documents')
   @UseGuards(RolesGuard)
   @Roles('admin', 'doctor', 'senior_clinician')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024 } }))
   @ApiOperation({ summary: 'Upload and ingest a clinical knowledge document' })
   async uploadDocument(
     @UploadedFile() file: Express.Multer.File,

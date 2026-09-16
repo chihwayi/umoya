@@ -38,7 +38,7 @@ export class RegistrationAiController {
    * Returns: { memberId, groupNumber, planName, payerName, confidence }
    */
   @Post('ocr-insurance-card')
-  @UseInterceptors(FileInterceptor('card'))
+  @UseInterceptors(FileInterceptor('card', { limits: { fileSize: 8 * 1024 * 1024 } }))
   async ocrInsuranceCard(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { sessionToken?: string },

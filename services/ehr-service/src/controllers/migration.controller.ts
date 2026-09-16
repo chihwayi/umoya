@@ -81,7 +81,7 @@ export class MigrationController {
       required: ['file'],
     },
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }))
   async uploadPatients(@UploadedFile() file: Express.Multer.File): Promise<MigrationJob> {
     if (!file) {
       throw new BadRequestException('CSV file is required');

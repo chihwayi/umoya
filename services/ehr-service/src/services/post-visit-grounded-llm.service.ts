@@ -668,9 +668,12 @@ export class PostVisitGroundedLlmService {
   ) {
     const promptText = messages.map((message) => `${message.role}:${message.content}`).join('\n');
     const promptHash = createHash('sha256').update(promptText).digest('hex');
+    // Tenant-scoped: two tenants issuing an identical prompt must never see
+    // each other's cached medical response (diagnoses, recommendations).
+    const cacheKey = `${options?.tenantId || 'no-tenant'}:${promptHash}`;
 
     // 1. Check cache
-    const cached = this.responseCache.get(promptHash);
+    const cached = this.responseCache.get(cacheKey);
     if (cached) {
       this.logger.debug(`LLM cache hit for prompt ${promptHash.substring(0, 8)}`);
       return { ...cached, source: 'cache' as const };
@@ -725,7 +728,7 @@ export class PostVisitGroundedLlmService {
       };
 
       this.circuitBreaker.recordSuccess();
-      this.responseCache.set(promptHash, result);
+      this.responseCache.set(cacheKey, result);
       return { ...result, source: 'llm' as const };
     } catch (error: any) {
       this.circuitBreaker.recordFailure();

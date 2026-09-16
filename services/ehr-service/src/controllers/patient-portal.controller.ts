@@ -2625,7 +2625,7 @@ export class PatientPortalController {
   @Post('voice-transcribe')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Transcribe audio to text for patient portal voice input' })
-  @UseInterceptors(FileInterceptor('audio'))
+  @UseInterceptors(FileInterceptor('audio', { limits: { fileSize: 25 * 1024 * 1024 } }))
   async voiceTranscribe(
     @UploadedFile() file: Express.Multer.File,
     @Body('context') context: string,

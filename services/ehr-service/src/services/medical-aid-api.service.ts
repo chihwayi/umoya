@@ -299,7 +299,12 @@ export class MedicalAidApiService {
     config: MedicalAidApiConfig,
     tenantDb: DataSource,
   ): Promise<AxiosInstance> {
-    const cacheKey = `${config.medicalAidName}_${config.providerType}`;
+    // Each tenant has its own physical database, so the database name is a
+    // stable per-tenant discriminator — without it, two tenants configuring
+    // the same medical-aid provider would share cached Axios clients and
+    // auth tokens, using one tenant's credentials for another's API calls.
+    const tenantKey = (tenantDb.options as any).database;
+    const cacheKey = `${tenantKey}:${config.medicalAidName}_${config.providerType}`;
 
     // Check if client exists and is still valid
     if (this.apiClients.has(cacheKey)) {
@@ -338,6 +343,7 @@ export class MedicalAidApiService {
     config: MedicalAidApiConfig,
     tenantDb: DataSource,
   ): Promise<void> {
+    const tenantKey = (tenantDb.options as any).database;
     switch (config.authenticationType) {
       case 'api_key':
         if (config.apiKey) {
@@ -381,7 +387,7 @@ export class MedicalAidApiService {
           client.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
 
           // Cache token
-          this.authTokens.set(`${config.medicalAidName}_${config.providerType}`, {
+          this.authTokens.set(`${tenantKey}:${config.medicalAidName}_${config.providerType}`, {
             token: accessToken,
             expiresAt: new Date(Date.now() + expiresIn * 1000),
           });

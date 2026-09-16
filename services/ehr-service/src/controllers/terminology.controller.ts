@@ -43,7 +43,7 @@ export class TerminologyController {
     },
   })
   @ApiResponse({ status: 201, description: 'Import job started' })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 200 * 1024 * 1024 } }))
   async importTerminology(
     @UploadedFile() file: Express.Multer.File,
     @Body('type') type: 'snomed' | 'icd10',

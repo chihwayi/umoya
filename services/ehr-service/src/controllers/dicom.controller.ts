@@ -113,7 +113,7 @@ export class DicomController {
    * Upload a DICOM file for an order.
    */
   @Post(':orderId/upload-dicom')
-  @UseInterceptors(FileInterceptor('dicom'))
+  @UseInterceptors(FileInterceptor('dicom', { limits: { fileSize: 100 * 1024 * 1024 } }))
   async uploadDicom(
     @Param('orderId') orderId: string,
     @UploadedFile() file: Express.Multer.File,

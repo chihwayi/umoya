@@ -3212,3 +3212,93 @@ Bug ref:       services/ehr-service/src/gateways/ws-auth.util.ts (new),
 |---|---|---|---|
 | 85 | All 6 WebSocket gateways accepted unauthenticated connections with zero JWT verification, trusting client-supplied userId/role/patientId from message payloads for room addressing and impersonation-prone actions (telemedicine tele:join, inbox subscriptions, queue nurse broadcasts) | **Security (critical) -- unauthenticated real-time PHI access and identity spoofing over WebSocket** | Fixed |
 | 86 | AmbientGateway resolved the tenant database directly from a client-supplied `tenantId` in every message payload (start/chunk/pause/resume/action/end), and ambient:action performed a real unauthenticated DB write faking a clinician's accept/dismiss decision on an AI-suggested order or diagnosis for any tenant | **Security (critical) -- unauthenticated cross-tenant database read/write via WebSocket** | Fixed |
+
+### Test 53 -- Multi-tenant shared-infrastructure isolation + missing file-upload size limits (backend, security)
+
+```
+Module:        post-visit-grounded-llm.service.ts (LLM response cache), medical-aid-api.service.ts
+               (Axios client/auth-token cache), 8 controllers using FileInterceptor with no
+               fileSize limit
+Platform:      Backend
+Role:          N/A (cross-tenant data isolation + resource-exhaustion)
+Context:       Follow-up to the WebSocket gateway sweep (Test 52) -- while gateways are the
+               obvious place client-supplied tenantId gets trusted, in-memory Maps used as
+               caches are a quieter place the same class of bug hides, since they live for the
+               life of the process and are shared across every tenant's requests handled by
+               that instance. Confirmed no Redis usage anywhere in the codebase (@InjectRedis/
+               redis.set/CacheModule all absent), so this was specifically about in-process Map
+               caches.
+               Found: (1) CRITICAL -- post-visit-grounded-llm.service.ts's responseCache keyed
+               purely by SHA256(prompt), with no tenant component. Two tenants issuing an
+               identical prompt (a common case for templated clinical prompts -- e.g. a standard
+               post-visit summary template with similar patient data) would get served each
+               other's cached LLM output, including diagnoses and clinical recommendations.
+               (2) medical-aid-api.service.ts's apiClients/authTokens Maps keyed only by
+               `${medicalAidName}_${providerType}` (e.g. "cimas_claims"), with no tenant
+               component. Two tenants both configuring "cimas" would share the same cached
+               Axios client instance and OAuth2 bearer token -- one tenant's calls could
+               silently use another tenant's medical-aid API credentials.
+               (3) 8 controllers (registration-ai, patient-portal voice-transcribe,
+               registration-intelligence, migration, terminology, knowledge, dicom,
+               provider-messaging) used FileInterceptor with no `limits.fileSize`, meaning any
+               authenticated user could upload an unbounded-size file and exhaust memory/disk
+               (Multer's default in-memory storage holds the whole buffer).
+Fix:           (1) LLM cache key changed from `promptHash` to `${tenantId}:${promptHash}` (both
+               the read in requestJsonCompletion's cache-check and the write after a fresh LLM
+               call use the new key; tenantId already flowed through options.tenantId at every
+               call site, so no caller signature changes needed).
+               (2) Medical-aid cache keys changed from `${medicalAidName}_${providerType}` to
+               `${tenantDb.options.database}:${medicalAidName}_${providerType}` in both
+               getAuthenticatedClient (client cache) and authenticateClient (OAuth2 token
+               cache) -- used the tenant's physical database name off the DataSource itself
+               rather than threading a new tenantId parameter through 4 public methods and
+               their callers, since each tenant already has a dedicated physical database and
+               that name is a stable, already-available per-tenant discriminator.
+               (3) Added `limits: { fileSize: N }` to all 8 FileInterceptor calls, sized to the
+               content type: 8MB for card/document images (registration-ai, registration-
+               intelligence), 25MB for audio/attachments/knowledge PDFs (patient-portal voice-
+               transcribe, knowledge, provider-messaging), 50MB for bulk patient CSV migration,
+               100MB for DICOM imaging, 200MB for SNOMED/ICD terminology bulk imports.
+               Also reviewed document.controller.ts (flagged by the audit for a `file.filename`
+               reference) -- confirmed it already runs every upload through
+               UploadSecurityService.assertCleanUpload() (a real clamscan-based malware scanner,
+               fail-closed by default, opt-in via EHR_MALWARE_SCAN_ENABLED) before persisting,
+               and the flagged filename comes from Multer's own file object, not directly from
+               user input, so no path-traversal risk there. Not addressed in this pass: no
+               magic-byte (file-content) validation exists anywhere in the codebase --
+               MIME/extension checks (where present, e.g. cdss.controller.ts's image-analysis
+               allowlist) remain spoofable by a client that lies about Content-Type. Left as a
+               known gap since it would require adding a new dependency; flagged for a future
+               pass rather than rushed in.
+Verification:  npx tsc --noEmit clean. Restarted umoya-ehr-service; confirmed no new errors in
+               docker logs (the one ERROR present -- HipaaAuditService failing on a
+               tenant-less /health request -- is pre-existing and unrelated to this change).
+               Logged in as admin@e2e-clinic.com and POSTed a 9MB file to
+               /api/registration-intelligence/documents/extract (8MB limit) -- got HTTP 413
+               "File too large". POSTed a 1KB file to the same endpoint -- passed the size gate
+               and reached normal downstream validation (400 on empty/garbage buffer content,
+               not a size rejection), confirming the limit only blocks oversized uploads.
+Actual result: Pass on all checks. LLM cache and medical-aid client cache are now tenant-scoped;
+               all 8 previously-unbounded upload endpoints reject oversized files with 413;
+               normal-sized uploads unaffected.
+Status:        Fail (cross-tenant LLM response cache and medical-aid API credential cache
+               collisions; 8 unbounded file-upload endpoints) -> Fixed -> Pass (verified live).
+Bug ref:       services/ehr-service/src/services/post-visit-grounded-llm.service.ts,
+               services/ehr-service/src/services/medical-aid-api.service.ts,
+               services/ehr-service/src/controllers/registration-ai.controller.ts,
+               services/ehr-service/src/controllers/patient-portal.controller.ts,
+               services/ehr-service/src/controllers/registration-intelligence.controller.ts,
+               services/ehr-service/src/controllers/migration.controller.ts,
+               services/ehr-service/src/controllers/terminology.controller.ts,
+               services/ehr-service/src/controllers/knowledge.controller.ts,
+               services/ehr-service/src/controllers/dicom.controller.ts,
+               services/ehr-service/src/controllers/provider-messaging.controller.ts.
+```
+
+## Update to Step 4 Deliverables (cont. 29)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 87 | post-visit-grounded-llm.service.ts's LLM response cache was keyed only by SHA256(prompt), with no tenant component -- identical prompts from different tenants could return each other's cached diagnoses/recommendations | **Security (critical) -- cross-tenant clinical data leak via shared in-memory cache** | Fixed |
+| 88 | medical-aid-api.service.ts's Axios client and OAuth2 token caches were keyed only by medicalAidName_providerType, with no tenant component -- two tenants configuring the same medical-aid provider could share cached credentials | **Security (high) -- cross-tenant credential reuse for external medical-aid API calls** | Fixed |
+| 89 | 8 file-upload controllers (registration-ai, patient-portal voice, registration-intelligence, migration, terminology, knowledge, dicom, provider-messaging) had no Multer fileSize limit, allowing unbounded-size uploads | **Reliability (medium) -- unauthenticated-scale memory/disk exhaustion via unbounded file upload** | Fixed |

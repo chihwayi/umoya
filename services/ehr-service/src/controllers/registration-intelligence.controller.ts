@@ -79,7 +79,7 @@ export class RegistrationIntelligenceController {
       required: ['file'],
     },
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 8 * 1024 * 1024 } }))
   async extractDocument(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: any,
