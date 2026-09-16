@@ -2713,3 +2713,90 @@ Bug ref:       services/cdss-service/main.py.
 | # | Bug | Severity | Status |
 |---|---|---|---|
 | 70 | CDSS's CDSS_REQUIRE_SERVICE_AUTH had no non-dev-environment enforcement (unlike every other security switch in the same startup validator) -- a production deployment that omitted the env var would silently run all clinical endpoints unauthenticated; MinIO and master-DB connections also had weak hardcoded credential fallbacks inconsistent with a fix already applied to a sibling function in the same file | **Security (medium, defense-in-depth) -- fail-open auth default + inconsistent credential hardening** | Fixed |
+
+
+### Test 48 -- Mobile app: PHI cached in plaintext on device + WS token in URL (mobile, security)
+
+```
+Module:        Mobile app (React Native) -- offline cache, offline write queue, allergy safety
+               cache, WebSocket client, certificate-pinning utility
+Platform:      Mobile
+Role:          N/A (client-side data-at-rest protection)
+Context:       First-ever audit of the mobile app this session (previously untouched; all prior
+               work was backend). Auth token storage, TLS defaults, API-client auth headers,
+               logout, and deep-link handling all checked out fine (JWT already in
+               expo-secure-store/OS Keychain, not AsyncStorage; every authenticated request
+               correctly attaches the token; logout clears both the token and cached offline
+               data; no custom URL-scheme handlers to audit).
+               Three real findings: (1) offlineCache.ts (every GET response, 6-hour TTL --
+               patient records, vitals, labs, imaging, messages), offlineAllergySafety.ts
+               (patient allergy lists, used for point-of-care drug-safety blocking), and
+               offlineQueue.ts (queued POST/PATCH bodies -- prescriptions, vitals entered
+               offline) all wrote PHI to AsyncStorage in plaintext -- readable by anything with
+               filesystem or backup access (rooted/jailbroken device, iOS Finder backup
+               extraction), no encryption at rest despite the JWT itself correctly living in the
+               OS Keychain. (2) ws.ts put the JWT directly in the WebSocket URL as a query
+               parameter -- URLs end up in proxy access logs, browser/devtools history, and
+               crash reports, unlike an Authorization header. Confirmed this specific file has
+               zero callers anywhere in the app (dead code, not currently reachable) but fixed
+               it cheaply before it gets wired up. (3) security.ts's CERT_PINS/validatePin were
+               dead code with placeholder hash values and a comment inaccurately claiming they
+               were "consumed by the axios TLS adapter" -- investigated and confirmed this is
+               architecturally impossible as written: RN's networking goes through the native
+               TLS stack, so a JS response interceptor never has access to a certificate's SPKI
+               hash to check. Real pinning needs a native library + the actual production
+               certificate hash, neither available in this session -- corrected the misleading
+               comment and spawned a follow-up task rather than fake-implementing something that
+               would create false confidence.
+Fix:           Added secureLocalStorage.ts: an AES-encrypted drop-in replacement for
+               AsyncStorage.setItem/getItem, backed by a random 256-bit key generated via
+               expo-crypto's getRandomBytesAsync and stored in expo-secure-store (OS
+               Keychain/Keystore) -- the same trust boundary already used correctly for the JWT.
+               Rewired offlineCache.ts, offlineAllergySafety.ts, and offlineQueue.ts to go
+               through it instead of raw AsyncStorage. Added crypto-js (pure JS, no native
+               rebuild) and expo-crypto (via `expo install` for SDK-compatible versioning) as
+               dependencies. ws.ts: moved the JWT from the URL query string to a Bearer
+               Authorization header via React Native's WebSocket options.headers extension (a
+               non-standard third constructor argument not in the browser WebSocket spec, hence
+               the TypeScript cast). security.ts: corrected the misleading comment; left
+               CERT_PINS/validatePin in place as a target for a future native pinning
+               integration, explicitly marked as currently non-functional.
+Steps to test: Updated offlineQueue.spec.ts's existing jest suite to mock expo-secure-store and
+               expo-crypto (previously only AsyncStorage was mocked) so the "legacy queue item"
+               test -- which seeds a raw plaintext item to simulate an old app version's queue
+               format -- now seeds it as ciphertext via the same encryptForStorage() helper the
+               real code uses, matching what readQueue() now expects to decrypt. Ran the full
+               jest suite and `npx tsc --noEmit` across the whole mobile app.
+Actual result: Pass. All 5 offlineQueue tests pass (enqueue/loadAll/retry-backoff/legacy-upgrade
+               round-trip correctly through the encrypted path). Full suite: 3 suites, 13 tests,
+               all green. Zero new TypeScript errors in any file touched (offlineCache.ts,
+               offlineAllergySafety.ts, offlineQueue.ts, offlineQueue.spec.ts, ws.ts,
+               security.ts, secureLocalStorage.ts) -- confirmed via targeted grep against the
+               full tsc output, which still shows 3 pre-existing, unrelated errors in
+               DoctorRoundsScreen.tsx (not a file this fix touched).
+Status:        Fail (patient records, vitals, allergies, and queued clinical writes sat
+               unencrypted on-device for hours; a JWT was placed in a URL) -> Fixed -> Pass
+               (verified via full test suite + typecheck; no device/simulator build available
+               in this session to verify at the native layer, noted as a gap).
+Bug ref:       mobile/src/services/secureLocalStorage.ts (new),
+               mobile/src/services/offlineCache.ts,
+               mobile/src/services/offlineAllergySafety.ts,
+               mobile/src/services/offlineQueue.ts,
+               mobile/src/services/offlineQueue.spec.ts,
+               mobile/src/services/ws.ts,
+               mobile/src/utils/security.ts.
+
+Note: real native-layer certificate pinning was NOT implemented (spawned as a separate follow-up
+task requiring the actual production certificate's SPKI hash and a native pinning library
+decision, neither available here). Also not independently verified on a real device/simulator
+build -- only `npx tsc --noEmit` and `npx jest` were run; a full Expo/EAS build was out of scope
+for this pass.
+```
+
+## Update to Step 4 Deliverables (cont. 24)
+
+| # | Bug | Severity | Status |
+|---|---|---|---|
+| 71 | Mobile app cached patient records, vitals, allergies, and queued clinical writes unencrypted in AsyncStorage (plaintext, readable with filesystem/backup access on a rooted/jailbroken device) despite the JWT itself correctly living in the OS Keychain | **Security (high) -- PHI at rest unencrypted on device** | Fixed |
+| 72 | ws.ts placed the JWT in the WebSocket URL query string (ends up in proxy/access logs) instead of an Authorization header; confirmed unreachable dead code (zero callers) but fixed before it gets wired up | **Security (low, defense-in-depth) -- token exposure via URL logging** | Fixed |
+| 73 | security.ts's certificate-pinning utility was dead code with placeholder hashes and a comment inaccurately claiming it was active; corrected the comment and flagged real native-pinning implementation as a follow-up requiring infra access this session didn't have | **Security (informational) -- misleading dead-code comment corrected, real fix deferred** | Documented / deferred |

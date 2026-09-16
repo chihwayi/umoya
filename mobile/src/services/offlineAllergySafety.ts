@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SecureLocalStorage } from './secureLocalStorage';
 
 interface CachedAllergy {
   allergen: string;
@@ -12,7 +12,7 @@ export async function cacheAllergies(
   patientId: string,
   allergies: CachedAllergy[],
 ): Promise<void> {
-  await AsyncStorage.setItem(
+  await SecureLocalStorage.setItem(
     cacheKey(patientId),
     JSON.stringify({ allergies, at: Date.now() }),
   );
@@ -22,7 +22,7 @@ export async function checkAllergyBlock(
   patientId: string,
   drugName: string,
 ): Promise<{ blocked: boolean; reason: string }> {
-  const raw = await AsyncStorage.getItem(cacheKey(patientId));
+  const raw = await SecureLocalStorage.getItem(cacheKey(patientId));
 
   if (!raw) {
     return {

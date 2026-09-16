@@ -15,9 +15,20 @@ import { AppState, AppStateStatus, Platform } from 'react-native';
 // ─── Certificate pinning ──────────────────────────────────────────────────────
 
 /**
- * SHA-256 SPKI pins for api.umoya.app.
- * Both current cert and backup are pinned — rotate 60 days before expiry.
- * Consumed by the axios TLS adapter (native modules only; ignored in Expo Go).
+ * NOT CURRENTLY ENFORCED. SHA-256 SPKI pins for api.umoya.app, intended for
+ * certificate pinning — but nothing calls validatePin() anywhere in the app,
+ * and the values below are placeholders, not real certificate hashes.
+ *
+ * This can't be wired up from a plain axios/fetch response interceptor the
+ * way the (removed) comment here used to claim: React Native's networking
+ * goes through the platform's native TLS stack (NSURLSession on iOS, OkHttp
+ * on Android), and a JS-level interceptor never sees the server's
+ * certificate or its SPKI hash — there's nothing for validatePin() to be
+ * called WITH. Actual pinning needs a native-level integration (e.g.
+ * react-native-ssl-pinning, or OkHttp/NSURLSession pinning config) plus the
+ * real production certificate's SPKI hash, not a JS response check. Left in
+ * place as the target pin list for when that native integration is added —
+ * do not treat its mere presence as pinning already being active.
  */
 export const CERT_PINS: Record<string, string[]> = {
   'api.umoya.app': [
@@ -29,10 +40,7 @@ export const CERT_PINS: Record<string, string[]> = {
   ],
 };
 
-/**
- * Validate that a response came from a pinned host.
- * Call this from the axios response interceptor on production builds.
- */
+/** Unused until real pinning is wired up natively — see CERT_PINS comment. */
 export const validatePin = (host: string, receivedPin: string): boolean => {
   const pins = CERT_PINS[host];
   if (!pins) return false; // unknown host → reject

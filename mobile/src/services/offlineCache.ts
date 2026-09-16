@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SecureLocalStorage } from './secureLocalStorage';
 
 const PREFIX = 'offline_cache_';
 const TTL_MS = 6 * 60 * 60 * 1000; // 6 hours — cover a full ward shift
@@ -16,7 +16,7 @@ export const OfflineCache = {
   async save(url: string, data: unknown): Promise<void> {
     try {
       const entry: CacheEntry = { data, savedAt: Date.now() };
-      await AsyncStorage.setItem(cacheKey(url), JSON.stringify(entry));
+      await SecureLocalStorage.setItem(cacheKey(url), JSON.stringify(entry));
     } catch {
       // AsyncStorage full — non-fatal, just don't cache
     }
@@ -24,11 +24,11 @@ export const OfflineCache = {
 
   async load<T = unknown>(url: string): Promise<CacheEntry<T> | null> {
     try {
-      const raw = await AsyncStorage.getItem(cacheKey(url));
+      const raw = await SecureLocalStorage.getItem(cacheKey(url));
       if (!raw) return null;
       const entry = JSON.parse(raw) as CacheEntry<T>;
       if (Date.now() - entry.savedAt > TTL_MS) {
-        await AsyncStorage.removeItem(cacheKey(url));
+        await SecureLocalStorage.removeItem(cacheKey(url));
         return null;
       }
       return entry;
@@ -39,9 +39,9 @@ export const OfflineCache = {
 
   async clearAll(): Promise<void> {
     try {
-      const keys = await AsyncStorage.getAllKeys();
+      const keys = await SecureLocalStorage.getAllKeys();
       const toRemove = (keys as string[]).filter((k) => k.startsWith(PREFIX));
-      if (toRemove.length > 0) await AsyncStorage.multiRemove(toRemove);
+      if (toRemove.length > 0) await SecureLocalStorage.multiRemove(toRemove);
     } catch {
       // best effort
     }

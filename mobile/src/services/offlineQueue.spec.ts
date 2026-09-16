@@ -17,7 +17,32 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
+// offlineQueue now stores through SecureLocalStorage, which encrypts with a
+// key held in SecureStore — mock both so the queue tests exercise the same
+// AsyncStorage-backed mockMemory as before, just through the encrypted path.
+const mockSecureStore = new Map<string, string>();
+jest.mock('expo-secure-store', () => ({
+  __esModule: true,
+  getItemAsync: jest.fn(async (key: string) => mockSecureStore.get(key) ?? null),
+  setItemAsync: jest.fn(async (key: string, value: string) => {
+    mockSecureStore.set(key, value);
+  }),
+  deleteItemAsync: jest.fn(async (key: string) => {
+    mockSecureStore.delete(key);
+  }),
+}));
+
+jest.mock('expo-crypto', () => ({
+  __esModule: true,
+  getRandomBytesAsync: jest.fn(async (count: number) => {
+    const bytes = new Uint8Array(count);
+    for (let i = 0; i < count; i++) bytes[i] = Math.floor(Math.random() * 256);
+    return bytes;
+  }),
+}));
+
 import { OfflineQueue } from './offlineQueue';
+import { encryptForStorage } from './secureLocalStorage';
 
 describe('OfflineQueue (S225 load-shedding hardening)', () => {
   beforeEach(async () => {
@@ -83,10 +108,14 @@ describe('OfflineQueue (S225 load-shedding hardening)', () => {
   });
 
   it('upgrades pre-S225 queue items missing idempotency/retry fields', async () => {
-    mockMemory.set(
-      'offline_write_queue',
-      JSON.stringify([{ id: 'legacy1', endpoint: '/vitals', method: 'POST', body: {}, queuedAt: 1, label: 'old' }]),
-    );
+    // Legacy items predate the encrypted-storage migration too, but they were
+    // still written through AsyncStorage.setItem directly (not through
+    // SecureLocalStorage), so seed the mock as ciphertext to match what
+    // readQueue() now expects to decrypt.
+    const legacyPlaintext = JSON.stringify([
+      { id: 'legacy1', endpoint: '/vitals', method: 'POST', body: {}, queuedAt: 1, label: 'old' },
+    ]);
+    mockMemory.set('offline_write_queue', await encryptForStorage(legacyPlaintext));
     const [item] = await OfflineQueue.loadAll();
     expect(item.clientOpId).toBeTruthy();
     expect(item.attempts).toBe(0);

@@ -25,9 +25,21 @@ export function createWsClient(
     ]);
     const tenant = tenantRaw ? JSON.parse(tenantRaw) : null;
     const slug = tenant?.slug ?? '';
-    const url = `${wsBase}${path}?tenant=${slug}&token=${jwt ?? ''}`;
+    const url = `${wsBase}${path}?tenant=${slug}`;
 
-    ws = new WebSocket(url);
+    // The JWT goes in a header, not the URL — query strings end up in proxy
+    // access logs, browser/devtools history, and crash reports. React
+    // Native's WebSocket accepts a non-standard third `options.headers`
+    // argument (not part of the browser WebSocket spec, so not in the DOM
+    // lib types TS resolves here) for exactly this.
+    const WebSocketCtor = WebSocket as unknown as new (
+      uri: string,
+      protocols?: string | string[],
+      options?: { headers?: Record<string, string> },
+    ) => WebSocket;
+    ws = new WebSocketCtor(url, undefined, {
+      headers: jwt ? { Authorization: `Bearer ${jwt}` } : undefined,
+    });
 
     ws.onmessage = (e) => {
       try { onMessage(JSON.parse(e.data)); } catch { /* non-JSON frame */ }

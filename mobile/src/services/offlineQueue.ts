@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SecureLocalStorage } from './secureLocalStorage';
 
 const QUEUE_KEY = 'offline_write_queue';
 
@@ -65,7 +65,7 @@ function upgrade(item: any): QueuedWrite {
 
 async function readQueue(): Promise<QueuedWrite[]> {
   try {
-    const raw = await AsyncStorage.getItem(QUEUE_KEY);
+    const raw = await SecureLocalStorage.getItem(QUEUE_KEY);
     return raw ? (JSON.parse(raw) as any[]).map(upgrade) : [];
   } catch {
     return [];
@@ -73,7 +73,7 @@ async function readQueue(): Promise<QueuedWrite[]> {
 }
 
 async function writeQueue(queue: QueuedWrite[]): Promise<void> {
-  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  await SecureLocalStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 }
 
 export const OfflineQueue = {
@@ -133,7 +133,7 @@ export const OfflineQueue = {
 
   async clearAll(): Promise<void> {
     await withQueueLock(async () => {
-      await AsyncStorage.removeItem(QUEUE_KEY);
+      await SecureLocalStorage.removeItem(QUEUE_KEY);
     });
     notify();
   },
