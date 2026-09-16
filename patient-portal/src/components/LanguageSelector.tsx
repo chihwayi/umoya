@@ -1,5 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { runtimeUrls } from '../config/runtime';
+
+const API_BASE_URL = runtimeUrls.ehrApi;
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -26,11 +29,14 @@ export const LanguageSelector: React.FC<Props> = ({ patientId, onChanged }) => {
 
     if (patientId) {
       try {
-        await fetch('/api/preferences/language', {
+        const token = localStorage.getItem('patient_token');
+        const tenantSlug = localStorage.getItem('patient_tenant');
+        await fetch(`${API_BASE_URL}/preferences/language`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
+            'X-Tenant-ID': tenantSlug ?? '',
+            Authorization: `Bearer ${token ?? ''}`,
           },
           body: JSON.stringify({ language: lang, entityType: 'patient', entityId: patientId }),
         });

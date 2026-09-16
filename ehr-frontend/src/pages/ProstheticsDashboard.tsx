@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
 import { ehrAxios } from '../services/api';
 
 interface AmputeeRecord {
@@ -83,11 +82,9 @@ export default function ProstheticsDashboard() {
   const [cdssResult, setCdssResult] = useState<any>(null);
   const [tab, setTab] = useState<'register' | 'prescriptions'>('register');
 
-  const api = axios.create({ baseURL: `/api/${tenantSlug}` });
-
   useEffect(() => {
     Promise.all([
-      api.get('/prosthetics/register'),
+      ehrAxios.get('/prosthetics/register'),
     ])
       .then(([regRes]) => {
         setRegister(regRes.data ?? []);
@@ -98,7 +95,7 @@ export default function ProstheticsDashboard() {
 
   useEffect(() => {
     if (!selectedPatient) return;
-    api.get(`/prosthetics/prescriptions/${selectedPatient}`)
+    ehrAxios.get(`/prosthetics/prescriptions/${selectedPatient}`)
       .then((r: any) => setPrescriptions(r.data ?? []))
       .catch(() => {});
   }, [selectedPatient, tenantSlug]);
@@ -106,7 +103,7 @@ export default function ProstheticsDashboard() {
   const handleKLevelUpdate = async () => {
     if (!kForm) return;
     try {
-      const res = await api.patch(`/prosthetics/register/${kForm.patientId}/k-level`, { kLevel: kForm.kLevel });
+      const res = await ehrAxios.patch(`/prosthetics/register/${kForm.patientId}/k-level`, { kLevel: kForm.kLevel });
       setKDesc(res.data?.k_description ?? '');
       setRegister(prev => prev.map(r => r.patient_id === kForm.patientId ? { ...r, k_level: kForm.kLevel } : r));
 

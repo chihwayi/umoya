@@ -793,10 +793,10 @@ export const DoctorRoundsScreen: React.FC = () => {
               .filter(Boolean);
 
             // Only show the card if there is at least one disclosure (zero-noise rule).
-            const disclosuresRes = await api.get<{ disclosures: Array<{ herb: string }> }>(
-              `/cultural/social-determinants/${patient.id}/traditional-medicine-disclosures`,
+            const remediesRes = await api.get<Array<{ remedyName: string }>>(
+              `/traditional-medicine/patient/${patient.id}/remedies`,
             );
-            const herbs = (disclosuresRes.data?.disclosures ?? []).map((d) => d.herb).filter(Boolean);
+            const herbs = (remediesRes.data ?? []).map((r) => r.remedyName).filter(Boolean);
             if (herbs.length === 0) return;
 
             setPatients((prev) =>

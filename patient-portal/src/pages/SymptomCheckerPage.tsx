@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 
 const SymptomCheckerPage: React.FC = () => {
   const navigate = useNavigate();
-  const { token } = usePatientAuth();
+  const { token, patient } = usePatientAuth();
   const tenantSlug = useTenantSlug();
   const { showError } = useNotification();
 
@@ -37,6 +37,19 @@ const SymptomCheckerPage: React.FC = () => {
     { icon: Eye, label: 'Visual', symptoms: ['Blurred vision', 'Eye pain', 'Eye irritation', 'Double vision', 'Light sensitivity'] },
     { icon: Thermometer, label: 'General', symptoms: ['Fever', 'Fatigue', 'Muscle aches', 'Joint pain', 'Chills'] },
   ];
+
+  const calculateAge = (dateOfBirth?: string): number | undefined => {
+    if (!dateOfBirth) return undefined;
+    const dob = new Date(dateOfBirth);
+    if (Number.isNaN(dob.getTime())) return undefined;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age -= 1;
+    }
+    return age;
+  };
 
   const handleAddSymptom = (symptom: string) => {
     if (symptom.trim() && !symptoms.includes(symptom.trim())) {
@@ -72,31 +85,15 @@ const SymptomCheckerPage: React.FC = () => {
     try {
       // Call CDSS service for symptom analysis
       const analysis = await patientPortalApi.analyzeSymptoms(
-        { symptoms, age: 35, gender: 'unknown' }, // TODO: Get from patient data
+        { symptoms, age: calculateAge(patient?.dateOfBirth) },
         token!,
         tenantSlug
       );
-      
+
       setResults(analysis);
       setShowResults(true);
     } catch (err: any) {
-      // If API doesn't exist, show mock results
-      console.warn('Symptom analysis API not available, showing mock results');
-      setResults({
-        suggestedDiagnoses: [
-          { diagnosis: 'Common Cold', confidence: 75, description: 'Viral infection of the upper respiratory tract' },
-          { diagnosis: 'Influenza', confidence: 60, description: 'Viral infection causing fever and body aches' },
-          { diagnosis: 'Allergic Rhinitis', confidence: 45, description: 'Allergic reaction causing nasal symptoms' },
-        ],
-        recommendations: [
-          'Rest and stay hydrated',
-          'Monitor symptoms for 2-3 days',
-          'Seek medical attention if symptoms worsen',
-          'Consider over-the-counter pain relief if needed',
-        ],
-        urgency: 'low',
-      });
-      setShowResults(true);
+      showError('Unable to analyze symptoms right now. Please try again shortly.', 'error');
     } finally {
       setAnalyzing(false);
     }

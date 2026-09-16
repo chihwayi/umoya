@@ -50,7 +50,7 @@ const NcdComorbiditydashboard: React.FC = () => {
         showError('Error', 'Authentication required');
         return;
       }
-      const response = await axios.get(`${runtimeUrls.ehrApi}/ncd-comorbidity/profile/${patientId}`, {
+      const response = await axios.get(`${runtimeUrls.ehrApi}/ncd-comorbidity/patient/${patientId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Tenant-ID': tenantSlug,
@@ -78,7 +78,7 @@ const NcdComorbiditydashboard: React.FC = () => {
         return;
       }
       const response = await axios.post(
-        `${runtimeUrls.ehrApi}/ncd-comorbidity/profile/${patientId}/sync`,
+        `${runtimeUrls.ehrApi}/ncd-comorbidity/patient/${patientId}/sync`,
         {},
         {
           headers: {

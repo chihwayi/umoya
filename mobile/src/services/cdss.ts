@@ -219,8 +219,8 @@ export const CdssService = {
    * Herb-drug interaction check (traditional medicine disclosures).
    *
    * Flow:
-   * 1) GET /cultural/social-determinants/:patientId/traditional-medicine-disclosures
-   * 2) POST /cdss/traditional-medicine/herb-drug-interactions
+   * 1) GET /traditional-medicine/patient/:patientId/remedies
+   * 2) POST /traditional-medicine/cdss/hdi-check
    *
    * Returns:
    * - HerbDrugResult if disclosures exist (even if interactions empty / abstained)
@@ -231,19 +231,45 @@ export const CdssService = {
     currentMedications: string[],
   ): Promise<HerbDrugResult | null> {
     try {
-      const disclosuresRes = await api.get<{
-        disclosures: Array<{ herb: string; form: string; frequency: string }>;
-      }>(`/cultural/social-determinants/${patientId}/traditional-medicine-disclosures`);
+      const remediesRes = await api.get<Array<{ remedyName: string }>>(
+        `/traditional-medicine/patient/${patientId}/remedies`,
+      );
 
-      const disclosures = disclosuresRes.data?.disclosures ?? [];
-      const herbs = disclosures.map((d) => d.herb).filter(Boolean);
+      const herbs = (remediesRes.data ?? []).map((r) => r.remedyName).filter(Boolean);
       if (herbs.length === 0) return null;
 
-      const interactionsRes = await api.post<HerbDrugResult>(
-        '/cdss/traditional-medicine/herb-drug-interactions',
-        { herbs, currentMedications },
-      );
-      return interactionsRes.data ?? { interactions: [], confidence: 0, abstained: true };
+      const checkRes = await api.post<{
+        interactions: Array<{
+          herb: string;
+          matched_drugs: string[];
+          severity: 'contraindicated' | 'major' | 'moderate' | 'minor' | 'informational';
+          clinical_effect: string;
+          management?: string;
+        }>;
+      }>('/traditional-medicine/cdss/hdi-check', {
+        herb_names: herbs,
+        current_drugs: currentMedications,
+        drug_classes: [],
+      });
+
+      const hits = checkRes.data?.interactions ?? [];
+      const severityMap: Record<string, 'major' | 'moderate' | 'minor'> = {
+        contraindicated: 'major',
+        major: 'major',
+        moderate: 'moderate',
+        minor: 'minor',
+        informational: 'minor',
+      };
+      return {
+        interactions: hits.map((h) => ({
+          herb: h.herb,
+          drug: h.matched_drugs?.[0] ?? '',
+          severity: severityMap[h.severity] ?? 'minor',
+          warning: h.management ? `${h.clinical_effect} — ${h.management}` : h.clinical_effect,
+        })),
+        confidence: 1,
+        abstained: false,
+      };
     } catch {
       return null;
     }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { ehrAxios } from '../services/api';
 
 interface Escalation {
   id: string;
@@ -24,16 +25,12 @@ export const EscalationQueuePanel: React.FC<{ tenantSlug: string }> = ({ tenantS
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${localStorage.getItem('token')}`,
-    'X-Tenant-Slug': tenantSlug,
-  };
+  const authHeaders = { 'X-Tenant-ID': tenantSlug };
 
   const load = async () => {
     try {
-      const res = await fetch('/api/post-visit-escalations', { headers });
-      const data = await res.json();
-      setEscalations(Array.isArray(data) ? data : []);
+      const res = await ehrAxios.get<Escalation[]>('/post-visit-escalations', { headers: authHeaders });
+      setEscalations(Array.isArray(res.data) ? res.data : []);
     } catch {
       /* silent */
     } finally {
@@ -46,10 +43,7 @@ export const EscalationQueuePanel: React.FC<{ tenantSlug: string }> = ({ tenantS
   }, []);
 
   const acknowledge = async (id: string) => {
-    await fetch(`/api/post-visit-escalations/${id}/acknowledge`, {
-      method: 'PATCH',
-      headers,
-    });
+    await ehrAxios.patch(`/post-visit-escalations/${id}/acknowledge`, {}, { headers: authHeaders });
     load();
   };
 

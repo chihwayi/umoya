@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Sparkles, Check, X } from 'lucide-react';
+import { ehrAxios } from '../services/api';
 
 interface Suggestion {
   id: string;
@@ -26,17 +27,16 @@ export const AiOrderSuggestionsPanel: React.FC<{
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
-    'X-Tenant-Slug': tenantSlug,
-    'Content-Type': 'application/json',
-  };
+  const authHeaders = { 'X-Tenant-ID': tenantSlug };
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ai-order-suggestions?patientId=${patientId}`, { headers });
-      setSuggestions(await res.json());
+      const res = await ehrAxios.get<Suggestion[]>('/ai-order-suggestions', {
+        params: { patientId },
+        headers: authHeaders,
+      });
+      setSuggestions(res.data);
     } catch {
       /* silent */
     } finally {
@@ -49,18 +49,18 @@ export const AiOrderSuggestionsPanel: React.FC<{
   }, [patientId]);
 
   const approve = async (id: string) => {
-    await fetch(`/api/ai-order-suggestions/${id}/approve`, { method: 'PATCH', headers });
+    await ehrAxios.patch(`/ai-order-suggestions/${id}/approve`, {}, { headers: authHeaders });
     load();
     onApproved?.();
   };
 
   const reject = async (id: string) => {
     const reason = window.prompt('Reason for rejection (optional):') ?? '';
-    await fetch(`/api/ai-order-suggestions/${id}/reject`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ rejectionReason: reason }),
-    });
+    await ehrAxios.patch(
+      `/ai-order-suggestions/${id}/reject`,
+      { rejectionReason: reason },
+      { headers: authHeaders },
+    );
     load();
   };
 

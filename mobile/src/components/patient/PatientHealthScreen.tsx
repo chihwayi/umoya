@@ -1078,14 +1078,25 @@ interface SdohAssessment {
 
 async function fetchWellbeingAssessment(patientId: string): Promise<SdohAssessment> {
   try {
-    const res = await api.get<any>(`/cultural/social-determinants/\${patientId}/latest`);
+    // /cultural/summary/:patientId is the only real endpoint that combines
+    // SDOH risk + Ubuntu wellbeing risk in one request; it doesn't expose a
+    // domains list, numeric ubuntu score, or a recommendations list (those
+    // fields don't exist on the backend model), so they're left empty/null —
+    // the UI already renders gracefully when they're absent.
+    const res = await api.get<any>(`/cultural/summary/${patientId}`);
     const d = res.data;
+    // Backend risk levels come back lowercase ("low"/"moderate"/"high");
+    // the UI's color map and type are keyed on the uppercase form.
+    const toLevel = (v: unknown): SdohAssessment["sdohRiskLevel"] => {
+      const upper = typeof v === "string" ? v.toUpperCase() : null;
+      return upper === "HIGH" || upper === "MODERATE" || upper === "LOW" ? upper : null;
+    };
     return {
-      sdohRiskLevel:  d?.sdohRiskLevel ?? null,
-      sdohDomains:    d?.riskDomains ?? [],
-      ubuntuScore:    d?.ubuntuScore ?? null,
-      ubuntuRiskLevel: d?.ubuntuRiskLevel ?? null,
-      recommendations: d?.recommendations ?? [],
+      sdohRiskLevel:  toLevel(d?.sdohRiskLevel),
+      sdohDomains:    [],
+      ubuntuScore:    null,
+      ubuntuRiskLevel: toLevel(d?.wellbeingRisk),
+      recommendations: [],
       abstained: false,
     };
   } catch {
