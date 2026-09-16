@@ -2,7 +2,7 @@
  * Umoya Security Utilities — S118
  *
  * HIPAA-required controls:
- *  - Certificate pinning config (enforced by axios interceptor in api.ts)
+ *  - Certificate pinning config (NOT YET ENFORCED — see note below)
  *  - Screen privacy / background snapshot prevention
  *  - Inactivity session lock
  *  - PHI masking for logs
@@ -15,9 +15,36 @@ import { AppState, AppStateStatus, Platform } from 'react-native';
 // ─── Certificate pinning ──────────────────────────────────────────────────────
 
 /**
- * SHA-256 SPKI pins for api.umoya.app.
- * Both current cert and backup are pinned — rotate 60 days before expiry.
- * Consumed by the axios TLS adapter (native modules only; ignored in Expo Go).
+ * NOT CURRENTLY ENFORCED. This config and `validatePin` below are inert.
+ *
+ * React Native's networking (axios/fetch) goes through the native TLS stack
+ * (NSURLSession on iOS, OkHttp on Android) to complete the handshake before
+ * any JS code — including an axios response interceptor — ever sees the
+ * response. JS has no access to the server's certificate or its SPKI hash
+ * at that point, so `validatePin` can never be called with real data and a
+ * pinning bypass in a MITM scenario would not be caught here.
+ *
+ * To make this real, certificate pinning has to be enforced natively:
+ *  1. Pick a native pinning mechanism, e.g. the `react-native-ssl-pinning`
+ *     package, or configure OkHttp's CertificatePinner (Android) and
+ *     NSURLSession server-trust evaluation (iOS) directly.
+ *  2. Obtain the real SHA-256 SPKI hash(es) for api.umoya.app's production
+ *     certificate and its backup/rotation cert, e.g.:
+ *       openssl s_client -connect api.umoya.app:443 | \
+ *         openssl x509 -pubkey -noout | \
+ *         openssl pkey -pubin -outform der | \
+ *         openssl dgst -sha256 -binary | base64
+ *  3. Replace the placeholder values below with the real hashes.
+ *  4. Wire the chosen mechanism into the native layer so it actually
+ *     enforces the pins on every request, not just defines them.
+ *  5. Verify on real iOS and Android builds: a request to the real API
+ *     succeeds, and a MITM/pinning-failure scenario is rejected.
+ *
+ * None of that has been done yet — this needs a build pipeline capable of
+ * producing installable iOS/Android builds and someone with access to the
+ * real production certificate, neither of which is available from this
+ * repo alone. Track this as a follow-up; do not treat CERT_PINS as active
+ * protection until it is wired up natively and verified on-device.
  */
 export const CERT_PINS: Record<string, string[]> = {
   'api.umoya.app': [
@@ -30,8 +57,8 @@ export const CERT_PINS: Record<string, string[]> = {
 };
 
 /**
- * Validate that a response came from a pinned host.
- * Call this from the axios response interceptor on production builds.
+ * Reference implementation only — see the CERT_PINS note above. Not called
+ * anywhere in the app because JS never sees the cert to validate.
  */
 export const validatePin = (host: string, receivedPin: string): boolean => {
   const pins = CERT_PINS[host];
