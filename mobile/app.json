@@ -119,15 +119,7 @@
       "expo-sharing",
       "expo-localization",
       "expo-audio",
-      "expo-asset",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "usesCleartextTraffic": true
-          }
-        }
-      ]
+      "expo-asset"
     ],
     "extra": {
       "eas": {
