@@ -6589,6 +6589,14 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getTelemedicineMeetingToken: async (id: string, role: 'doctor' | 'patient', token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/telemedicine/consultations/${id}/token`, {
+      params: { role },
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getTelemedicineMonitoringAlerts: async (token: string, tenantSlug: string, patientId?: string) => {
     const response = await ehrAxios.get('/telemedicine/monitoring/alerts', {
       params: patientId ? { patientId } : {},

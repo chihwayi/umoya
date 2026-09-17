@@ -1,45 +1,31 @@
 import { Injectable, Logger, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import axios, { AxiosInstance } from 'axios';
-
-interface DailyRoom {
-  id: string;
-  name: string;
-  url: string;
-  privacy: string;
-}
-
-interface DailyRecording {
-  id: string;
-  room_name: string;
-  start_ts: number;
-  status: string;
-  max_participants: number;
-  duration: number;
-  share_token: string;
-  s3key?: string;
-  mtg_session_id?: string;
-  tracks?: Array<{ type: string; status: string }>;
-  download_link?: string;
-}
+import { RoomServiceClient, AccessToken, Room } from 'livekit-server-sdk';
 
 @Injectable()
 export class TelemedicineVideoService {
   private readonly logger = new Logger(TelemedicineVideoService.name);
-  private readonly daily: AxiosInstance;
   private readonly apiKey: string;
+  private readonly apiSecret: string;
+  /** Public wss:// URL clients (browser/mobile) connect their LiveKit SDK to. */
+  private readonly publicUrl: string;
+  private readonly roomService: RoomServiceClient | null;
 
   constructor() {
-    this.apiKey = process.env.DAILY_API_KEY || '';
-    const baseURL = process.env.DAILY_API_URL || 'https://api.daily.co/v1';
+    this.apiKey = process.env.LIVEKIT_API_KEY || '';
+    this.apiSecret = process.env.LIVEKIT_API_SECRET || '';
+    this.publicUrl = process.env.LIVEKIT_URL || process.env.LIVEKIT_INTERNAL_URL || '';
 
-    this.daily = axios.create({
-      baseURL,
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 10_000,
-    });
+    // Server-to-server room management calls go over the internal docker
+    // network (plain ws/http, no TLS needed) rather than out through Caddy.
+    const internalUrl = (process.env.LIVEKIT_INTERNAL_URL || '').replace(/^ws/, 'http');
+
+    this.roomService = this.apiKey && this.apiSecret && internalUrl
+      ? new RoomServiceClient(internalUrl, this.apiKey, this.apiSecret)
+      : null;
+
+    if (!this.roomService) {
+      this.logger.warn('LIVEKIT_API_KEY/LIVEKIT_API_SECRET/LIVEKIT_INTERNAL_URL not fully set — video calls will use placeholder rooms');
+    }
   }
 
   // ── Room management ─────────────────────────────────────────────────────────
@@ -49,83 +35,49 @@ export class TelemedicineVideoService {
     patientId: string,
     doctorId: string,
   ): Promise<{ meetingRoomId: string; meetingUrl: string; meetingPassword?: string }> {
-    if (!this.apiKey) {
-      this.logger.warn('DAILY_API_KEY not set — falling back to placeholder room URL');
+    if (!this.roomService) {
       return this.placeholderRoom(consultationId);
     }
 
-    // Rooms expire 2 h after scheduled start; allow early join 15 min before
-    const expiresAt = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
-    const notBeforeAt = Math.floor(Date.now() / 1000) - 15 * 60;
     const roomName = `mc-${consultationId.slice(0, 8)}-${Date.now()}`;
 
-    // A-002/MOAS-06: this used to let a raw Axios error from Daily.co (e.g.
-    // an expired/invalid API key, rate limit, or outage) propagate straight
-    // up as an opaque 500 "Request failed with status code 400" — no
-    // indication anywhere that the problem was the video provider, not the
-    // booking itself. Catch it here and surface a typed, actionable error
-    // instead.
-    // Cloud recording requires a Daily.co plan that supports it — it's a
-    // nice-to-have, not core to "create a video room and join a call", so
-    // it must never block booking a consultation on plans that don't have
-    // it (a plain 'unavailable feature' response from the provider is a
-    // very different situation from an outage or bad credentials).
-    const recordingEnabled = process.env.DAILY_ENABLE_RECORDING === 'true';
-
-    let room: DailyRoom;
+    let room: Room;
     try {
-      const response = await this.daily.post<DailyRoom>('/rooms', {
+      room = await this.roomService.createRoom({
         name: roomName,
-        privacy: 'private',
-        properties: {
-          ...(recordingEnabled ? { enable_recording: 'cloud' } : {}),
-          enable_chat: true,
-          enable_screenshare: true,
-          enable_knocking: true,
-          exp: expiresAt,
-          nbf: notBeforeAt,
-          max_participants: 3, // patient + doctor + optional interpreter
-          lang: 'en',
-          eject_at_room_exp: true,
-        },
+        emptyTimeout: 2 * 60 * 60, // seconds — room auto-closes 2h after going empty
+        maxParticipants: 3, // patient + doctor + optional interpreter
       });
-      room = response.data;
     } catch (err: any) {
-      const providerStatus = err?.response?.status;
-      const providerMessage = err?.response?.data?.info || err?.response?.data?.error || err?.message || 'unknown error';
+      const message = err?.message || 'unknown error';
       this.logger.error(
-        `Daily.co room creation failed for consultation ${consultationId}: HTTP ${providerStatus ?? 'no response'} — ${providerMessage}`,
+        `LiveKit room creation failed for consultation ${consultationId}: ${message}`,
       );
       throw new ServiceUnavailableException({
         code: 'VIDEO_PROVIDER_UNAVAILABLE',
-        message: `Telemedicine video provider (Daily.co) rejected the room-creation request: ${providerMessage}. This consultation was not created — no partial/broken state was left behind. Check DAILY_API_KEY validity and Daily.co account status.`,
+        message: `Self-hosted video provider (LiveKit) rejected the room-creation request: ${message}. This consultation was not created — no partial/broken state was left behind. Check the livekit container is healthy and LIVEKIT_API_KEY/SECRET are correct.`,
       });
     }
 
-    this.logger.log(`Daily.co room created: ${room.name} for consultation ${consultationId}`);
+    this.logger.log(`LiveKit room created: ${room.name} for consultation ${consultationId}`);
 
     return {
       meetingRoomId: room.name,
-      meetingUrl: room.url,
+      // Not a per-room URL like Daily.co — LiveKit clients connect to the one
+      // server URL and are routed to the right room via the join token.
+      meetingUrl: this.publicUrl,
     };
   }
 
   async endMeeting(consultationId: string, meetingRoomId: string): Promise<void> {
-    if (!this.apiKey) return;
-
-    // Eject all participants; if eject fails the room may already be empty — still try to delete
-    try {
-      await this.daily.post(`/rooms/${meetingRoomId}/eject`);
-    } catch (e: any) {
-      this.logger.warn(`Could not eject participants from ${meetingRoomId}: ${e?.message}`);
-    }
+    if (!this.roomService) return;
 
     try {
-      await this.daily.delete(`/rooms/${meetingRoomId}`);
-      this.logger.log(`Daily.co room deleted: ${meetingRoomId} (consultation ${consultationId})`);
+      await this.roomService.deleteRoom(meetingRoomId);
+      this.logger.log(`LiveKit room deleted: ${meetingRoomId} (consultation ${consultationId})`);
     } catch (e: any) {
-      // Room may already be deleted or expired — not a hard failure
-      this.logger.warn(`Could not delete Daily.co room ${meetingRoomId}: ${e?.message}`);
+      // Room may already be gone (emptyTimeout already closed it) — not a hard failure
+      this.logger.warn(`Could not delete LiveKit room ${meetingRoomId}: ${e?.message}`);
     }
   }
 
@@ -133,12 +85,11 @@ export class TelemedicineVideoService {
     consultationId: string,
     meetingRoomId: string,
   ): Promise<{ isActive: boolean; participants: number }> {
-    if (!this.apiKey) return { isActive: false, participants: 0 };
+    if (!this.roomService) return { isActive: false, participants: 0 };
 
     try {
-      const { data } = await this.daily.get(`/rooms/${meetingRoomId}/presence`);
-      const participants: number = Object.keys(data?.participants ?? {}).length;
-      return { isActive: participants > 0, participants };
+      const participants = await this.roomService.listParticipants(meetingRoomId);
+      return { isActive: participants.length > 0, participants: participants.length };
     } catch {
       return { isActive: false, participants: 0 };
     }
@@ -147,9 +98,10 @@ export class TelemedicineVideoService {
   // ── Participant tokens ───────────────────────────────────────────────────────
 
   /**
-   * Returns a signed Daily.co meeting token for a specific participant.
-   * Doctor gets is_owner=true (can mute, eject, end meeting).
-   * Patient gets is_owner=false.
+   * Returns a signed LiveKit access token (JWT) for a specific participant.
+   * Generated locally — no network call to the LiveKit server needed.
+   * Doctor gets roomAdmin=true (can mute/remove others, end the room).
+   * Patient gets roomAdmin=false.
    * Token expires in 2 hours.
    */
   async getMeetingToken(
@@ -158,110 +110,54 @@ export class TelemedicineVideoService {
     role: 'doctor' | 'patient',
     displayName?: string,
   ): Promise<string> {
-    if (!this.apiKey) {
+    if (!this.apiKey || !this.apiSecret) {
       throw new BadRequestException(
-        'Video provider not configured — DAILY_API_KEY is required to generate meeting tokens',
+        'Video provider not configured — LIVEKIT_API_KEY/LIVEKIT_API_SECRET are required to generate meeting tokens',
       );
     }
 
-    const expiresAt = Math.floor(Date.now() / 1000) + 2 * 60 * 60;
+    const at = new AccessToken(this.apiKey, this.apiSecret, {
+      identity: userId,
+      name: displayName ?? (role === 'doctor' ? 'Doctor' : 'Patient'),
+      ttl: '2h',
+    });
+    at.addGrant({
+      room: meetingRoomId,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+      roomAdmin: role === 'doctor',
+    });
 
-    try {
-      const { data } = await this.daily.post<{ token: string }>('/meeting-tokens', {
-        properties: {
-          room_name: meetingRoomId,
-          user_id: userId,
-          user_name: displayName ?? (role === 'doctor' ? 'Doctor' : 'Patient'),
-          is_owner: role === 'doctor',
-          enable_recording: process.env.DAILY_ENABLE_RECORDING === 'true' && role === 'doctor', // only doctor can start recording, and only on plans that support it
-          exp: expiresAt,
-          // Prevent sharing token: each token is single-use bound to user_id
-          close_tab_on_exit: true,
-        },
-      });
-      return data.token;
-    } catch (err: any) {
-      const providerStatus = err?.response?.status;
-      const providerMessage = err?.response?.data?.info || err?.response?.data?.error || err?.message || 'unknown error';
-      this.logger.error(
-        `Daily.co meeting-token request failed for room ${meetingRoomId}: HTTP ${providerStatus ?? 'no response'} — ${providerMessage}`,
-      );
-      throw new ServiceUnavailableException({
-        code: 'VIDEO_PROVIDER_UNAVAILABLE',
-        message: `Telemedicine video provider (Daily.co) could not issue a join token: ${providerMessage}. Check DAILY_API_KEY validity and Daily.co account status.`,
-      });
-    }
+    return at.toJwt();
   }
 
   // ── Recording ────────────────────────────────────────────────────────────────
+  // Recording requires the separate LiveKit Egress service, not yet deployed.
+  // These honestly report "no recording available" rather than faking success —
+  // the post-visit bridge already has a clean no-recording code path for this.
 
   async enableRecording(
     consultationId: string,
     meetingRoomId: string,
   ): Promise<{ recordingEnabled: boolean; recordingId?: string }> {
-    // Cloud recording is configured at room creation — no separate call needed.
-    // This method exists for explicit operator-triggered recording if needed.
-    this.logger.log(`Cloud recording is enabled by default on room ${meetingRoomId}`);
-    return { recordingEnabled: true };
+    this.logger.debug(`Recording requested for room ${meetingRoomId} — LiveKit Egress is not deployed yet`);
+    return { recordingEnabled: false };
   }
 
-  /**
-   * Fetches the most recent completed recording for a room.
-   * Returns a 1-hour signed download URL, or null if no recording is ready yet.
-   */
   async getRecording(consultationId: string, meetingRoomId: string): Promise<string | null> {
-    if (!this.apiKey) return null;
-
-    try {
-      const { data } = await this.daily.get<{ data: DailyRecording[] }>(
-        `/recordings?room_name=${encodeURIComponent(meetingRoomId)}&limit=1`,
-      );
-
-      const recordings = data?.data ?? [];
-      if (!recordings.length) return null;
-
-      const latest = recordings[0];
-      if (latest.status !== 'finished') {
-        this.logger.debug(`Recording for ${meetingRoomId} status: ${latest.status} (not yet finished)`);
-        return null;
-      }
-
-      // Get a signed, time-limited download link
-      const { data: linkData } = await this.daily.get<{ download_link: string }>(
-        `/recordings/${latest.id}/access-link?valid_for_secs=3600`,
-      );
-
-      return linkData.download_link ?? null;
-    } catch (e: any) {
-      this.logger.warn(`Could not fetch recording for ${meetingRoomId}: ${e?.message}`);
-      return null;
-    }
+    return null;
   }
 
-  /**
-   * Polls for a recording up to maxAttempts times with delaySecs between attempts.
-   * Used by the post-visit bridge — recordings take ~60 s to process after room ends.
-   */
   async getRecordingWithRetry(
     consultationId: string,
     meetingRoomId: string,
     maxAttempts = 3,
     delaySecs = 30,
   ): Promise<string | null> {
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const url = await this.getRecording(consultationId, meetingRoomId);
-      if (url) return url;
-
-      if (attempt < maxAttempts) {
-        this.logger.debug(
-          `Recording not ready for ${meetingRoomId} — attempt ${attempt}/${maxAttempts}, waiting ${delaySecs}s`,
-        );
-        await new Promise(resolve => setTimeout(resolve, delaySecs * 1000));
-      }
-    }
-
-    this.logger.warn(
-      `Recording not available after ${maxAttempts} attempts for ${meetingRoomId} (consultation ${consultationId})`,
+    this.logger.debug(
+      `No recording for ${meetingRoomId} (consultation ${consultationId}) — LiveKit Egress is not deployed yet`,
     );
     return null;
   }

@@ -427,6 +427,10 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_INTERNAL_URL=${LIVEKIT_INTERNAL_URL}
     command: npm run dev
     volumes:
       - ./services/ehr-service/src:/app/services/ehr-service/src
@@ -495,6 +499,7 @@ services:
       - REACT_APP_EHR_API_URL=${REACT_APP_EHR_API_URL}
       - REACT_APP_TENANT_API_URL=${REACT_APP_TENANT_API_URL}
       - REACT_APP_CDSS_API_URL=${REACT_APP_CDSS_API_URL}
+      - REACT_APP_LIVEKIT_URL=${LIVEKIT_URL}
       # Server-side only (proxy injects x-service-token to CDSS; never exposed to the browser)
       - CDSS_SERVICE_TOKEN=${CDSS_SERVICE_TOKEN}
       - CHOKIDAR_USEPOLLING=true

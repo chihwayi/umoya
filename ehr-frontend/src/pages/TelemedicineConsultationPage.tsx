@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Video,
-  VideoOff,
-  Mic,
-  MicOff,
   PhoneOff,
   User,
   Clock,
@@ -20,6 +17,8 @@ import {
   ArrowRight,
   ClipboardList,
 } from 'lucide-react';
+import { LiveKitRoom, VideoConference } from '@livekit/components-react';
+import '@livekit/components-styles/components';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import GuidelineCitationCard from '../components/GuidelineCitationCard';
@@ -35,9 +34,12 @@ const TelemedicineConsultationPage: React.FC = () => {
   const [consultation, setConsultation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [meetingUrl, setMeetingUrl] = useState('');
+  const [livekitToken, setLivekitToken] = useState('');
+  const [livekitUrl, setLivekitUrl] = useState('');
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isJoined, setIsJoined] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
   const [endingConsultation, setEndingConsultation] = useState(false);
 
@@ -83,15 +85,23 @@ const TelemedicineConsultationPage: React.FC = () => {
       showError('Failed to join consultation', 'Missing current user ID. Please sign in again.');
       return;
     }
+    setJoining(true);
     try {
       await ehrApi.joinTelemedicineConsultation(consultationId!, { role: 'doctor', userId }, token, tenantSlug!);
+
+      const tokenInfo = await ehrApi.getTelemedicineMeetingToken(consultationId!, 'doctor', token, tenantSlug!);
+      setLivekitToken(tokenInfo.data.token);
+      setLivekitUrl(tokenInfo.data.meetingUrl);
+
       setIsJoined(true);
       showSuccess('Joined consultation', 'You are now in the video call');
-      
+
       // Update consultation status to in_progress
       await ehrApi.updateTelemedicineConsultation(consultationId!, { status: 'in_progress' }, token, tenantSlug!);
     } catch (error: any) {
       showError('Failed to join consultation', error.response?.data?.message || 'Please try again');
+    } finally {
+      setJoining(false);
     }
   };
 
@@ -236,18 +246,13 @@ const TelemedicineConsultationPage: React.FC = () => {
               <p className="text-white/60 mb-6">
                 Join the video consultation with {consultation.patient_name || 'the patient'}
               </p>
-              {meetingUrl && (
-                <div className="mb-6 p-4 rounded-lg bg-white/5 border border-white/10">
-                  <p className="text-sm text-white/60 mb-2">Meeting URL:</p>
-                  <p className="text-xs text-white/40 font-mono break-all">{meetingUrl}</p>
-                </div>
-              )}
               <button
                 onClick={handleJoinConsultation}
-                className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all font-medium flex items-center justify-center gap-2"
+                disabled={joining}
+                className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-all font-medium flex items-center justify-center gap-2"
               >
                 <Video className="w-5 h-5" />
-                Join Video Call
+                {joining ? 'Connecting...' : 'Join Video Call'}
               </button>
             </div>
           </div>
@@ -255,52 +260,27 @@ const TelemedicineConsultationPage: React.FC = () => {
           <div className="space-y-6">
             {/* Video Container */}
             <div className="relative bg-black rounded-2xl overflow-hidden border border-white/10" style={{ aspectRatio: '16/9' }}>
-              {/* Placeholder for video - In production, this would integrate with Daily.co, Twilio, or similar */}
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900 to-slate-900">
-                <div className="text-center">
-                  <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-white/10 flex items-center justify-center">
-                    <User className="w-16 h-16 text-white/60" />
+              {livekitToken && livekitUrl ? (
+                <LiveKitRoom
+                  token={livekitToken}
+                  serverUrl={livekitUrl}
+                  connect={true}
+                  audio={isAudioEnabled}
+                  video={isVideoEnabled}
+                  onDisconnected={() => handleEndConsultation(false)}
+                  data-lk-theme="default"
+                  style={{ height: '100%' }}
+                >
+                  <VideoConference />
+                </LiveKitRoom>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900 to-slate-900">
+                  <div className="text-center">
+                    <Video className="w-16 h-16 text-purple-400 animate-pulse mx-auto mb-4" />
+                    <p className="text-white/60 text-lg">Connecting to video call...</p>
                   </div>
-                  <p className="text-white/60 text-lg">{consultation.patient_name || 'Patient'}</p>
-                  <p className="text-white/40 text-sm mt-2">Video feed will appear here</p>
                 </div>
-              </div>
-
-              {/* Local Video (Doctor) - Top Right */}
-              <div className="absolute top-4 right-4 w-48 h-36 rounded-lg overflow-hidden bg-gradient-to-br from-blue-900 to-indigo-900 border-2 border-white/20">
-                <div className="w-full h-full flex items-center justify-center">
-                  <User className="w-12 h-12 text-white/60" />
-                </div>
-              </div>
-
-              {/* Controls Overlay */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-                <div className="flex items-center justify-center gap-4">
-                  <button
-                    onClick={() => setIsAudioEnabled(!isAudioEnabled)}
-                    className={`p-3 rounded-full transition-colors ${
-                      isAudioEnabled ? 'bg-white/20 hover:bg-white/30' : 'bg-red-600 hover:bg-red-700'
-                    }`}
-                  >
-                    {isAudioEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-                  </button>
-                  <button
-                    onClick={() => setIsVideoEnabled(!isVideoEnabled)}
-                    className={`p-3 rounded-full transition-colors ${
-                      isVideoEnabled ? 'bg-white/20 hover:bg-white/30' : 'bg-red-600 hover:bg-red-700'
-                    }`}
-                  >
-                    {isVideoEnabled ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
-                  </button>
-                  <button
-                    onClick={() => handleEndConsultation(false)}
-                    disabled={endingConsultation}
-                    className="p-3 rounded-full bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <PhoneOff className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Consultation Info */}
@@ -337,19 +317,6 @@ const TelemedicineConsultationPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Note: In production, integrate with Daily.co, Twilio Video, or similar service */}
-            <div className="bg-blue-500/20 border border-blue-500/30 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-white">Video Integration Required</p>
-                  <p className="text-xs text-white/60 mt-1">
-                    This is a placeholder interface. To enable video calls, integrate with Daily.co, Twilio Video, or
-                    another HIPAA-compliant video provider. The backend APIs are ready and the meeting URL is available.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         )}
         </div>
