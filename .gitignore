@@ -19,6 +19,9 @@ dist/
 # GCP service account keys
 secrets/
 
+# Live server credentials — never commit
+CREDENTIALS.md
+
 # Generated release-gate reports
 services/cdss-service/evaluation/reports/
 .env.local
