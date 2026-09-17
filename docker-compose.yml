@@ -25,6 +25,28 @@ services:
     networks:
       - umoya-network
 
+  # Self-hosted WebRTC video (telemedicine) — replaces Daily.co. HTTP/WS
+  # (7880) goes through Caddy same as every other service; RTC media (7881
+  # TCP fallback + the UDP port range) cannot go through a reverse proxy and
+  # must be reachable directly, so those are bound to 0.0.0.0 and opened in
+  # ufw explicitly, unlike every other service's 127.0.0.1-only binding.
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: umoya-livekit
+    command: --config /etc/livekit.yaml
+    environment:
+      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "127.0.0.1:${PORT_LIVEKIT}:7880"
+      - "0.0.0.0:${PORT_LIVEKIT_RTC_TCP}:7881"
+      - "0.0.0.0:50100-50200:50100-50200/udp"
+    depends_on:
+      - redis
+    networks:
+      - umoya-network
+
   minio:
     image: minio/minio:RELEASE.2023-10-07T15-07-38Z
     container_name: umoya-minio
