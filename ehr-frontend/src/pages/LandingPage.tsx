@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Code2,
   Database,
+  Download,
   FileText,
   FlaskConical,
   Globe,
@@ -923,6 +924,28 @@ export default function LandingPage() {
                     );
                   })}
                 </div>
+
+                {/* Mobile app download */}
+                <a
+                  href="https://dl-173-212-195-88.sslip.io/umoya-clinical.apk"
+                  download="umoya-clinical.apk"
+                  className="card-hover glow-teal mt-4 flex items-center gap-4 rounded-2xl border border-[#0AA98A]/30 bg-gradient-to-r from-[#0AA98A]/[0.08] to-[#3B9EFF]/[0.05] p-4 transition hover:border-[#0AA98A]/60"
+                >
+                  <div
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: '#0AA98A18', border: '1px solid #0AA98A40' }}
+                  >
+                    <Smartphone className="h-6 w-6" style={{ color: '#0AA98A' }} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-white">Get the Umoya Mobile App</p>
+                    <p className="text-xs text-[#6A88AA]">Point-of-care Android app · offline-first · 8 languages</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-[#0AA98A] to-[#0D9479] px-4 py-2 text-xs font-bold text-[#040A10]">
+                    <Download className="h-3.5 w-3.5" />
+                    Download APK
+                  </div>
+                </a>
               </div>
 
               {/* Right — live AI activity panel */}
