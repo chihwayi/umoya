@@ -262,6 +262,22 @@ export class MentalHealthService {
     }
   }
 
+  async listScreeningTools(params: { tool?: string; language_code?: string }, tenantId?: string) {
+    return this.cdssService.mentalHealthScreeningTools(params, tenantId);
+  }
+
+  async interpretScreening(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.mentalHealthScreeningInterpret(payload, tenantId);
+  }
+
+  async mhgapAssess(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.mentalHealthMhgapAssess(payload, tenantId);
+  }
+
+  async safetyPlanTemplate(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.mentalHealthSafetyPlan(payload, tenantId);
+  }
+
   /** Local scoring for PHQ-9, GAD-7, EPDS, PCL-5. */
   private localScreeningScore(tool: string, responses: Record<string, number>): Record<string, any> {
     const total = Object.values(responses).reduce((s, v) => s + (Number(v) || 0), 0);

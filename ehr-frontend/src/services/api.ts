@@ -11379,9 +11379,12 @@ export const cdssApi = {
     return res.data;
   },
 
+  // Routed through ehr-service (not cdss-service directly) — cdss-service
+  // requires a service-to-service token the browser can never have.
+  // ehr-service holds that credential and proxies these calls server-side.
   listMhScreeningTools: async () => {
     const token = getStoredAuthToken();
-    const res = await cdssAxios.get('/cdss/mental-health/screening-tools', {
+    const res = await ehrAxios.get('/mental-health/cdss/screening-tools', {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;
@@ -11389,7 +11392,7 @@ export const cdssApi = {
 
   getMhScreeningToolDefinition: async (tool: string, languageCode: string) => {
     const token = getStoredAuthToken();
-    const res = await cdssAxios.get('/cdss/mental-health/screening-tools', {
+    const res = await ehrAxios.get('/mental-health/cdss/screening-tools', {
       params: { tool, language_code: languageCode },
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -11398,7 +11401,7 @@ export const cdssApi = {
 
   interpretMhScreening: async (data: { tool: string; score: number; language_code: string; age_years?: number; pregnancy?: boolean }) => {
     const token = getStoredAuthToken();
-    const res = await cdssAxios.post('/cdss/mental-health/screening-interpret', data, {
+    const res = await ehrAxios.post('/mental-health/cdss/screening-interpret', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;
@@ -11406,7 +11409,7 @@ export const cdssApi = {
 
   assessMhGap: async (data: Record<string, any>) => {
     const token = getStoredAuthToken();
-    const res = await cdssAxios.post('/cdss/mental-health/mhgap-assess', data, {
+    const res = await ehrAxios.post('/mental-health/cdss/mhgap-assess', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;
@@ -11414,7 +11417,7 @@ export const cdssApi = {
 
   getMhSafetyPlanTemplate: async (data: { risk_level: string; patient_age?: number; prior_attempt?: boolean }) => {
     const token = getStoredAuthToken();
-    const res = await cdssAxios.post('/cdss/mental-health/safety-plan', data, {
+    const res = await ehrAxios.post('/mental-health/cdss/safety-plan', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;

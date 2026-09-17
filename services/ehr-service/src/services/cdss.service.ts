@@ -2323,6 +2323,52 @@ export class CdssService {
     );
   }
 
+  async mentalHealthScreeningTools(
+    params: { tool?: string; language_code?: string } = {},
+    tenantId?: string,
+  ): Promise<Record<string, any>> {
+    return this.getWithPolicy<Record<string, any>>(
+      'mentalHealthScreeningTools',
+      '/cdss/mental-health/screening-tools',
+      this.defaultTimeoutMs,
+      tenantId,
+      params,
+    );
+  }
+
+  async mentalHealthScreeningInterpret(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'mentalHealthScreeningInterpret',
+      '/cdss/mental-health/screening-interpret',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async mentalHealthMhgapAssess(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'mentalHealthMhgapAssess',
+      '/cdss/mental-health/mhgap-assess',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async mentalHealthSafetyPlan(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'mentalHealthSafetyPlan',
+      '/cdss/mental-health/safety-plan',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async cervicalCancerScreenRecommend(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',

@@ -195,4 +195,28 @@ export class MentalHealthController {
   monitorMedication(@Body() body: any) {
     return this.mhService.monitorMedication(body);
   }
+
+  @Get('cdss/screening-tools')
+  listScreeningTools(
+    @Request() req: RequestWithTenant,
+    @Query('tool') tool?: string,
+    @Query('language_code') languageCode?: string,
+  ) {
+    return this.mhService.listScreeningTools({ tool, language_code: languageCode }, req.tenantId);
+  }
+
+  @Post('cdss/screening-interpret')
+  interpretScreening(@Request() req: RequestWithTenant, @Body() body: any) {
+    return this.mhService.interpretScreening(body, req.tenantId);
+  }
+
+  @Post('cdss/mhgap-assess')
+  mhgapAssess(@Request() req: RequestWithTenant, @Body() body: any) {
+    return this.mhService.mhgapAssess(body, req.tenantId);
+  }
+
+  @Post('cdss/safety-plan')
+  safetyPlan(@Request() req: RequestWithTenant, @Body() body: any) {
+    return this.mhService.safetyPlanTemplate(body, req.tenantId);
+  }
 }
