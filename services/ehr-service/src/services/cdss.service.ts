@@ -2587,6 +2587,72 @@ export class CdssService {
     );
   }
 
+  async malariaActDose(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'malariaActDose',
+      '/malaria/act-dose',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async malariaG6pdCheck(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'malariaG6pdCheck',
+      '/malaria/g6pd-check',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async malariaIptpDue(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'malariaIptpDue',
+      '/malaria/iptp-due',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async outbreakPlagueTreatment(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'outbreakPlagueTreatment',
+      '/cdss/outbreak/plague-treatment',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async outbreakYellowFeverSeverity(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'outbreakYellowFeverSeverity',
+      '/cdss/outbreak/yellow-fever-severity',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
+  async outbreakMeningitisManagement(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
+    return this.requestWithPolicy<Record<string, any>>(
+      'POST',
+      'outbreakMeningitisManagement',
+      '/cdss/outbreak/meningitis-management',
+      payload,
+      this.defaultTimeoutMs,
+      tenantId,
+    );
+  }
+
   async cbhiClaimAdjudication(payload: Record<string, any>, tenantId?: string): Promise<Record<string, any>> {
     return this.requestWithPolicy<Record<string, any>>(
       'POST',

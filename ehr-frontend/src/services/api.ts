@@ -11596,7 +11596,7 @@ export const cdssApi = {
 
   getActDose: async (data: { weight_kg: number; species?: string; regimen?: string }) => {
     const token = localStorage.getItem('token') || '';
-    const res = await cdssAxios.post('/malaria/act-dose', data, {
+    const res = await ehrAxios.post('/malaria/cdss/act-dose', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;
@@ -11604,7 +11604,7 @@ export const cdssApi = {
 
   checkG6pd: async (data: { species: string; intend_primaquine: boolean; g6pd_tested: boolean; g6pd_result?: string }) => {
     const token = localStorage.getItem('token') || '';
-    const res = await cdssAxios.post('/malaria/g6pd-check', data, {
+    const res = await ehrAxios.post('/malaria/cdss/g6pd-check', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;
@@ -11612,7 +11612,7 @@ export const cdssApi = {
 
   getIptpDue: async (data: { gestational_age_weeks: number; prior_dose_count: number; last_dose_date?: string }) => {
     const token = localStorage.getItem('token') || '';
-    const res = await cdssAxios.post('/malaria/iptp-due', data, {
+    const res = await ehrAxios.post('/malaria/cdss/iptp-due', data, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.data;
@@ -12463,7 +12463,7 @@ export const cervicalCancerApi = {
     return response.data;
   },
   getScreenRecommend: async (data: any, token: string, tenantSlug: string) => {
-    const response = await cdssAxios.post('/cdss/cervical-cancer/screen-recommend', data, {
+    const response = await ehrAxios.post('/cervical-cancer/cdss/screen-recommend', data, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;
@@ -12508,13 +12508,13 @@ export const familyPlanningApi = {
     return response.data;
   },
   getMethodEligibility: async (data: any, token: string, tenantSlug: string) => {
-    const response = await cdssAxios.post('/cdss/family-planning/method-eligibility', data, {
+    const response = await ehrAxios.post('/family-planning/cdss/method-eligibility', data, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;
   },
   getMethods: async (token: string, tenantSlug: string) => {
-    const response = await cdssAxios.get('/cdss/family-planning/methods', {
+    const response = await ehrAxios.get('/family-planning/cdss/methods', {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;
@@ -13074,7 +13074,7 @@ export const outbreakApi = {
     return response.data;
   },
   getPlagueTreatment: async (payload: any, token: string, tenantSlug: string) => {
-    const response = await cdssAxios.post('/cdss/outbreak/plague-treatment', payload, {
+    const response = await ehrAxios.post('/outbreak/cdss/plague-treatment', payload, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;
@@ -13095,7 +13095,7 @@ export const outbreakApi = {
     return response.data;
   },
   getYellowFeverSeverity: async (payload: any, token: string, tenantSlug: string) => {
-    const response = await cdssAxios.post('/cdss/outbreak/yellow-fever-severity', payload, {
+    const response = await ehrAxios.post('/outbreak/cdss/yellow-fever-severity', payload, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;
@@ -13116,7 +13116,7 @@ export const outbreakApi = {
     return response.data;
   },
   getMeningitisManagement: async (payload: any, token: string, tenantSlug: string) => {
-    const response = await cdssAxios.post('/cdss/outbreak/meningitis-management', payload, {
+    const response = await ehrAxios.post('/outbreak/cdss/meningitis-management', payload, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
     });
     return response.data;

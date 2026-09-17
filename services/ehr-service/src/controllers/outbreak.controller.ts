@@ -96,4 +96,21 @@ export class OutbreakController {
   async acknowledgeAlert(@Param('id') id: string, @Request() req: RequestWithTenant) {
     return this.outbreakService.acknowledgeAlert(req.tenantId, id);
   }
+
+  // ── CDSS ───────────────────────────────────────────────────────────────────
+
+  @Post('cdss/plague-treatment')
+  async plagueTreatment(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.outbreakService.plagueTreatment(body, req.tenantId);
+  }
+
+  @Post('cdss/yellow-fever-severity')
+  async yellowFeverSeverity(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.outbreakService.yellowFeverSeverity(body, req.tenantId);
+  }
+
+  @Post('cdss/meningitis-management')
+  async meningitisManagement(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.outbreakService.meningitisManagement(body, req.tenantId);
+  }
 }

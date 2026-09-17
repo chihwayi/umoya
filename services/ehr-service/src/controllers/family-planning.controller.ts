@@ -67,6 +67,11 @@ export class FamilyPlanningController {
     return this.cdssService.familyPlanningMethodEligibility(body, req.tenantId!);
   }
 
+  @Get('cdss/methods')
+  getMethods(@Request() req: RequestWithTenant) {
+    return this.cdssService.familyPlanningMethods(req.tenantId!);
+  }
+
   @Post('cdss/method-counselling')
   methodCounselling(@Body() body: any) {
     return this.familyPlanningService.methodCounselling(body);

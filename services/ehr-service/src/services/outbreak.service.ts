@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantService } from './tenant.service';
+import { CdssService } from './cdss.service';
 import { NotifiableDisease } from '../entities/notifiable-disease.entity';
 import { OutbreakCase } from '../entities/outbreak-case.entity';
 import { ContactTrace } from '../entities/contact-trace.entity';
@@ -9,7 +10,24 @@ import { MohAlert } from '../entities/moh-alert.entity';
 export class OutbreakService {
   private readonly logger = new Logger(OutbreakService.name);
 
-  constructor(private tenantService: TenantService) {}
+  constructor(
+    private tenantService: TenantService,
+    private readonly cdssService: CdssService,
+  ) {}
+
+  // ── CDSS Proxies ───────────────────────────────────────────────────────────
+
+  async plagueTreatment(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.outbreakPlagueTreatment(payload, tenantId);
+  }
+
+  async yellowFeverSeverity(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.outbreakYellowFeverSeverity(payload, tenantId);
+  }
+
+  async meningitisManagement(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.outbreakMeningitisManagement(payload, tenantId);
+  }
 
   // ── Notifiable diseases ───────────────────────────────────────────────────
 

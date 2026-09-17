@@ -159,6 +159,18 @@ export class MalariaService {
     }
   }
 
+  async actDose(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.malariaActDose(payload, tenantId);
+  }
+
+  async g6pdCheck(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.malariaG6pdCheck(payload, tenantId);
+  }
+
+  async iptpDue(payload: Record<string, any>, tenantId?: string) {
+    return this.cdssService.malariaIptpDue(payload, tenantId);
+  }
+
   /** WHO 2015 malaria treatment — local fallback.
    *  First-line: Artemether-Lumefantrine (AL) for uncomplicated P. falciparum.
    *  Severe: IV Artesunate, ICU referral.

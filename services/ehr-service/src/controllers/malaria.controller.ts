@@ -107,4 +107,19 @@ export class MalariaController {
   scoreSeverity(@Body() body: any) {
     return this.malariaService.scoreSeverity(body);
   }
+
+  @Post('cdss/act-dose')
+  getActDose(@Req() req: RequestWithTenant, @Body() body: any) {
+    return this.malariaService.actDose(body, req.tenantId);
+  }
+
+  @Post('cdss/g6pd-check')
+  checkG6pd(@Req() req: RequestWithTenant, @Body() body: any) {
+    return this.malariaService.g6pdCheck(body, req.tenantId);
+  }
+
+  @Post('cdss/iptp-due')
+  getIptpDue(@Req() req: RequestWithTenant, @Body() body: any) {
+    return this.malariaService.iptpDue(body, req.tenantId);
+  }
 }
