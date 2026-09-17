@@ -1375,6 +1375,11 @@ async def service_to_service_auth_middleware(request: Request, call_next):
     if not SERVICE_AUTH_REQUIRED:
         return await call_next(request)
 
+    # Same rationale as tenant_context_guard_middleware: never gate a CORS
+    # preflight, or CORSMiddleware (registered inside this one) never runs.
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     path = request.url.path
     exempt_exact = _PUBLIC_PATH_EXACT
     exempt_prefixes = _SERVICE_AUTH_EXEMPT_PREFIXES
@@ -1454,6 +1459,13 @@ async def service_to_service_auth_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def tenant_context_guard_middleware(request: Request, call_next):
+    # CORS preflight requests never carry the app's custom headers (browsers
+    # strip them for OPTIONS) — reject one here and CORSMiddleware never gets
+    # a chance to attach Access-Control-Allow-Origin, since it's registered
+    # inside this middleware in the stack. Let it through unconditionally.
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     path = request.url.path
     if not _is_tenant_required_path(path):
         return await call_next(request)
