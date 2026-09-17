@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Image,
+  View, Text, TextInput, TouchableOpacity, Pressable, StyleSheet,
+  FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Image, Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,7 +50,24 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
   const [showQr, setShowQr] = useState(false);
   const [qrPermission, setQrPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [defaultTenants, setDefaultTenants] = useState<Tenant[]>([]);
+  const [loadingDefaults, setLoadingDefaults] = useState(true);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get<Tenant[]>(`${TENANT_DISCOVERY_URL}/active`, { timeout: 8000 })
+      .then((res) => {
+        if (!cancelled && Array.isArray(res.data)) setDefaultTenants(res.data);
+      })
+      .catch(() => { /* silently fall back to search-only UX */ })
+      .finally(() => { if (!cancelled) setLoadingDefaults(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const showingDefaults = query.trim().length < 2;
+  const listData = showingDefaults ? defaultTenants : results;
 
   const search = (q: string) => {
     setQuery(q);
@@ -98,6 +115,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
   };
 
   const select = async (tenant: Tenant) => {
+    Keyboard.dismiss();
     try {
       await setTenant(tenant);
       buildApiClient(tenant.baseUrl);
@@ -202,19 +220,23 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
           </TouchableOpacity>
         </View>
 
-        {/* Results */}
-        {results.length > 0 && (
+        {/* Results / default clinic list */}
+        {showingDefaults && listData.length > 0 && (
+          <Text style={styles.listHeading}>Suggested clinics</Text>
+        )}
+        {listData.length > 0 && (
           <FlatList
-            data={results}
+            data={listData}
             keyExtractor={item => item.slug}
             contentContainerStyle={styles.list}
             style={styles.listContainer}
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
-              <TouchableOpacity
+              <Pressable
                 testID={`tenant-result-${item.slug}`}
                 onPress={() => select(item)}
-                activeOpacity={0.75}
+                hitSlop={8}
+                style={({ pressed }) => pressed ? { opacity: 0.75 } : undefined}
               >
                 <Card style={styles.resultCard}>
                   <View style={styles.resultRow}>
@@ -226,7 +248,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
                     <Icon name="arrow" size={16} color={C.textMuted} />
                   </View>
                 </Card>
-              </TouchableOpacity>
+              </Pressable>
             )}
           />
         )}
@@ -246,8 +268,8 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
           </View>
         )}
 
-        {/* Empty state */}
-        {query.length < 2 && results.length === 0 && (
+        {/* Empty state — only when there's truly nothing to show */}
+        {showingDefaults && !loadingDefaults && listData.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>Can't find your clinic?</Text>
             <Text style={styles.emptyBody}>
@@ -321,6 +343,16 @@ const styles = StyleSheet.create({
   },
   listContainer: { flex: 1 },
   list: { paddingHorizontal: 16, gap: 8 },
+  listHeading: {
+    fontFamily: FONT.uiBd,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: C.textMuted,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+  },
   resultCard: { padding: 12 },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   clinicIcon: {
