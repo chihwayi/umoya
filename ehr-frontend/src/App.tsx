@@ -277,15 +277,14 @@ const TenantScopedModuleRoute: React.FC<{ moduleKey: string; children: React.Rea
       return;
     }
 
-    const cached = readTenantSubscriptionCache(tenantSlug);
-    if (cached) {
-      setTenantInfo(cached);
-      setCheckingModuleAccess(false);
-      return;
-    }
-
+    // A cached copy (if any) is used only to render instantly without a
+    // loading flash — it's never trusted on its own. We always refetch in
+    // the background and overwrite it, since the cache has no TTL and would
+    // otherwise keep serving stale module access after a tenant's config
+    // changes (e.g. an admin enabling/disabling a module).
     let active = true;
-    setCheckingModuleAccess(true);
+    const hadCache = Boolean(readTenantSubscriptionCache(tenantSlug));
+    setCheckingModuleAccess(!hadCache);
 
     tenantApi
       .getTenantBySlug(tenantSlug)
@@ -307,7 +306,7 @@ const TenantScopedModuleRoute: React.FC<{ moduleKey: string; children: React.Rea
         writeTenantSubscriptionCache(tenantSlug, nextTenantInfo);
       })
       .catch(() => {
-        if (!active) return;
+        if (!active || hadCache) return;
         setTenantInfo(null);
       })
       .finally(() => {
@@ -361,15 +360,14 @@ const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; moduleKey?: string;
       return;
     }
 
-    const cached = readTenantSubscriptionCache(tenantSlug);
-    if (cached) {
-      setTenantInfo(cached);
-      setCheckingModuleAccess(false);
-      return;
-    }
-
+    // Same rationale as TenantScopedModuleRoute above: the cache renders
+    // instantly to avoid a loading flash, but is never trusted on its own —
+    // we always refetch in the background so a tenant's module config
+    // change is picked up without waiting for the sessionStorage entry to
+    // expire (it never does on its own).
     let active = true;
-    setCheckingModuleAccess(true);
+    const hadCache = Boolean(readTenantSubscriptionCache(tenantSlug));
+    setCheckingModuleAccess(!hadCache);
 
     tenantApi
       .getTenantBySlug(tenantSlug)
@@ -391,7 +389,7 @@ const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; moduleKey?: string;
         writeTenantSubscriptionCache(tenantSlug, nextTenantInfo);
       })
       .catch(() => {
-        if (!active) return;
+        if (!active || hadCache) return;
         setTenantInfo(null);
       })
       .finally(() => {
