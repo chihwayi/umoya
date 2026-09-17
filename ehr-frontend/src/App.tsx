@@ -30,6 +30,8 @@ const TechnologistImagingDashboard = lazy(() => import('./pages/TechnologistImag
 const NursePatientSummary = lazy(() => import('./pages/NursePatientSummary'));
 const LabDashboard = lazy(() => import('./pages/LabDashboard'));
 const PostVisitCompanionPortal = lazy(() => import('./pages/PostVisitCompanionPortal'));
+const HivWhoWorkflowPage = lazy(() => import('./pages/HivWhoWorkflowPage'));
+const MaternityWhoWorkflowPage = lazy(() => import('./pages/MaternityWhoWorkflowPage'));
 const PostVisitDoctorWorkspace = lazy(() => import('./pages/PostVisitDoctorWorkspace'));
 const OncologyDashboard = lazy(() => import('./pages/OncologyDashboard'));
 const OphthalmologyDashboard = lazy(() => import('./pages/OphthalmologyDashboard'));
@@ -1278,6 +1280,22 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['doctor', 'nurse', 'admin']} moduleKey="telemedicine">
                   <TelemedicineConsultationPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/hiv/who-workflow"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse']} moduleKey="hiv">
+                  <HivWhoWorkflowPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/maternity/who-workflow"
+              element={
+                <RoleProtectedRoute allowedRoles={['doctor', 'nurse']} moduleKey="maternity">
+                  <MaternityWhoWorkflowPage />
                 </RoleProtectedRoute>
               }
             />

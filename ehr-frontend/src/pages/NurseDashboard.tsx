@@ -27,10 +27,9 @@ import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
 import { useSafetyAlerts } from '../hooks/useSafetyAlerts';
 import HIVNursePanel from '../components/HIVNursePanel';
 import HIVTestingComponent from '../components/HIVTestingComponent';
-import { HIVTestingWithSmartForms, HIVWorkflowIntegration } from '../components/HIV';
+import { HIVTestingWithSmartForms } from '../components/HIV';
 import HIVPatientManagement from '../components/HIVPatientManagement';
 import { TBScreeningWithSmartForms } from '../components/TB';
-import { MaternityWithSmartForms } from '../components/Maternity';
 import CervicalCancerScreeningComponent from '../components/CervicalCancerScreeningComponent';
 import HIVQualityMetricsChart from '../components/HIVQualityMetricsChart';
 import HIVStockManagement from '../components/HIVStockManagement';
@@ -3305,7 +3304,11 @@ const NurseDashboard: React.FC = () => {
                          <button
                            key={childIndex}
                            onClick={() => {
-                             setActiveTab(child.tab as any);
+                             if (child.tab === 'who-workflow') {
+                               navigate(`/ehr/${tenantSlug}/hiv/who-workflow`);
+                             } else {
+                               setActiveTab(child.tab as any);
+                             }
                              setSidebarOpen(false); // Close sidebar on mobile after selection
                            }}
                            className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 text-sm ${
@@ -4990,64 +4993,9 @@ const NurseDashboard: React.FC = () => {
         {activeSection === 'hiv' && activeTab === 'hiv-reports' && (
           <HivReportsPanel tenantSlug={tenantSlug || ''} token={localStorage.getItem('ehr_token') || ''} />
         )}
-        {activeSection === 'hiv' && activeTab === 'who-workflow' && (
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2">
-                <Activity className="w-6 h-6 text-indigo-600" />
-                Guided WHO HIV Workflow
-              </h2>
-              <p className="text-slate-600">
-                Step-by-step WHO-aligned HIV workflow: Testing → Registration → ART Initiation → Care & Treatment
-              </p>
-            </div>
-
-            {selectedPatient ? (
-              <HIVWorkflowIntegration
-                patientId={selectedPatient.id}
-                patientName={`${selectedPatient.firstName} ${selectedPatient.lastName}`}
-                patientAge={selectedPatient.dateOfBirth ? Math.floor((new Date().getTime() - new Date(selectedPatient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365)) : undefined}
-                patientSex={selectedPatient.gender}
-                tenantSlug={tenantSlug || ''}
-                token={localStorage.getItem('ehr_token') || ''}
-                currentStage="testing"
-                onComplete={() => {
-                  showSuccess('Success', 'WHO Smart Forms workflow completed successfully');
-                }}
-              />
-            ) : (
-              <div className="text-center py-12 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg border-2 border-indigo-200">
-                <Activity className="w-16 h-16 text-indigo-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">Select a patient to begin</h3>
-                <p className="text-slate-600 mb-6">
-                  Choose a patient from the queue or search to start the guided WHO workflow
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <button
-                    onClick={() => {
-                      // Focus on patient search/selection
-                      const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
-                      if (searchInput) {
-                        searchInput.focus();
-                      }
-                    }}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex items-center justify-center gap-2"
-                  >
-                    <Search className="w-5 h-5" />
-                    Search Patient
-                  </button>
-                  <button
-                    onClick={() => setShowHivTestingModal(true)}
-                    className="px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold flex items-center justify-center gap-2"
-                  >
-                    <TestTube className="w-5 h-5" />
-                    Start HIV Testing
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Guided WHO HIV Workflow moved to its own page (/hiv/who-workflow) to
+            keep this dashboard uncluttered — the nav item below navigates there
+            directly instead of switching to an in-page tab. */}
 
         {/* Maternity Section */}
         {activeSection === 'maternity' && (
@@ -5059,18 +5007,19 @@ const NurseDashboard: React.FC = () => {
               </h2>
             </div>
 
-            {/* WHO Smart Forms Integration */}
-            <div className="mb-6">
-              <MaternityWithSmartForms
-                tenantSlug={tenantSlug!}
-                token={localStorage.getItem('ehr_token') || ''}
-                patientId={selectedPatient?.id}
-                patientName={selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : undefined}
-                onSuccess={() => {
-                  // Refresh data if needed
-                }}
-              />
-            </div>
+            {/* WHO Smart Forms moved to their own page to keep this workspace
+                focused on day-to-day maternity care rather than form entry. */}
+            <button
+              type="button"
+              onClick={() => navigate(`/ehr/${tenantSlug}/maternity/who-workflow`)}
+              className="mb-6 flex w-full items-center gap-3 rounded-xl border border-pink-200 bg-pink-50 px-4 py-3 text-left transition hover:bg-pink-100"
+            >
+              <span className="rounded-lg bg-pink-600 p-2"><FileText className="h-4 w-4 text-white" /></span>
+              <span>
+                <span className="block text-sm font-semibold text-pink-900">WHO Smart Forms — Maternity / PMTCT</span>
+                <span className="block text-xs text-pink-700">Maternal history, ANC &amp; PMTCT guided forms — opens in its own page</span>
+              </span>
+            </button>
 
             {/* Standard Maternity Dashboard */}
             <MaternityDashboard
