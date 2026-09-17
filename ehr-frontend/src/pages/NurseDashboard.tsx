@@ -3025,37 +3025,39 @@ const NurseDashboard: React.FC = () => {
           {/* Side rail */}
           <div className="space-y-6">
             {/* Care tools */}
-            <div className="rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-md backdrop-blur-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <Brain className="h-5 w-5 text-violet-600" />
-                <h3 className="text-base font-bold text-slate-900">Care Tools</h3>
+            {hasModuleAccess(tenantInfo, 'mental_health') && (
+              <div className="rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-md backdrop-blur-sm">
+                <div className="mb-3 flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-violet-600" />
+                  <h3 className="text-base font-bold text-slate-900">Care Tools</h3>
+                </div>
+                <p className="text-sm text-slate-600">Quick clinical helpers without leaving the dashboard.</p>
+                <div className="mt-3 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMhQuickModal(true)}
+                    className="flex w-full items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-left transition hover:bg-violet-100"
+                  >
+                    <span className="rounded-lg bg-violet-600 p-2"><Brain className="h-4 w-4 text-white" /></span>
+                    <span>
+                      <span className="block text-sm font-semibold text-violet-900">mhGAP quick screen</span>
+                      <span className="block text-xs text-violet-700">PHQ-9 / GAD-7 interpretation &amp; safety plan</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openMentalHealthWorkspace('careplans')}
+                    className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:bg-slate-50"
+                  >
+                    <span className="rounded-lg bg-slate-700 p-2"><Heart className="h-4 w-4 text-white" /></span>
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-900">Mental health workspace</span>
+                      <span className="block text-xs text-slate-500">Care plans, follow-ups &amp; screening</span>
+                    </span>
+                  </button>
+                </div>
               </div>
-              <p className="text-sm text-slate-600">Quick clinical helpers without leaving the dashboard.</p>
-              <div className="mt-3 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setShowMhQuickModal(true)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-left transition hover:bg-violet-100"
-                >
-                  <span className="rounded-lg bg-violet-600 p-2"><Brain className="h-4 w-4 text-white" /></span>
-                  <span>
-                    <span className="block text-sm font-semibold text-violet-900">mhGAP quick screen</span>
-                    <span className="block text-xs text-violet-700">PHQ-9 / GAD-7 interpretation &amp; safety plan</span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openMentalHealthWorkspace('careplans')}
-                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:bg-slate-50"
-                >
-                  <span className="rounded-lg bg-slate-700 p-2"><Heart className="h-4 w-4 text-white" /></span>
-                  <span>
-                    <span className="block text-sm font-semibold text-slate-900">Mental health workspace</span>
-                    <span className="block text-xs text-slate-500">Care plans, follow-ups &amp; screening</span>
-                  </span>
-                </button>
-              </div>
-            </div>
+            )}
 
             {/* AI / CDSS performance (condensed) */}
             <div className="rounded-2xl border border-slate-200/60 bg-white/70 p-5 shadow-md backdrop-blur-sm">

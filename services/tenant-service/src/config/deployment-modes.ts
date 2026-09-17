@@ -17,6 +17,7 @@ const CLINIC_VISIBLE: string[] = [
   'hiv',
   'maternity',
   'diabetes',
+  'mental_health',
 ];
 
 const HOSPITAL_EXTRA: string[] = [
@@ -41,7 +42,7 @@ const ALL_MODULES: string[] = [
   'oncology', 'cardiology', 'diabetes', 'pharmacy', 'laboratory',
   'telemedicine', 'patient_portal', 'operating_room', 'emergency',
   'ophthalmology', 'blood_bank', 'infection_control', 'revenue_cycle',
-  'population_health',
+  'population_health', 'mental_health',
 ];
 
 export const DEPLOYMENT_MODES: Record<DeploymentMode, ModeDefinition> = {
