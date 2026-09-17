@@ -17,17 +17,22 @@ function ensureUrlProtocol(value: string): string {
     : `http://${trimmed}`;
 }
 
-function requireEnv(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
+// Metro/Babel's env-var inlining (babel-preset-expo) only statically replaces
+// `process.env.EXPO_PUBLIC_X` member-expression reads -- a dynamic
+// `process.env[name]` lookup is invisible to it, so the value never makes it
+// into the bundle and `process.env` is empty at runtime on a real device.
+// Every reference below must stay a literal dotted access for this reason.
+function requireEnv(name: string, value: string | undefined): string {
+  const trimmed = value?.trim();
+  if (!trimmed) {
     throw new Error(
       `${name} is required. Set it in mobile/.env for local development or in your build environment.`
     );
   }
-  return value;
+  return trimmed;
 }
 
-const rawBase = ensureUrlProtocol(requireEnv('EXPO_PUBLIC_API_BASE'));
+const rawBase = ensureUrlProtocol(requireEnv('EXPO_PUBLIC_API_BASE', process.env.EXPO_PUBLIC_API_BASE));
 
 /**
  * Optional direct EHR base URL — used ONLY when bypassing tenant discovery
@@ -36,8 +41,8 @@ const rawBase = ensureUrlProtocol(requireEnv('EXPO_PUBLIC_API_BASE'));
  * which takes precedence over this value.
  */
 export const EHR_BASE_OVERRIDE: string | null =
-  process.env['EXPO_PUBLIC_EHR_BASE']?.trim()
-    ? ensureUrlProtocol(process.env['EXPO_PUBLIC_EHR_BASE']!.trim())
+  process.env.EXPO_PUBLIC_EHR_BASE?.trim()
+    ? ensureUrlProtocol(process.env.EXPO_PUBLIC_EHR_BASE.trim())
     : null;
 
 function replaceDevLoopbackHost(url: URL): URL {
