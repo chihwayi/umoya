@@ -1548,6 +1548,11 @@ const NurseDashboard: React.FC = () => {
       if (action.label === 'Sepsis Management') return hasModuleAccess(tenantInfo, 'emergency');
       if (action.label === 'Infection Control') return hasModuleAccess(tenantInfo, 'infection_control');
       if (action.label === 'HIV Testing') return hasModuleAccess(tenantInfo, 'hiv');
+      // PACU and hospital-wide bed/ward ADT only make sense where surgery happens —
+      // there's no dedicated module key for either, so operating_room is the closest
+      // proxy for "this tenant runs inpatient/surgical operations".
+      if (action.label === 'PACU') return hasModuleAccess(tenantInfo, 'operating_room');
+      if (action.label === 'Bed Management') return hasModuleAccess(tenantInfo, 'operating_room');
       return true;
     });
   };
