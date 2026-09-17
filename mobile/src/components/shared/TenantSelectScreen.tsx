@@ -57,7 +57,7 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
   useEffect(() => {
     let cancelled = false;
     axios
-      .get<Tenant[]>(`${TENANT_DISCOVERY_URL}/active`, { timeout: 8000 })
+      .get<Tenant[]>(`${TENANT_DISCOVERY_URL}/search`, { timeout: 8000 })
       .then((res) => {
         if (!cancelled && Array.isArray(res.data)) setDefaultTenants(res.data);
       })

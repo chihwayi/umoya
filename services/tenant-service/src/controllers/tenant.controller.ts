@@ -149,13 +149,12 @@ export class TenantController {
   }
 
   @Get("search")
-  @ApiOperation({ summary: "Search active tenants by name or subdomain (public — mobile discovery)" })
+  @ApiOperation({ summary: "Search active tenants by name or subdomain (public — mobile discovery). A blank q returns the top active tenants (browse mode)." })
   @ApiResponse({ status: 200, description: "Matching tenants" })
   async searchTenants(
-    @Query("q") q: string,
+    @Query("q") q?: string,
   ): Promise<Array<{ id: string; slug: string; name: string; baseUrl: string; logoUrl?: string }>> {
-    if (!q || q.trim().length < 2) return [];
-    return this.tenantService.searchTenants(q.trim());
+    return this.tenantService.searchTenants((q || '').trim());
   }
 
   @Get("country-packs")

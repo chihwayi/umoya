@@ -340,11 +340,19 @@ export class TenantService implements OnModuleInit {
   }
 
   async searchTenants(q: string): Promise<Array<{ id: string; slug: string; name: string; baseUrl: string; logoUrl?: string }>> {
-    const term = `%${q.toLowerCase()}%`;
-    const tenants = await this.tenantRepository
+    const trimmed = q.trim();
+    let query = this.tenantRepository
       .createQueryBuilder('t')
-      .where('t.status = :status', { status: TenantStatus.ACTIVE })
-      .andWhere('(LOWER(t."clinicName") LIKE :term OR LOWER(t.subdomain) LIKE :term)', { term })
+      .where('t.status = :status', { status: TenantStatus.ACTIVE });
+
+    // Blank/short query: browse mode — top active tenants instead of no results.
+    // Powers the mobile app's default "suggested clinics" list before typing.
+    if (trimmed.length >= 2) {
+      const term = `%${trimmed.toLowerCase()}%`;
+      query = query.andWhere('(LOWER(t."clinicName") LIKE :term OR LOWER(t.subdomain) LIKE :term)', { term });
+    }
+
+    const tenants = await query
       .orderBy('t."clinicName"', 'ASC')
       .limit(20)
       .getMany();
