@@ -115,12 +115,17 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     showError(`Action Blocked (Payment Pending)`, `${context}. ${suffix}`);
   };
 
+  // Only summarizes vitals NOT already called out by getCriticalVitals below —
+  // otherwise an abnormal reading (the common case for a triage patient)
+  // rendered in both the compact string AND its own critical badge,
+  // showing the same number twice side by side.
   const getCompactVitalsString = (vitals: Appointment['vitals']) => {
     if (!vitals) return '';
+    const critical = new Set(getCriticalVitals(vitals).map((c) => c.label));
     const parts: string[] = [];
-    if (vitals.heartRate) parts.push(`HR ${vitals.heartRate}`);
-    if (vitals.temperature) parts.push(`Temp ${vitals.temperature}°C`);
-    if (vitals.oxygenSaturation) parts.push(`SpO2 ${vitals.oxygenSaturation}%`);
+    if (vitals.heartRate && !critical.has(`HR ${vitals.heartRate}`)) parts.push(`HR ${vitals.heartRate}`);
+    if (vitals.temperature && !critical.has(`Temp ${vitals.temperature}°C`)) parts.push(`Temp ${vitals.temperature}°C`);
+    if (vitals.oxygenSaturation && !critical.has(`SpO2 ${vitals.oxygenSaturation}%`)) parts.push(`SpO2 ${vitals.oxygenSaturation}%`);
     return parts.join(' · ');
   };
 
@@ -653,7 +658,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
 
                         {/* Dropdown menu */}
                         {moreMenuOpen && (
-                          <div className="absolute right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-max">
+                          <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200/50 rounded-xl shadow-lg z-10 overflow-hidden py-1.5">
                             {onViewVitalsHistory && (
                               <button
                                 type="button"
@@ -664,8 +669,11 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                   );
                                   setOpenMoreMenuId(null);
                                 }}
-                                className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 first:rounded-t-lg"
+                                className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors group"
                               >
+                                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 text-blue-600 group-hover:bg-blue-200 transition-colors flex-shrink-0">
+                                  <Activity className="w-4 h-4" />
+                                </span>
                                 Vitals History
                               </button>
                             )}
@@ -675,8 +683,11 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                   onViewCarePlans(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`);
                                   setOpenMoreMenuId(null);
                                 }}
-                                className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors group"
                               >
+                                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-teal-100 text-teal-600 group-hover:bg-teal-200 transition-colors flex-shrink-0">
+                                  <Target className="w-4 h-4" />
+                                </span>
                                 Care Plans
                               </button>
                             )}
@@ -686,8 +697,11 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                   onViewLabResults(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`);
                                   setOpenMoreMenuId(null);
                                 }}
-                                className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors group"
                               >
+                                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-100 text-violet-600 group-hover:bg-violet-200 transition-colors flex-shrink-0">
+                                  <TestTube className="w-4 h-4" />
+                                </span>
                                 Lab Results
                               </button>
                             )}
@@ -697,8 +711,11 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                 setOpenMoreMenuId(null);
                               }}
                               disabled={(awaitingPayment && !isWaived(appointment)) || (triageCopilotLoading && triageCopilotPatientId === appointment.patient.id)}
-                              className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                              className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors group disabled:text-slate-400 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             >
+                              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-orange-100 text-orange-600 group-hover:bg-orange-200 transition-colors flex-shrink-0 group-disabled:bg-slate-100 group-disabled:text-slate-400">
+                                <Brain className="w-4 h-4" />
+                              </span>
                               {triageCopilotLoading && triageCopilotPatientId === appointment.patient.id
                                 ? 'AI Analyzing...'
                                 : 'AI Suggest + Open'}
@@ -710,9 +727,11 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                   onOpenPayment(appointment);
                                   setOpenMoreMenuId(null);
                                 }}
-                                className="block w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 last:rounded-b-lg border-t border-slate-200"
+                                className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors group border-t border-slate-100 mt-1 pt-2.5"
                               >
-                                <CreditCard className="w-3 h-3 inline mr-1" />
+                                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 text-amber-700 group-hover:bg-amber-200 transition-colors flex-shrink-0">
+                                  <CreditCard className="w-4 h-4" />
+                                </span>
                                 Record Payment
                               </button>
                             )}
@@ -728,10 +747,10 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                     {hasVisitVitals && latestVitals && (
                       <button
                         onClick={() => setExpandedVitalsId(vitalsExpanded ? null : appointment.id)}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 font-medium transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-xs text-indigo-700 font-semibold transition-colors cursor-pointer"
                       >
                         <Eye className="w-3 h-3" />
-                        {getCompactVitalsString(latestVitals)}
+                        {getCompactVitalsString(latestVitals) || 'Vitals'}
                         <ChevronDown className={`w-3 h-3 transition-transform ${vitalsExpanded ? 'rotate-180' : ''}`} />
                       </button>
                     )}
