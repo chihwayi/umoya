@@ -20,7 +20,8 @@ export interface ApiConsultation {
 }
 
 export interface MeetingAccess {
-  roomUrl: string;
+  /** LiveKit server wss:// URL — shared across all rooms, not per-call */
+  serverUrl: string;
   token: string;
   consultationId: string;
 }
@@ -91,30 +92,30 @@ export const TelemedicineService = {
   getMeetingUrl: (id: string) =>
     api.get<MeetingUrlResponse>(`/patient-portal/telemedicine/consultation/${id}/meeting-url`)
       .then(r => ({
-        roomUrl: r.data.roomUrl ?? r.data.meetingUrl ?? '',
+        serverUrl: r.data.roomUrl ?? r.data.meetingUrl ?? '',
         roomName: r.data.roomName ?? r.data.meetingRoomId ?? '',
       })),
 
-  /** Get a signed Daily.co meeting token */
+  /** Get a signed LiveKit meeting token */
   getToken: (id: string, _role: 'patient' | 'doctor' = 'patient') =>
     api.get<MeetingTokenResponse>(`/patient-portal/telemedicine/consultation/${id}/token`)
       .then(r => ({
         token: r.data.token,
-        roomUrl: r.data.roomUrl ?? r.data.meetingUrl ?? '',
+        serverUrl: r.data.roomUrl ?? r.data.meetingUrl ?? '',
         expiresAt: r.data.expiresAt,
       })),
 
   /**
-   * One-shot helper: get room URL + token together
-   * Returns everything needed to open the Daily.co WebView.
+   * One-shot helper: get server URL + token together — everything the
+   * LiveKit SDK needs to connect the native call view.
    */
   getMeetingAccess: async (id: string, role: 'patient' | 'doctor' = 'patient'): Promise<MeetingAccess> => {
     const [urlRes, tokenRes] = await Promise.all([
       TelemedicineService.getMeetingUrl(id),
       TelemedicineService.getToken(id, role),
     ]);
-    const roomUrl = tokenRes.roomUrl ?? urlRes.roomUrl;
-    return { roomUrl, token: tokenRes.token, consultationId: id };
+    const serverUrl = tokenRes.serverUrl ?? urlRes.serverUrl;
+    return { serverUrl, token: tokenRes.token, consultationId: id };
   },
 
   /** Join consultation (registers participant) */

@@ -11,11 +11,14 @@
     "test:e2e": "detox test --configuration android.emu.debug",
     "test:e2e:ios": "detox test --configuration ios.sim.debug",
     "detox:build:android": "detox build --configuration android.emu.debug",
-    "detox:build:ios": "detox build --configuration ios.sim.debug"
+    "detox:build:ios": "detox build --configuration ios.sim.debug",
+    "postinstall": "node scripts/patch-livekit-gradle.js"
   },
   "dependencies": {
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo-google-fonts/sora": "^0.4.2",
+    "@livekit/react-native": "^2.5.0",
+    "@livekit/react-native-webrtc": "^125.0.12",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.15.6",
     "@react-navigation/native": "^7.1.34",
@@ -44,6 +47,7 @@
     "expo-status-bar": "~55.0.6",
     "expo-system-ui": "~55.0.19",
     "i18next": "^26.0.10",
+    "livekit-client": "^2.7.5",
     "lucide-react-native": "^1.41.0",
     "react": "19.2.0",
     "react-i18next": "^17.0.7",

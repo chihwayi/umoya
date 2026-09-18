@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, ActivityIndicator, Alert,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, FONT, RADIUS, SHADOW } from '../../design/tokens';
 import { Icon, Card, AiBadge, AiPulse, Badge } from '../ui';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { TelemedicineService, ApiConsultation, MeetingAccess } from '../../services/telemedicine';
+import { NativeCallStage } from '../telemedicine/NativeCallStage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,99 +90,6 @@ const rStyles = StyleSheet.create({
   btnText:   { fontFamily: FONT.uiBd, fontSize: 14, color: '#fff' },
   skip:      { paddingVertical: 8 },
   skipText:  { fontFamily: FONT.ui, fontSize: 13, color: C.textMuted },
-});
-
-// ─── In-Call WebView ──────────────────────────────────────────────────────────
-
-const CallView: React.FC<{
-  access: MeetingAccess;
-  onEnd: () => void;
-}> = ({ access, onEnd }) => {
-  const insets = useSafeAreaInsets();
-  const [muted, setMuted] = useState(false);
-  const [camOff, setCamOff] = useState(false);
-  const webViewRef = useRef<WebView>(null);
-
-  // Build Daily.co prebuilt URL with meeting token
-  const callUrl = `${access.roomUrl}?t=${encodeURIComponent(access.token)}`;
-
-  const toggleMute = () => {
-    setMuted(m => !m);
-    // Inject JS to toggle Daily.co audio
-    webViewRef.current?.injectJavaScript(
-      `window.callFrame && window.callFrame.setLocalAudio(${muted});`
-    );
-  };
-
-  const toggleCam = () => {
-    setCamOff(c => !c);
-    webViewRef.current?.injectJavaScript(
-      `window.callFrame && window.callFrame.setLocalVideo(${camOff});`
-    );
-  };
-
-  const confirmEnd = () => {
-    Alert.alert('End Call', 'Are you sure you want to end this consultation?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'End Call', style: 'destructive', onPress: onEnd },
-    ]);
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
-      <WebView
-        ref={webViewRef}
-        source={{ uri: callUrl }}
-        style={{ flex: 1 }}
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
-        javaScriptEnabled
-        domStorageEnabled
-        allowsProtectedMedia
-        originWhitelist={['*']}
-        onError={() => Alert.alert('Connection Error', 'Could not connect to the call. Please try again.')}
-      />
-
-      {/* Floating call controls */}
-      <View style={[callStyles.controls, { paddingBottom: insets.bottom + 12 }]}>
-        <TouchableOpacity
-          style={[callStyles.ctrlBtn, muted && callStyles.ctrlActive]}
-          onPress={toggleMute}
-          activeOpacity={0.85}
-        >
-          <Icon name={muted ? 'escalate' : 'pulse'} size={20} color={muted ? C.amber : '#fff'} />
-          <Text style={[callStyles.ctrlLabel, muted && { color: C.amber }]}>
-            {muted ? 'Unmute' : 'Mute'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={callStyles.endBtn} onPress={confirmEnd} activeOpacity={0.85}>
-          <Icon name="escalate" size={22} color="#fff" />
-          <Text style={callStyles.endLabel}>End</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[callStyles.ctrlBtn, camOff && callStyles.ctrlActive]}
-          onPress={toggleCam}
-          activeOpacity={0.85}
-        >
-          <Icon name={camOff ? 'rounds' : 'telehealth'} size={20} color={camOff ? C.amber : '#fff'} />
-          <Text style={[callStyles.ctrlLabel, camOff && { color: C.amber }]}>
-            {camOff ? 'Show Cam' : 'Hide Cam'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
-const callStyles = StyleSheet.create({
-  controls:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, paddingTop: 12, backgroundColor: 'rgba(0,0,0,0.75)' },
-  ctrlBtn:   { alignItems: 'center', gap: 4, padding: 10, borderRadius: RADIUS.md, minWidth: 68 },
-  ctrlActive:{ backgroundColor: 'rgba(255,255,255,0.1)' },
-  ctrlLabel: { fontFamily: FONT.uiBd, fontSize: 11, color: 'rgba(255,255,255,0.8)' },
-  endBtn:    { alignItems: 'center', gap: 4, backgroundColor: C.red, borderRadius: 36, width: 72, height: 72, justifyContent: 'center', ...SHADOW.heavy },
-  endLabel:  { fontFamily: FONT.uiBd, fontSize: 11, color: '#fff' },
 });
 
 // ─── Consultation Card ────────────────────────────────────────────────────────
@@ -345,9 +252,12 @@ export const PatientTelemedicineScreen: React.FC<PatientTelemedicineScreenProps>
   // ── In-call full-screen view ───────────────────────────────────────────────
   if (callState === 'in_call' && meetingAccess) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
-        <CallView access={meetingAccess} onEnd={handleEndCall} />
-      </View>
+      <NativeCallStage
+        serverUrl={meetingAccess.serverUrl}
+        token={meetingAccess.token}
+        remoteName={activeConsultation?.doctorName}
+        onEnd={handleEndCall}
+      />
     );
   }
 
@@ -374,13 +284,13 @@ export const PatientTelemedicineScreen: React.FC<PatientTelemedicineScreenProps>
             <Text style={styles.headerTitle}>Telehealth</Text>
             <Text style={styles.headerSub}>Video consultations with your doctor</Text>
           </View>
-          <AiBadge text="Daily.co" />
+          <AiBadge text="Secure" />
         </View>
 
         {/* HIPAA badge */}
         <View style={styles.hipaaRow}>
           <Icon name="sparkle" size={11} color={C.green} />
-          <Text style={styles.hipaaText}>End-to-end encrypted  ·  HIPAA compliant  ·  Daily.co powered</Text>
+          <Text style={styles.hipaaText}>End-to-end encrypted  ·  HIPAA compliant  ·  Self-hosted</Text>
         </View>
       </LinearGradient>
 

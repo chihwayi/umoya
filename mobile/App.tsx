@@ -1,4 +1,6 @@
 import './src/i18n';
+import { registerGlobals } from '@livekit/react-native';
+registerGlobals();
 import React, { useEffect } from 'react';
 import { View, StyleSheet, StatusBar, Text, LogBox, Linking } from 'react-native';
 LogBox.ignoreAllLogs(true);
