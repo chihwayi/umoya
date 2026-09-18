@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
-  Users, Clock, AlertTriangle, CheckCircle, Activity, Eye, 
+  Users, Clock, AlertTriangle, CheckCircle, Activity, Eye,
   Heart, Thermometer, Droplets, Plus, Search, Filter,
   ArrowUp, ArrowDown, User, Calendar, Stethoscope, ClipboardList,
-  CreditCard, Lock, Target, TestTube, Brain
+  CreditCard, Lock, Target, TestTube, Brain, MoreVertical, ChevronDown
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from './GlobalNotification';
@@ -86,6 +86,8 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   const [filterPriority, setFilterPriority] = useState('all');
   const [sortBy, setSortBy] = useState('priority');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [expandedVitalsId, setExpandedVitalsId] = useState<string | null>(null);
+  const [openMoreMenuId, setOpenMoreMenuId] = useState<string | null>(null);
   const { showError, showSuccess } = useNotification();
 
   const formatCurrency = (value?: number | string | null) => {
@@ -113,10 +115,19 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
     showError(`Action Blocked (Payment Pending)`, `${context}. ${suffix}`);
   };
 
+  const getCompactVitalsString = (vitals: Appointment['vitals']) => {
+    if (!vitals) return '';
+    const parts: string[] = [];
+    if (vitals.heartRate) parts.push(`HR ${vitals.heartRate}`);
+    if (vitals.temperature) parts.push(`Temp ${vitals.temperature}°C`);
+    if (vitals.oxygenSaturation) parts.push(`SpO2 ${vitals.oxygenSaturation}%`);
+    return parts.join(' · ');
+  };
+
   const getCriticalVitals = (vitals: Appointment['vitals']) => {
     if (!vitals) return [];
     const critical = [];
-    
+
     // BP check
     if (vitals.bloodPressure) {
       const [sys, dia] = vitals.bloodPressure.split('/').map(Number);
@@ -510,271 +521,326 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
               new Date(latestVitals.recordedAt).toDateString() ===
                 new Date(appointment.appointmentDate).toDateString();
             const queueRiskLevel = getQueueRiskLevel(appointment);
+            const vitalsExpanded = expandedVitalsId === appointment.id;
+            const moreMenuOpen = openMoreMenuId === appointment.id;
 
             return (
-              <div key={appointment.id} className={`p-8 transition-all duration-300 group ${awaitingPayment ? 'bg-amber-50/60' : 'hover:bg-gradient-to-r hover:from-slate-50 hover:to-pink-50/30'}`}>
-                <div className="flex items-center justify-between gap-6">
-                  <div className="flex items-center gap-6 flex-1">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg group-hover:shadow-xl transition-all duration-300 ${awaitingPayment ? 'bg-gradient-to-br from-amber-500 via-orange-600 to-amber-700' : 'bg-gradient-to-br from-pink-500 via-rose-600 to-purple-600'}`}>
-                      {appointment.patient.firstName.charAt(0)}{appointment.patient.lastName.charAt(0)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <h4 className={`text-xl font-bold ${awaitingPayment ? 'text-amber-800' : 'text-slate-900 group-hover:text-pink-900 transition-colors'}`}>
-                          {appointment.patient?.firstName || 'Unknown'} {appointment.patient?.lastName || 'Patient'}
-                        </h4>
-                        {awaitingPayment && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
-                            <CreditCard className="w-3 h-3" /> Awaiting Payment
-                          </span>
-                        )}
+              <div key={appointment.id} className={`transition-all duration-300 group ${awaitingPayment ? 'bg-amber-50/60' : 'hover:bg-gradient-to-r hover:from-slate-50 hover:to-pink-50/30'}`}>
+                {/* Main card - compact header row */}
+                <div className="p-4 space-y-2">
+                  {/* Top row: Avatar, Name, Badges, Actions */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* Avatar */}
+                      <div className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center text-white font-bold text-sm shadow ${awaitingPayment ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-gradient-to-br from-pink-500 to-purple-600'}`}>
+                        {appointment.patient.firstName.charAt(0)}{appointment.patient.lastName.charAt(0)}
                       </div>
-                      <p className="text-slate-600 font-medium mb-3">
-                        ID: {appointment.patient?.patientNumber || 'N/A'} • {appointment.appointmentType}
-                      </p>
-                      <div className="flex items-center gap-4 mb-3 flex-wrap">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(appointment.priorityLevel)}`}>
+
+                      {/* Name & Key Info */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className={`font-semibold truncate ${awaitingPayment ? 'text-amber-800' : 'text-slate-900'}`}>
+                            {appointment.patient?.firstName || 'Unknown'} {appointment.patient?.lastName || 'Patient'}
+                          </h4>
+                          <span className="text-xs text-slate-500 flex-shrink-0">
+                            ID: {appointment.patient?.patientNumber || 'N/A'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 truncate">
+                          {appointment.appointmentType} • {formatDateTimeToDDMMYYYYHHMM(appointment.appointmentDate)}
+                        </p>
+                      </div>
+
+                      {/* Status badges - compact inline */}
+                      <div className="flex items-center gap-1 flex-wrap flex-shrink-0">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getPriorityColor(appointment.priorityLevel)}`}>
                           {appointment.priorityLevel}
                         </span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(appointment.status)}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusColor(appointment.status)}`}>
                           {appointment.status}
                         </span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getQueueRiskColor(queueRiskLevel)}`}>
-                          Queue risk: {queueRiskLevel === 'high' ? 'High' : queueRiskLevel === 'medium' ? 'Medium' : 'Low'}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getQueueRiskColor(queueRiskLevel)}`}>
+                          {queueRiskLevel === 'high' ? 'High Risk' : queueRiskLevel === 'medium' ? 'Med Risk' : 'Low Risk'}
                         </span>
-                        <span className="text-sm text-slate-500">
-                          {formatDateTimeToDDMMYYYYHHMM(appointment.appointmentDate)}
+                      </div>
+                    </div>
+
+                    {/* Right side: Primary actions & more menu */}
+                    <div className="flex items-center gap-1 flex-shrink-0 relative">
+                      {/* Primary action button (Record Vitals or Triage) */}
+                      {hasVisitVitals ? (
+                        <span className="px-2 py-1 rounded-lg border border-green-200 bg-green-50 text-green-800 text-xs font-semibold flex-shrink-0">
+                          Vitals ✓
                         </span>
-                        {feeEstimate && (
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold border border-slate-200 text-slate-600 bg-slate-50">
-                            Fee: {feeEstimate}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Vitals Status */}
-                      <div className="flex flex-wrap items-center gap-4">
-                        {hasVisitVitals ? (
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="w-4 h-4" />
-                            <span className="text-sm font-semibold">Vitals Recorded</span>
-                          </div>
-                        ) : (
-                          <div className={`flex items-center gap-2 ${awaitingPayment ? 'text-amber-600' : 'text-orange-600'}`}>
-                            <AlertTriangle className="w-4 h-4" />
-                            <span className="text-sm font-semibold">Vitals Pending</span>
-                          </div>
-                        )}
-                        
-                        {hasVisitVitals && latestVitals && (
-                          <div className="flex items-center gap-4 text-sm text-slate-600">
-                            <div className="flex items-center gap-1">
-                              <Heart className="w-3 h-3" />
-                              <span>{latestVitals.heartRate} bpm</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Thermometer className="w-3 h-3" />
-                              <span>{latestVitals.temperature}°C</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Droplets className="w-3 h-3" />
-                              <span>{latestVitals.oxygenSaturation}%</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Critical Vitals Tags */}
-                      {hasVisitVitals && latestVitals && getCriticalVitals(latestVitals).length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {getCriticalVitals(latestVitals).map((alert, idx) => (
-                            <span key={idx} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold border ${alert.severity === 'high' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
-                              <Activity className="w-3 h-3" />
-                              {alert.label}
-                            </span>
-                          ))}
-                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleRecordVitalsClick(appointment)}
+                          disabled={awaitingPayment && !isWaived(appointment)}
+                          className={`px-2 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 flex-shrink-0 transition-all ${awaitingPayment && !isWaived(appointment)
+                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                            : 'bg-red-500 text-white hover:bg-red-600'
+                          }`}
+                        >
+                          <Heart className="w-3 h-3" />
+                          Record
+                        </button>
                       )}
 
-                      {/* Clinical Context */}
-                      {(appointment.patient?.allergies || appointment.patient?.chronicConditions || isElderly(appointment.patient?.dateOfBirth)) && (
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {isElderly(appointment.patient?.dateOfBirth) && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                              <AlertTriangle className="w-3 h-3" />
-                              Fall Risk (Age &gt; 65)
-                            </span>
-                          )}
-                          {appointment.patient?.allergies && appointment.patient.allergies.trim().length > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                              <AlertTriangle className="w-3 h-3" />
-                              Allergies: {appointment.patient.allergies}
-                            </span>
-                          )}
-                          {appointment.patient?.chronicConditions && appointment.patient.chronicConditions.trim().length > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              <Stethoscope className="w-3 h-3" />
-                              Conditions: {appointment.patient.chronicConditions}
-                            </span>
-                          )}
-                        </div>
+                      {/* Triage button */}
+                      <button
+                        onClick={() => handleTriageClick(appointment)}
+                        disabled={awaitingPayment && !isWaived(appointment)}
+                        className={`px-2 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 flex-shrink-0 transition-all ${awaitingPayment && !isWaived(appointment)
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                        }`}
+                      >
+                        <ClipboardList className="w-3 h-3" />
+                        Triage
+                      </button>
+
+                      {/* Status action button */}
+                      {appointment.status === 'scheduled' && (
+                        <button
+                          onClick={() => handleStatusChange(appointment, 'confirmed')}
+                          disabled={awaitingPayment}
+                          className={`px-2 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 flex-shrink-0 transition-all ${awaitingPayment
+                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                            : 'bg-green-500 text-white hover:bg-green-600'
+                          }`}
+                        >
+                          <CheckCircle className="w-3 h-3" />
+                          Confirm
+                        </button>
                       )}
 
-                      {awaitingPayment && !isWaived(appointment) && (
-                        <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex flex-col gap-1">
-                          <span className="flex items-center gap-2 font-medium">
-                            <Lock className="w-4 h-4" /> Payment required before nursing actions
-                          </span>
-                          <span>
-                            {canManagePayments
-                              ? 'Record payment in Billing to unlock vitals, triage, and status updates.'
-                              : 'Coordinate with Accounts to unlock vitals, triage, and status updates.'}
-                          </span>
-                          {financeReference && (
-                            <span className="text-xs text-amber-600">
-                              Finance reference: <span className="font-mono">{financeReference}</span>
-                            </span>
-                          )}
-                          {canManagePayments && onOpenPayment && (
+                      {appointment.status === 'confirmed' && (
+                        <button
+                          onClick={() => handleStatusChange(appointment, 'in-progress')}
+                          disabled={awaitingPayment}
+                          className={`px-2 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 flex-shrink-0 transition-all ${awaitingPayment
+                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                          }`}
+                        >
+                          <Activity className="w-3 h-3" />
+                          Start
+                        </button>
+                      )}
+
+                      {(appointment.status === 'in-progress' || appointment.status === 'in_progress') && (
+                        <button
+                          onClick={() => handleStatusChange(appointment, 'completed')}
+                          disabled={awaitingPayment}
+                          className={`px-2 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 flex-shrink-0 transition-all ${awaitingPayment
+                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                            : 'bg-purple-500 text-white hover:bg-purple-600'
+                          }`}
+                        >
+                          <CheckCircle className="w-3 h-3" />
+                          Done
+                        </button>
+                      )}
+
+                      {/* More menu button */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setOpenMoreMenuId(moreMenuOpen ? null : appointment.id)}
+                          className="p-1 rounded-lg hover:bg-slate-200 transition-colors flex-shrink-0"
+                        >
+                          <MoreVertical className="w-4 h-4 text-slate-600" />
+                        </button>
+
+                        {/* Dropdown menu */}
+                        {moreMenuOpen && (
+                          <div className="absolute right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-max">
+                            {onViewVitalsHistory && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onViewVitalsHistory(
+                                    appointment.patient.id,
+                                    `${appointment.patient.firstName} ${appointment.patient.lastName}`,
+                                  );
+                                  setOpenMoreMenuId(null);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 first:rounded-t-lg"
+                              >
+                                Vitals History
+                              </button>
+                            )}
+                            {onViewCarePlans && (
+                              <button
+                                onClick={() => {
+                                  onViewCarePlans(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`);
+                                  setOpenMoreMenuId(null);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                Care Plans
+                              </button>
+                            )}
+                            {onViewLabResults && (
+                              <button
+                                onClick={() => {
+                                  onViewLabResults(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`);
+                                  setOpenMoreMenuId(null);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                Lab Results
+                              </button>
+                            )}
                             <button
-                              type="button"
-                              onClick={() => onOpenPayment(appointment)}
-                              className="mt-2 inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                              onClick={() => {
+                                handleTriageCopilotClick(appointment);
+                                setOpenMoreMenuId(null);
+                              }}
+                              disabled={(awaitingPayment && !isWaived(appointment)) || (triageCopilotLoading && triageCopilotPatientId === appointment.patient.id)}
+                              className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                             >
-                              <CreditCard className="w-3 h-3 mr-1" />
-                              Record Payment
+                              {triageCopilotLoading && triageCopilotPatientId === appointment.patient.id
+                                ? 'AI Analyzing...'
+                                : 'AI Suggest + Open'}
                             </button>
-                          )}
-                        </div>
-                      )}
-                      {awaitingPayment && isWaived(appointment) && (
-                        <div className="mt-3 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4" />
-                          <span className="font-medium">Payment Waived (Age &gt; 65)</span>
-                        </div>
-                      )}
+                            {awaitingPayment && !isWaived(appointment) && canManagePayments && onOpenPayment && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenPayment(appointment);
+                                  setOpenMoreMenuId(null);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 last:rounded-b-lg border-t border-slate-200"
+                              >
+                                <CreditCard className="w-3 h-3 inline mr-1" />
+                                Record Payment
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {hasVisitVitals ? (
-                      <span className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm font-semibold">Vitals recorded</span>
-                    ) : (
+                  {/* Second row: Compact vitals & additional info */}
+                  <div className="flex items-center gap-3 flex-wrap pl-13">
+                    {/* Vitals badge - clickable to expand */}
+                    {hasVisitVitals && latestVitals && (
                       <button
-                        onClick={() => handleRecordVitalsClick(appointment)}
-                        disabled={awaitingPayment && !isWaived(appointment)}
-                        className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${awaitingPayment && !isWaived(appointment)
-                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-red-500 to-pink-600 text-white hover:from-red-600 hover:to-pink-700'
-                        }`}
+                        onClick={() => setExpandedVitalsId(vitalsExpanded ? null : appointment.id)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs text-slate-700 font-medium transition-colors cursor-pointer"
                       >
-                        <Heart className="w-4 h-4" />
-                        Record Vitals
+                        <Eye className="w-3 h-3" />
+                        {getCompactVitalsString(latestVitals)}
+                        <ChevronDown className={`w-3 h-3 transition-transform ${vitalsExpanded ? 'rotate-180' : ''}`} />
                       </button>
                     )}
-                    
-                    <button
-                      onClick={() => handleTriageClick(appointment)}
-                      disabled={awaitingPayment && !isWaived(appointment)}
-                      className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${awaitingPayment && !isWaived(appointment)
-                        ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-orange-500 to-yellow-600 text-white hover:from-orange-600 hover:to-yellow-700'
-                      }`}
-                    >
-                      <ClipboardList className="w-4 h-4" />
-                      Triage Assessment
-                    </button>
-                    <button
-                      onClick={() => handleTriageCopilotClick(appointment)}
-                      disabled={(awaitingPayment && !isWaived(appointment)) || (triageCopilotLoading && triageCopilotPatientId === appointment.patient.id)}
-                      className={`px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 ${
-                        (awaitingPayment && !isWaived(appointment)) || (triageCopilotLoading && triageCopilotPatientId === appointment.patient.id)
-                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700'
-                      }`}
-                    >
-                      <Brain className="w-4 h-4" />
-                      {triageCopilotLoading && triageCopilotPatientId === appointment.patient.id
-                        ? 'Analyzing...'
-                        : 'AI Suggest + Open'}
-                    </button>
-                    <span className="text-[10px] text-slate-400">AI-generated · clinician review required</span>
-                    {onViewVitalsHistory && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onViewVitalsHistory(
-                            appointment.patient.id,
-                            `${appointment.patient.firstName} ${appointment.patient.lastName}`,
-                          )
-                        }
-                        className="px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 bg-gradient-to-r from-sky-500 to-indigo-600 text-white hover:from-sky-600 hover:to-indigo-700"
-                      >
-                        <Activity className="w-4 h-4" />
-                        Vitals History
-                      </button>
+
+                    {!hasVisitVitals && (
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border ${awaitingPayment ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
+                        <AlertTriangle className="w-3 h-3" />
+                        Vitals Pending
+                      </span>
                     )}
-                    {onViewCarePlans && (
-                      <button
-                        onClick={() => onViewCarePlans(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`)}
-                        className="px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 bg-gradient-to-r from-teal-500 to-cyan-600 text-white hover:from-teal-600 hover:to-cyan-700"
-                      >
-                        <Target className="w-4 h-4" />
-                        Care Plans
-                      </button>
+
+                    {/* Critical vitals inline */}
+                    {hasVisitVitals && latestVitals && getCriticalVitals(latestVitals).length > 0 && (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {getCriticalVitals(latestVitals).map((alert, idx) => (
+                          <span key={idx} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${alert.severity === 'high' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+                            {alert.label}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    {onViewLabResults && (
-                      <button
-                        onClick={() => onViewLabResults(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`)}
-                        className="px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-200 bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700"
-                      >
-                        <TestTube className="w-4 h-4" />
-                        Lab Results
-                      </button>
+
+                    {/* Clinical alerts */}
+                    {isElderly(appointment.patient?.dateOfBirth) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                        <AlertTriangle className="w-3 h-3" />
+                        Fall Risk
+                      </span>
                     )}
-                    {/* Status Change Buttons */}
-                    {appointment.status === 'scheduled' && (
-                      <button
-                        onClick={() => handleStatusChange(appointment, 'confirmed')}
-                        disabled={awaitingPayment}
-                        className={`px-3 py-2 rounded-lg font-semibold text-sm flex items-center gap-1 transition-all duration-200 ${awaitingPayment
-                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700'
-                        }`}
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Confirm
-                      </button>
+
+                    {feeEstimate && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold border border-slate-200 text-slate-600 bg-slate-50">
+                        {feeEstimate}
+                      </span>
                     )}
-                    
-                    {appointment.status === 'confirmed' && (
-                      <button
-                        onClick={() => handleStatusChange(appointment, 'in-progress')}
-                        disabled={awaitingPayment}
-                        className={`px-3 py-2 rounded-lg font-semibold text-sm flex items-center gap-1 transition-all duration-200 ${awaitingPayment
-                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700'
-                        }`}
-                      >
-                        <Activity className="w-4 h-4" />
-                        Start
-                      </button>
-                    )}
-                    
-                    {(appointment.status === 'in-progress' || appointment.status === 'in_progress') && (
-                      <button
-                        onClick={() => handleStatusChange(appointment, 'completed')}
-                        disabled={awaitingPayment}
-                        className={`px-3 py-2 rounded-lg font-semibold text-sm flex items-center gap-1 transition-all duration-200 ${awaitingPayment
-                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700'
-                        }`}
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Complete
-                      </button>
+
+                    {awaitingPayment && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                        <CreditCard className="w-3 h-3" /> Payment Pending
+                      </span>
                     )}
                   </div>
+
+                  {/* Expanded vitals detail section */}
+                  {vitalsExpanded && hasVisitVitals && latestVitals && (
+                    <div className="ml-13 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm space-y-2">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">BP</p>
+                          <p className="font-semibold text-slate-900">{latestVitals.bloodPressure}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">HR</p>
+                          <p className="font-semibold text-slate-900">{latestVitals.heartRate} bpm</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">Temp</p>
+                          <p className="font-semibold text-slate-900">{latestVitals.temperature}°C</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">SpO2</p>
+                          <p className="font-semibold text-slate-900">{latestVitals.oxygenSaturation}%</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">RR</p>
+                          <p className="font-semibold text-slate-900">{latestVitals.respiratoryRate}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-600 font-semibold">BMI</p>
+                          <p className="font-semibold text-slate-900">{latestVitals.bmi}</p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-600 pt-2 border-t border-slate-200">
+                        Recorded by {latestVitals.recordedBy} on {new Date(latestVitals.recordedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Payment & Clinical alerts section */}
+                  {(awaitingPayment || appointment.patient?.allergies || appointment.patient?.chronicConditions) && (
+                    <div className="ml-13 space-y-2">
+                      {awaitingPayment && !isWaived(appointment) && (
+                        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                          <span className="font-semibold block mb-0.5">
+                            <Lock className="w-3 h-3 inline mr-1" /> Payment required
+                          </span>
+                          <span className="block">
+                            {canManagePayments
+                              ? 'Record payment to unlock vitals, triage, and updates.'
+                              : 'Contact Accounts to proceed.'}
+                          </span>
+                        </div>
+                      )}
+                      {appointment.patient?.allergies && appointment.patient.allergies.trim().length > 0 && (
+                        <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5">
+                          <span className="font-semibold block">
+                            <AlertTriangle className="w-3 h-3 inline mr-1" /> Allergies: {appointment.patient.allergies}
+                          </span>
+                        </div>
+                      )}
+                      {appointment.patient?.chronicConditions && appointment.patient.chronicConditions.trim().length > 0 && (
+                        <div className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2 py-1.5">
+                          <span className="font-semibold block">
+                            <Stethoscope className="w-3 h-3 inline mr-1" /> Conditions: {appointment.patient.chronicConditions}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
