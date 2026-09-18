@@ -298,8 +298,9 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   };
 
   useEffect(() => {
-    if (appointments.length > 0 && appointments[0]?.reason) {
-      setChiefComplaint(prev => prev || appointments[0].reason);
+    const reason = appointments.length > 0 ? appointments[0]?.reason?.trim() : '';
+    if (reason && !VISIT_REASON_PATTERNS.test(reason)) {
+      setChiefComplaint(prev => prev || reason);
     }
   }, [appointments]);
 
