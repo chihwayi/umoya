@@ -69,6 +69,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState<'face' | 'fingerprint' | 'none'>('none');
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Android's automatic keyboard-avoidance (adjustResize + KeyboardAvoidingView)
+  // is unreliable on some real devices — the form stays put behind the keyboard
+  // instead of resizing, leaving Password/Sign In unreachable without a manual
+  // swipe. Force it: whenever a field in this form gets focus, scroll straight
+  // to the bottom (past the button) once the keyboard has finished animating in.
+  const scrollToFormEnd = () => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 250);
+  };
 
   // Detect what biometric hardware is available
   useEffect(() => {
@@ -232,6 +242,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         style={[styles.flex, { paddingTop: insets.top }]}
       >
         <ScrollView
+          ref={scrollRef}
           testID="login-scroll-view"
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
           keyboardShouldPersistTaps="handled"
@@ -282,6 +293,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       placeholderTextColor={C.textMuted}
                       value={email}
                       onChangeText={setEmail}
+                      onFocus={scrollToFormEnd}
                       keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -300,6 +312,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       placeholderTextColor={C.textMuted}
                       value={password}
                       onChangeText={setPassword}
+                      onFocus={scrollToFormEnd}
                       secureTextEntry={!showPw}
                       // iOS's "Save Password?" Keychain sheet is a real system
                       // UI (not part of the app's own view tree) that Detox's
@@ -365,6 +378,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       placeholderTextColor={C.textMuted}
                       value={email}
                       onChangeText={setEmail}
+                      onFocus={scrollToFormEnd}
                       keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -382,6 +396,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                       placeholderTextColor={C.textMuted}
                       value={password}
                       onChangeText={setPassword}
+                      onFocus={scrollToFormEnd}
                       secureTextEntry={!showPw}
                       // iOS's "Save Password?" Keychain sheet is a real system
                       // UI (not part of the app's own view tree) that Detox's
