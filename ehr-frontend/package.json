@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@livekit/components-react": "^2.9.24",
+    "@livekit/components-react": "^2.6.10",
     "@livekit/components-styles": "^1.2.0",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^18.15.0",
@@ -26,7 +26,7 @@
     "i18next-browser-languagedetector": "^8.2.1",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
-    "livekit-client": "^2.22.3",
+    "livekit-client": "^2.7.5",
     "lucide-react": "^0.548.0",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.3.1",
