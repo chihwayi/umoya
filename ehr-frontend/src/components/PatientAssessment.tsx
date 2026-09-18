@@ -1251,9 +1251,13 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
         <ModalPortal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className={`p-6 border-b flex items-center justify-between ${
+                selectedHistory.priority === 'urgent' ? 'bg-gradient-to-r from-red-50 to-rose-50 border-red-100' :
+                selectedHistory.priority === 'high' ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-100' :
+                'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100'
+              }`}>
                 <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-xl ${
+                  <div className={`p-3 rounded-xl shadow-sm ${
                     selectedHistory.priority === 'urgent' ? 'bg-red-100 text-red-600' :
                     selectedHistory.priority === 'high' ? 'bg-orange-100 text-orange-600' :
                     'bg-blue-100 text-blue-600'
@@ -1279,29 +1283,29 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                 {/* Vitals Section */}
                 {selectedHistory.vitals && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="flex items-center gap-2 mb-2 text-slate-500">
+                    <div className="p-4 bg-rose-50 rounded-xl border border-rose-100">
+                      <div className="flex items-center gap-2 mb-2 text-rose-600">
                         <Activity className="w-4 h-4" />
                         <span className="text-xs font-semibold uppercase">Blood Pressure</span>
                       </div>
                       <p className="text-lg font-bold text-slate-900">{selectedHistory.vitals.bloodPressure || '—'}</p>
                     </div>
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="flex items-center gap-2 mb-2 text-slate-500">
+                    <div className="p-4 bg-pink-50 rounded-xl border border-pink-100">
+                      <div className="flex items-center gap-2 mb-2 text-pink-600">
                         <Heart className="w-4 h-4" />
                         <span className="text-xs font-semibold uppercase">Heart Rate</span>
                       </div>
                       <p className="text-lg font-bold text-slate-900">{selectedHistory.vitals.heartRate ? `${selectedHistory.vitals.heartRate} bpm` : '—'}</p>
                     </div>
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="flex items-center gap-2 mb-2 text-slate-500">
+                    <div className="p-4 bg-orange-50 rounded-xl border border-orange-100">
+                      <div className="flex items-center gap-2 mb-2 text-orange-600">
                         <Thermometer className="w-4 h-4" />
                         <span className="text-xs font-semibold uppercase">Temperature</span>
                       </div>
                       <p className="text-lg font-bold text-slate-900">{selectedHistory.vitals.temperature ? `${selectedHistory.vitals.temperature}°C` : '—'}</p>
                     </div>
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="flex items-center gap-2 mb-2 text-slate-500">
+                    <div className="p-4 bg-sky-50 rounded-xl border border-sky-100">
+                      <div className="flex items-center gap-2 mb-2 text-sky-600">
                         <Droplets className="w-4 h-4" />
                         <span className="text-xs font-semibold uppercase">O2 Saturation</span>
                       </div>
@@ -1314,8 +1318,11 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Chief Complaint</h3>
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl">
+                      <h3 className="text-sm font-bold text-indigo-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <ClipboardList className="w-4 h-4" />
+                        Chief Complaint
+                      </h3>
+                      <div className="p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl">
                         <p className="text-slate-800">{selectedHistory.chiefComplaint}</p>
                         {selectedHistory.chief_complaint_snomed && (
                            <div className="mt-2 flex items-center gap-2 text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded w-fit">
@@ -1327,13 +1334,16 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Symptoms</h3>
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl">
+                      <h3 className="text-sm font-bold text-purple-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Stethoscope className="w-4 h-4" />
+                        Symptoms
+                      </h3>
+                      <div className="p-4 bg-purple-50/60 border border-purple-100 rounded-xl">
                         <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.symptoms || 'None recorded'}</p>
                         {selectedHistory.symptoms_snomed && selectedHistory.symptoms_snomed.length > 0 && (
                           <div className="mt-3 flex flex-wrap gap-2">
                             {selectedHistory.symptoms_snomed.map((s: any, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs border border-slate-200">
+                              <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs border border-purple-200">
                                 {s.term}
                               </span>
                             ))}
@@ -1341,10 +1351,13 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                         )}
                       </div>
                     </div>
-                    
+
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Pain Assessment</h3>
-                      <div className="flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-xl">
+                      <h3 className="text-sm font-bold text-amber-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4" />
+                        Pain Assessment
+                      </h3>
+                      <div className="flex items-center gap-4 p-4 bg-amber-50/60 border border-amber-100 rounded-xl">
                          <div className={`text-2xl font-bold ${
                            selectedHistory.painScore >= 7 ? 'text-red-600' :
                            selectedHistory.painScore >= 4 ? 'text-orange-500' :
@@ -1368,19 +1381,22 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
 
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Clinical History</h3>
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4">
+                      <h3 className="text-sm font-bold text-teal-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <History className="w-4 h-4" />
+                        Clinical History
+                      </h3>
+                      <div className="p-4 bg-teal-50/60 border border-teal-100 rounded-xl space-y-4">
                         <div>
-                          <span className="text-xs font-semibold text-slate-500 uppercase block mb-1">Onset</span>
+                          <span className="text-xs font-semibold text-teal-600 uppercase block mb-1">Onset</span>
                           <p className="text-slate-800">{selectedHistory.onset || 'Not specified'}</p>
                         </div>
                         <div>
-                          <span className="text-xs font-semibold text-slate-500 uppercase block mb-1">Medical History</span>
+                          <span className="text-xs font-semibold text-teal-600 uppercase block mb-1">Medical History</span>
                           <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.history || 'None recorded'}</p>
                           {selectedHistory.history_snomed && selectedHistory.history_snomed.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-2">
                               {selectedHistory.history_snomed.map((h: any, idx: number) => (
-                                <span key={idx} className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs border border-slate-200">
+                                <span key={idx} className="px-2 py-1 bg-teal-100 text-teal-700 rounded text-xs border border-teal-200">
                                   {h.term}
                                 </span>
                               ))}
@@ -1391,14 +1407,17 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Medications & Allergies</h3>
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4">
+                      <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Heart className="w-4 h-4" />
+                        Medications &amp; Allergies
+                      </h3>
+                      <div className="p-4 bg-rose-50/60 border border-rose-100 rounded-xl space-y-4">
                         <div>
-                          <span className="text-xs font-semibold text-slate-500 uppercase block mb-1">Current Medications</span>
+                          <span className="text-xs font-semibold text-rose-600 uppercase block mb-1">Current Medications</span>
                           <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.medications || 'None recorded'}</p>
                         </div>
                         <div>
-                          <span className="text-xs font-semibold text-slate-500 uppercase block mb-1">Allergies</span>
+                          <span className="text-xs font-semibold text-rose-600 uppercase block mb-1">Allergies</span>
                           <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.allergies || 'No known allergies'}</p>
                         </div>
                       </div>
@@ -1406,13 +1425,16 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
 
                     {selectedHistory.observations && (
                       <div>
-                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Nurse Observations</h3>
-                        <div className="p-4 bg-white border border-slate-200 rounded-xl">
+                        <h3 className="text-sm font-bold text-blue-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <Edit2 className="w-4 h-4" />
+                          Nurse Observations
+                        </h3>
+                        <div className="p-4 bg-blue-50/60 border border-blue-100 rounded-xl">
                           <p className="text-slate-800 whitespace-pre-wrap">{selectedHistory.observations}</p>
                           {selectedHistory.observations_snomed && selectedHistory.observations_snomed.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-2">
                               {selectedHistory.observations_snomed.map((o: any, idx: number) => (
-                                <span key={idx} className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs border border-slate-200">
+                                <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs border border-blue-200">
                                   {o.term}
                                 </span>
                               ))}
