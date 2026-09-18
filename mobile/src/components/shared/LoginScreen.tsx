@@ -225,7 +225,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient
         colors={['#030B18', C.bg]}

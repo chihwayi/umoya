@@ -152,7 +152,19 @@ export const useAppPrivacyState = (): { isPrivate: boolean; appState: AppStateSt
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
-      const isPrivate = next === 'inactive' || next === 'background';
+      // 'inactive' means "app switcher preview" on iOS — a real moment to
+      // hide PHI. On Android it's not a reliable signal: some OEM skins
+      // (confirmed on a Samsung device with Game Booster/SGM actively
+      // monitoring the app) fire spurious 'inactive' transitions during
+      // ordinary window-focus churn, e.g. on every tap. Treating that as
+      // "hide the screen" mounted a fullscreen, same-color-as-background
+      // overlay over the whole app essentially at random, silently
+      // swallowing touches — every button needed 10-20 taps to land in a
+      // gap when the overlay happened to be unmounted. Only 'background'
+      // (truly left the app) is a reliable privacy signal on Android.
+      const isPrivate = Platform.OS === 'ios'
+        ? next === 'inactive' || next === 'background'
+        : next === 'background';
       currentState.current = next;
       setState({ isPrivate, appState: next });
 
