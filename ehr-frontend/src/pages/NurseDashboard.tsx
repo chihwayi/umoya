@@ -3373,7 +3373,7 @@ const NurseDashboard: React.FC = () => {
       {/* Slim Top Bar: system title + notifications + user */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200/50 sticky top-0 z-30">
         <div className="w-full max-w-full mx-auto px-2 sm:px-4 lg:px-6">
-          <div className="flex justify-between items-center h-14">
+          <div className="flex justify-between items-center min-h-14 py-2">
             {/* Left Section - Hamburger + Title */}
             <div className="flex items-center space-x-4">
               <button

@@ -315,6 +315,30 @@ body.ehr-theme header[class*='bg-gradient-to-r'] [data-dropdown] [class*='absolu
   color: #1e293b !important;
 }
 
+/* Same problem, different shape: header controls that carry their own
+   white/light pill background (Lite Mode toggle, Guidelines toggle, etc.)
+   were still inheriting the pale nav text color meant for the dark nav
+   surface behind them, making the text on their own light background
+   unreadable. Any element inside the header whose class carries a
+   'bg-white' token owns its own light surface — give it dark text too. */
+body.ehr-theme header[class*='sticky'][class*='top-0'] [class*='bg-white'] :is(h1, h2, h3, h4, p, span, a, button, svg),
+body.ehr-theme header[class*='bg-gradient-to-r'] [class*='bg-white'] :is(h1, h2, h3, h4, p, span, a, button, svg) {
+  color: #1e293b !important;
+}
+
+/* And a third shape of the same bug: controls with no background of their
+   own (correctly pale-on-navy at rest, e.g. the user-profile trigger)
+   that gain a light hover background without the text following —
+   illegible pale-on-light-gray on hover. Tailwind's hover: variant class
+   names are present verbatim in the class attribute, so this is a real,
+   working selector, not just a naming convention match. */
+body.ehr-theme header[class*='sticky'][class*='top-0'] [class*='hover:bg-slate-100']:hover :is(h1, h2, h3, h4, p, span, a, svg),
+body.ehr-theme header[class*='sticky'][class*='top-0'] [class*='hover:bg-white']:hover :is(h1, h2, h3, h4, p, span, a, svg),
+body.ehr-theme header[class*='bg-gradient-to-r'] [class*='hover:bg-slate-100']:hover :is(h1, h2, h3, h4, p, span, a, svg),
+body.ehr-theme header[class*='bg-gradient-to-r'] [class*='hover:bg-white']:hover :is(h1, h2, h3, h4, p, span, a, svg) {
+  color: #1e293b !important;
+}
+
 /* Sign-out / destructive items keep their red */
 body.ehr-theme header[class*='sticky'][class*='top-0'] [data-dropdown] [class*='absolute'] [class*='text-red'] :is(span, svg),
 body.ehr-theme header[class*='sticky'][class*='top-0'] [data-dropdown] [class*='absolute'] button[class*='text-red'],
