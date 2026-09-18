@@ -17668,6 +17668,20 @@ export class DatabaseProvisioningService {
       throw new Error('users table does not exist — core bundle did not apply successfully; cannot seed demo users');
     }
 
+    // ON CONFLICT (email) below only catches an exact email collision. If this
+    // is ever invoked a second time for the same physical tenant DB with a
+    // differently-resolved slug (e.g. subdomain/slug changed between calls),
+    // the email changes too and a second set of "Demo X" rows gets inserted —
+    // surfacing as duplicate entries in every doctor/staff picker. Guard on
+    // the demo doctor's stable identity (name + role) instead of email.
+    const alreadySeeded = await tenantDataSource.query(`
+      SELECT 1 FROM users WHERE role = 'doctor' AND first_name = 'Demo' AND last_name = 'Doctor' LIMIT 1
+    `);
+    if (alreadySeeded.length > 0) {
+      this.logger.log(`Default demo users already seeded for this tenant DB — skipping (slug: ${s})`);
+      return;
+    }
+
     this.logger.log(`Seeding default demo users for tenant: ${s}`);
 
     // Umoya1# — meets policy (uppercase, lowercase, digit, special char, 9 chars).
