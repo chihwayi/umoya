@@ -660,7 +660,7 @@ export class TelemedicineService {
   }
 
   /**
-   * Get a signed Daily.co meeting token for a participant.
+   * Get a signed LiveKit meeting token for a participant.
    * Validates the user is the patient or doctor on this consultation before issuing.
    */
   async getMeetingToken(
@@ -717,7 +717,7 @@ export class TelemedicineService {
   }
 
   /**
-   * Get live room status from Daily.co (real participant count).
+   * Get live room status from LiveKit (real participant count).
    */
   async getRoomStatus(tenantDb: DataSource, consultationId: string) {
     this.ensureTenantDb(tenantDb);
@@ -730,5 +730,39 @@ export class TelemedicineService {
 
     const status = await this.videoService.getMeetingStatus(consultationId, consultation.meeting_room_id);
     return { ...status, meetingRoomId: consultation.meeting_room_id };
+  }
+
+  /**
+   * Start recording the call (doctor-initiated). Requires patient telehealth
+   * consent, same as joining — recording is a superset of the call itself.
+   */
+  async startRecording(tenantDb: DataSource, consultationId: string, userId: string) {
+    this.ensureTenantDb(tenantDb);
+    const consultation = await this.getConsultation(tenantDb, consultationId);
+    if (!consultation.meeting_room_id) {
+      throw new BadRequestException('Meeting room not created for this consultation');
+    }
+    if (consultation.doctor_id !== userId) {
+      throw new BadRequestException('Only the assigned doctor can start recording');
+    }
+    if (this.consentService) {
+      const hasConsent = await this.consentService.checkConsent(tenantDb, consultation.patient_id);
+      if (!hasConsent) {
+        throw new BadRequestException('Patient has not granted telehealth consent — cannot record this call');
+      }
+    }
+    return this.videoService.startRecording(consultationId, consultation.meeting_room_id);
+  }
+
+  async stopRecording(tenantDb: DataSource, consultationId: string, userId: string) {
+    this.ensureTenantDb(tenantDb);
+    const consultation = await this.getConsultation(tenantDb, consultationId);
+    if (!consultation.meeting_room_id) {
+      throw new BadRequestException('Meeting room not created for this consultation');
+    }
+    if (consultation.doctor_id !== userId) {
+      throw new BadRequestException('Only the assigned doctor can stop recording');
+    }
+    return this.videoService.stopRecording(consultationId, consultation.meeting_room_id);
   }
 }

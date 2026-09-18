@@ -17,8 +17,9 @@ import {
   ArrowRight,
   ClipboardList,
 } from 'lucide-react';
-import { LiveKitRoom, VideoConference } from '@livekit/components-react';
+import { LiveKitRoom } from '@livekit/components-react';
 import '@livekit/components-styles/components';
+import { TelehealthCallStage } from '../components/telemedicine/TelehealthCallStage';
 import { ehrApi, cdssApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import GuidelineCitationCard from '../components/GuidelineCitationCard';
@@ -42,6 +43,8 @@ const TelemedicineConsultationPage: React.FC = () => {
   const [joining, setJoining] = useState(false);
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor'>('good');
   const [endingConsultation, setEndingConsultation] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingBusy, setRecordingBusy] = useState(false);
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -102,6 +105,25 @@ const TelemedicineConsultationPage: React.FC = () => {
       showError('Failed to join consultation', error.response?.data?.message || 'Please try again');
     } finally {
       setJoining(false);
+    }
+  };
+
+  const handleToggleRecording = async () => {
+    setRecordingBusy(true);
+    try {
+      if (isRecording) {
+        await ehrApi.stopTelemedicineRecording(consultationId!, token, tenantSlug!);
+        setIsRecording(false);
+        showSuccess('Recording stopped', 'The call recording has ended');
+      } else {
+        await ehrApi.startTelemedicineRecording(consultationId!, token, tenantSlug!);
+        setIsRecording(true);
+        showSuccess('Recording started', 'This call is now being recorded');
+      }
+    } catch (error: any) {
+      showError('Recording failed', error.response?.data?.message || 'Please try again');
+    } finally {
+      setRecordingBusy(false);
     }
   };
 
@@ -268,10 +290,15 @@ const TelemedicineConsultationPage: React.FC = () => {
                   audio={isAudioEnabled}
                   video={isVideoEnabled}
                   onDisconnected={() => handleEndConsultation(false)}
-                  data-lk-theme="default"
                   style={{ height: '100%' }}
                 >
-                  <VideoConference />
+                  <TelehealthCallStage
+                    remoteName={consultation.patient_name}
+                    isRecording={isRecording}
+                    recordingBusy={recordingBusy}
+                    onToggleRecording={handleToggleRecording}
+                    onLeave={() => handleEndConsultation(false)}
+                  />
                 </LiveKitRoom>
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900 to-slate-900">

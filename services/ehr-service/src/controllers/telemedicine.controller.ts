@@ -132,7 +132,7 @@ export class TelemedicineController {
   }
 
   @Get('consultations/:id/token')
-  @ApiOperation({ summary: 'Get a signed Daily.co meeting token for the requesting participant' })
+  @ApiOperation({ summary: 'Get a signed LiveKit meeting token for the requesting participant' })
   @ApiParam({ name: 'id', description: 'Consultation ID' })
   @ApiQuery({ name: 'role', enum: ['doctor', 'patient'], required: true })
   @ApiResponse({ status: 200, description: 'Meeting token returned' })
@@ -146,11 +146,31 @@ export class TelemedicineController {
   }
 
   @Get('consultations/:id/status')
-  @ApiOperation({ summary: 'Get live room status (participant count) from Daily.co' })
+  @ApiOperation({ summary: 'Get live room status (participant count) from the video provider' })
   @ApiParam({ name: 'id', description: 'Consultation ID' })
   @ApiResponse({ status: 200, description: 'Room status from video provider' })
   async getRoomStatus(@Param('id') id: string, @Req() req: RequestWithTenant) {
     return this.telemedicineService.getRoomStatus(req.tenantDb, id);
+  }
+
+  @Post('consultations/:id/recording/start')
+  @Roles('doctor')
+  @ApiOperation({ summary: 'Start recording the call (doctor only, requires patient consent)' })
+  @ApiParam({ name: 'id', description: 'Consultation ID' })
+  @ApiResponse({ status: 200, description: 'Recording started' })
+  async startRecording(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.telemedicineService.startRecording(req.tenantDb, id, userId);
+  }
+
+  @Post('consultations/:id/recording/stop')
+  @Roles('doctor')
+  @ApiOperation({ summary: 'Stop recording the call (doctor only)' })
+  @ApiParam({ name: 'id', description: 'Consultation ID' })
+  @ApiResponse({ status: 200, description: 'Recording stopped' })
+  async stopRecording(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.telemedicineService.stopRecording(req.tenantDb, id, userId);
   }
 
   @Post('consultations/:id/technical-issue')

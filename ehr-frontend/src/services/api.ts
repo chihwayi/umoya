@@ -6597,6 +6597,20 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  startTelemedicineRecording: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/telemedicine/consultations/${id}/recording/start`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  stopTelemedicineRecording: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/telemedicine/consultations/${id}/recording/stop`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getTelemedicineMonitoringAlerts: async (token: string, tenantSlug: string, patientId?: string) => {
     const response = await ehrAxios.get('/telemedicine/monitoring/alerts', {
       params: patientId ? { patientId } : {},

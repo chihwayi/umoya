@@ -1,5 +1,5 @@
 import { Injectable, Logger, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { RoomServiceClient, AccessToken, Room } from 'livekit-server-sdk';
+import { RoomServiceClient, EgressClient, AccessToken, Room, EncodedFileType, EgressStatus } from 'livekit-server-sdk';
 
 @Injectable()
 export class TelemedicineVideoService {
@@ -9,6 +9,9 @@ export class TelemedicineVideoService {
   /** Public wss:// URL clients (browser/mobile) connect their LiveKit SDK to. */
   private readonly publicUrl: string;
   private readonly roomService: RoomServiceClient | null;
+  private readonly egressClient: EgressClient | null;
+  /** roomName -> in-progress egressId, so endMeeting() can stop a forgotten recording. */
+  private readonly activeEgressByRoom = new Map<string, string>();
 
   constructor() {
     this.apiKey = process.env.LIVEKIT_API_KEY || '';
@@ -21,6 +24,9 @@ export class TelemedicineVideoService {
 
     this.roomService = this.apiKey && this.apiSecret && internalUrl
       ? new RoomServiceClient(internalUrl, this.apiKey, this.apiSecret)
+      : null;
+    this.egressClient = this.apiKey && this.apiSecret && internalUrl
+      ? new EgressClient(internalUrl, this.apiKey, this.apiSecret)
       : null;
 
     if (!this.roomService) {
@@ -70,6 +76,18 @@ export class TelemedicineVideoService {
   }
 
   async endMeeting(consultationId: string, meetingRoomId: string): Promise<void> {
+    const runningEgressId = this.activeEgressByRoom.get(meetingRoomId);
+    if (runningEgressId && this.egressClient) {
+      try {
+        await this.egressClient.stopEgress(runningEgressId);
+        this.logger.log(`Stopped recording ${runningEgressId} for room ${meetingRoomId} on call end`);
+      } catch (e: any) {
+        this.logger.warn(`Could not stop egress ${runningEgressId}: ${e?.message}`);
+      } finally {
+        this.activeEgressByRoom.delete(meetingRoomId);
+      }
+    }
+
     if (!this.roomService) return;
 
     try {
@@ -133,21 +151,89 @@ export class TelemedicineVideoService {
     return at.toJwt();
   }
 
-  // ── Recording ────────────────────────────────────────────────────────────────
-  // Recording requires the separate LiveKit Egress service, not yet deployed.
-  // These honestly report "no recording available" rather than faking success —
-  // the post-visit bridge already has a clean no-recording code path for this.
+  // ── Recording (LiveKit Egress → MinIO) ──────────────────────────────────────
+  // Room-composite egress records the whole call to an MP4 and uploads it
+  // straight to the same MinIO bucket the post-visit bridge reads from —
+  // no video bytes pass through this service.
 
-  async enableRecording(
+  async startRecording(
     consultationId: string,
     meetingRoomId: string,
   ): Promise<{ recordingEnabled: boolean; recordingId?: string }> {
-    this.logger.debug(`Recording requested for room ${meetingRoomId} — LiveKit Egress is not deployed yet`);
+    if (!this.egressClient) {
+      this.logger.warn(`Recording requested for room ${meetingRoomId} but LiveKit Egress is not configured`);
+      return { recordingEnabled: false };
+    }
+    if (this.activeEgressByRoom.has(meetingRoomId)) {
+      return { recordingEnabled: true, recordingId: this.activeEgressByRoom.get(meetingRoomId) };
+    }
+
+    const bucket = process.env.MINIO_BUCKET || process.env.STORAGE_S3_BUCKET || 'umoya';
+    try {
+      const info = await this.egressClient.startRoomCompositeEgress(
+        meetingRoomId,
+        {
+          file: {
+            fileType: EncodedFileType.MP4,
+            filepath: `telemedicine-recordings/${meetingRoomId}-{time}.mp4`,
+            output: {
+              case: 's3',
+              value: {
+                accessKey: process.env.STORAGE_S3_ACCESS_KEY || '',
+                secret: process.env.STORAGE_S3_SECRET_KEY || '',
+                region: process.env.STORAGE_S3_REGION || 'us-east-1',
+                endpoint: process.env.STORAGE_S3_ENDPOINT || '',
+                bucket,
+                forcePathStyle: process.env.STORAGE_S3_FORCE_PATH_STYLE === 'true',
+              },
+            },
+          },
+        } as any,
+        { layout: 'speaker' },
+      );
+      this.activeEgressByRoom.set(meetingRoomId, info.egressId);
+      this.logger.log(`Recording started: egress ${info.egressId} for room ${meetingRoomId}`);
+      return { recordingEnabled: true, recordingId: info.egressId };
+    } catch (e: any) {
+      this.logger.error(`Failed to start recording for room ${meetingRoomId}: ${e?.message}`);
+      throw new ServiceUnavailableException({
+        code: 'RECORDING_UNAVAILABLE',
+        message: `Could not start recording: ${e?.message}`,
+      });
+    }
+  }
+
+  async stopRecording(consultationId: string, meetingRoomId: string): Promise<{ recordingEnabled: boolean }> {
+    const egressId = this.activeEgressByRoom.get(meetingRoomId);
+    if (!egressId || !this.egressClient) {
+      return { recordingEnabled: false };
+    }
+    try {
+      await this.egressClient.stopEgress(egressId);
+      this.logger.log(`Recording stopped: egress ${egressId} for room ${meetingRoomId}`);
+    } finally {
+      this.activeEgressByRoom.delete(meetingRoomId);
+    }
     return { recordingEnabled: false };
   }
 
+  /**
+   * Resolves the completed recording's S3 object key once egress has
+   * finished uploading. Returns null (not yet ready / no recording) rather
+   * than throwing, so the post-visit bridge's existing no-recording path
+   * keeps working unchanged.
+   */
   async getRecording(consultationId: string, meetingRoomId: string): Promise<string | null> {
-    return null;
+    if (!this.egressClient) return null;
+    try {
+      const results = await this.egressClient.listEgress({ roomName: meetingRoomId });
+      const finished = results.find(r => r.fileResults?.length && r.status === EgressStatus.EGRESS_COMPLETE);
+      const key = finished?.fileResults?.[0]?.filename;
+      return key || null;
+    } catch (e: any) {
+      this.logger.warn(`Could not look up recording for room ${meetingRoomId}: ${e?.message}`);
+      return null;
+    }
   }
 
   async getRecordingWithRetry(
@@ -156,9 +242,14 @@ export class TelemedicineVideoService {
     maxAttempts = 3,
     delaySecs = 30,
   ): Promise<string | null> {
-    this.logger.debug(
-      `No recording for ${meetingRoomId} (consultation ${consultationId}) — LiveKit Egress is not deployed yet`,
-    );
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const key = await this.getRecording(consultationId, meetingRoomId);
+      if (key) return key;
+      if (attempt < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, delaySecs * 1000));
+      }
+    }
+    this.logger.warn(`No recording found for room ${meetingRoomId} after ${maxAttempts} attempts`);
     return null;
   }
 

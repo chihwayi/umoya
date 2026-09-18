@@ -99,14 +99,16 @@ export class TelemedicinePostVisitBridgeService {
   ): Promise<void> {
     if (!c.meeting_room_id) return;
 
-    const downloadUrl = await this.videoService.getRecordingWithRetry(
+    // LiveKit Egress uploads straight to MinIO — this is the object's S3 key
+    // in `this.bucket`, not an HTTP URL.
+    const egressObjectKey = await this.videoService.getRecordingWithRetry(
       c.id,
       c.meeting_room_id,
       3,  // max attempts
       30, // seconds between attempts
     );
 
-    if (!downloadUrl) {
+    if (!egressObjectKey) {
       this.logger.warn(
         `No recording available for consultation ${c.id} after retries — session ${sessionId} will proceed without recording`,
       );
@@ -117,21 +119,22 @@ export class TelemedicinePostVisitBridgeService {
       return;
     }
 
-    // Download recording bytes from Daily.co
-    const recordingBytes = await this.downloadBytes(downloadUrl);
+    if (!this.minioService) {
+      this.logger.warn('MinioService not available — cannot relocate the recording, leaving it at its egress path');
+      this.teleGateway?.broadcastToConsultation(tenantId, c.id, 'tele:postvisit_ready', {
+        sessionId,
+        hasRecording: false,
+      });
+      return;
+    }
+
+    // Copy from the egress upload path into the post-visit session's own key
+    const recordingBytes = await this.minioService.getObjectBuffer(this.bucket, egressObjectKey);
     const sha256 = await this.computeSha256(recordingBytes);
 
-    // Upload to MinIO
-    let storageKey: string | null = null;
-    if (this.minioService) {
-      storageKey = `post-visit/recordings/${sessionId}/recording.mp4`;
-      await this.minioService.uploadBuffer(this.bucket, storageKey, recordingBytes, 'video/mp4');
-      this.logger.log(`Recording uploaded to MinIO: ${storageKey}`);
-    } else {
-      // MinIO not configured — store the Daily.co URL directly as a fallback
-      storageKey = downloadUrl;
-      this.logger.warn('MinioService not available — storing recording download URL directly');
-    }
+    const storageKey = `post-visit/recordings/${sessionId}/recording.mp4`;
+    await this.minioService.uploadBuffer(this.bucket, storageKey, recordingBytes, 'video/mp4');
+    this.logger.log(`Recording relocated to ${storageKey}`);
 
     // Persist storage key and integrity hash on the session
     await tenantDb.query(
@@ -146,12 +149,12 @@ export class TelemedicinePostVisitBridgeService {
       this.logger.warn(`Could not update recording fields on session ${sessionId}: ${e?.message}`),
     );
 
-    // Also save the download URL back on the consultation row for audit
+    // Also save the egress object key back on the consultation row for audit
     await tenantDb.query(
       `UPDATE telemedicine_consultations
        SET recording_download_url = $1, recording_fetched_at = NOW()
        WHERE id = $2`,
-      [downloadUrl, c.id],
+      [egressObjectKey, c.id],
     ).catch((e: any) => this.logger.warn(`Update of consultation ${c.id} recording URL failed: ${e?.message}`));
 
     // Notify both participants the post-visit summary (with recording) is ready
@@ -163,15 +166,6 @@ export class TelemedicinePostVisitBridgeService {
     this.logger.log(
       `Recording attached to post-visit session ${sessionId} (sha256: ${sha256.slice(0, 16)}…)`,
     );
-  }
-
-  private async downloadBytes(url: string): Promise<Buffer> {
-    const { default: axios } = await import('axios');
-    const response = await axios.get<Buffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 300_000, // 5 min — recordings can be large
-    });
-    return Buffer.from(response.data);
   }
 
   private async computeSha256(buf: Buffer): Promise<string> {
