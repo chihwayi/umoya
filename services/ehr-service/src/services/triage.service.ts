@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional, BadRequestException } from '@nestjs/common';
 import { Repository, DataSource } from 'typeorm';
 import { TriageAssessment } from '../entities/triage-assessment.entity';
 import { ClinicalEscalationTask } from '../entities/clinical-escalation-task.entity';
@@ -318,6 +318,23 @@ export class TriageService {
     const tenantDb = await this.tenantService.getTenantDatabase(tenantId);
     if (!tenantDb) {
       throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    // Bug B: Server-side governance — enforce severity/priority alignment
+    // If severity is high (>= 7) but priority is still at default/unescalated level,
+    // require a written mismatch rationale (matching VitalsPanel governance pattern).
+    const severityHigh = Number(data.severityScore || 0) >= 7;
+    const priorityNotEscalated = !data.priority || data.priority === 'normal' || data.priority === 'low';
+    const severityPriorityMismatch = Boolean((data as any).severityPriorityMismatch);
+
+    if (severityHigh && priorityNotEscalated && severityPriorityMismatch) {
+      const mismatchRationale = (data as any).mismatchRationale ? String((data as any).mismatchRationale) : null;
+      if (!mismatchRationale?.trim()) {
+        throw new BadRequestException(
+          'A clinical rationale is required to save a triage assessment with high severity (≥7/10) at a default or low priority. ' +
+          'Either use "Analyze + Apply Copilot Priority" to auto-escalate, or provide a written rationale explaining the discrepancy.'
+        );
+      }
     }
 
     // Resolve SNOMED concepts

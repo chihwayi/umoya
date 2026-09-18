@@ -87,6 +87,8 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   const [triageHistory, setTriageHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<any | null>(null);
+  const [lastSavedAssessment, setLastSavedAssessment] = useState<{ id: string; recordedAt: string } | null>(null);
+  const [severityPriorityMismatchNote, setSeverityPriorityMismatchNote] = useState('');
 
   // Load triage history when patient changes
   useEffect(() => {
@@ -274,11 +276,22 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
       showError('Error', 'No patient selected for triage');
       return;
     }
+
+    // Bug B governance: if severity is high but priority hasn't been escalated, require rationale
+    const severityHigh = severityScore >= 7;
+    const priorityNotEscalated = priority === 'normal' || priority === 'low';
+    const severityPriorityMismatch = severityHigh && priorityNotEscalated;
+
+    if (severityPriorityMismatch && !severityPriorityMismatchNote.trim()) {
+      showError('Governance Gate', `Severity is ${severityScore}/10 but Priority is "${priority}" — a rationale is required to save this mismatch. Click "Analyze + Apply Copilot Priority" first, or enter a clinical rationale below.`);
+      return;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem('ehr_token');
       const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-      
+
       if (!token || !tenantSlug) {
         showError('Error', 'Authentication required');
         return;
@@ -301,17 +314,25 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
         observations_snomed: observationsConcepts,
         priority,
         severityScore,
+        severityPriorityMismatch,
+        mismatchRationale: severityPriorityMismatchNote || undefined,
         recordedAt: new Date().toISOString(),
         recordedBy: JSON.parse(localStorage.getItem('ehr_user') || '{}').id,
       };
 
       const response = await Api.ehrApi.recordTriageAssessment(triagePayload, token, tenantSlug);
       setCdssInsights(response.data?.cdssInsights ?? null);
-      showSuccess('Saved', 'Triage assessment recorded');
+      setLastSavedAssessment({
+        id: response.data?.assessment?.id,
+        recordedAt: response.data?.assessment?.recordedAt || new Date().toISOString(),
+      });
+      setSeverityPriorityMismatchNote('');
+      showSuccess('Recorded', `Triage assessment saved for ${patient.firstName} ${patient.lastName}`);
       onSave?.();
     } catch (e) {
       console.error(e);
-      showError('Error', 'Failed to save triage assessment');
+      const errorMsg = (e as any)?.response?.data?.message || 'Failed to save triage assessment';
+      showError('Error', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -522,8 +543,21 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
         );
       })()}
 
+      {/* Last Saved Feedback — Bug A Fix */}
+      {lastSavedAssessment && (
+        <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-emerald-900">Assessment recorded</p>
+            <p className="text-xs text-emerald-700">
+              Saved {formatDateTimeToDDMMYYYYHHMM(lastSavedAssessment.recordedAt)}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Triage Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-4">
 
           {/* Clinical Assessment */}
@@ -1021,88 +1055,105 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
           </>}
         </div>
 
-        {/* Right rail */}
-        <div className="space-y-6">
-
-          <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-gradient-to-r from-orange-500 to-yellow-600 rounded-xl">
-                <AlertTriangle className="w-5 h-5 text-white" />
+        {/* Right rail — Priority & Severity, now compact and integrated */}
+        <div className="space-y-4">
+          {/* Priority + Severity at top, tighter */}
+          <div className="p-5 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              {/* Severity Score */}
+              <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <Activity className="w-4 h-4 text-indigo-600" />
+                  <span className="text-xs font-semibold uppercase text-indigo-700">Severity</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-indigo-600">{severityScore}</span>
+                  <span className="text-sm text-indigo-600">/10</span>
+                </div>
               </div>
-              <h4 className="text-sm font-bold text-slate-900">Priority</h4>
+
+              {/* Priority Selector — more compact */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-4 h-4 text-slate-600" />
+                  <span className="text-xs font-semibold uppercase text-slate-700">Priority</span>
+                </div>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as 'urgent' | 'high' | 'normal' | 'low')}
+                  className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                >
+                  <option value="urgent">🔴 Urgent</option>
+                  <option value="high">🟠 High</option>
+                  <option value="normal">🟡 Normal</option>
+                  <option value="low">🟢 Low</option>
+                </select>
+              </div>
             </div>
+
+            {/* Bug B — Severity/Priority Mismatch Governance */}
+            {severityScore >= 7 && (priority === 'normal' || priority === 'low') && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 mb-4">
+                <p className="text-xs font-semibold text-amber-900 mb-2">
+                  ⚠ Severity {severityScore}/10 does not match Priority "{priority.charAt(0).toUpperCase() + priority.slice(1)}"
+                </p>
+                <p className="text-xs text-amber-800 mb-2">
+                  Click "Analyze + Apply Copilot Priority" to auto-update, or enter a clinical rationale:
+                </p>
+                <textarea
+                  value={severityPriorityMismatchNote}
+                  onChange={(e) => setSeverityPriorityMismatchNote(e.target.value)}
+                  placeholder="E.g., 'Acute presentation but stable vitals — will monitor closely'"
+                  className="w-full px-2 py-1.5 text-xs border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-transparent resize-none"
+                  rows={2}
+                />
+              </div>
+            )}
+
+            {/* Copilot AI Analysis Button */}
             <button
               type="button"
               onClick={handleTriageCopilot}
               disabled={triageCopilotLoading}
-              className="w-full mb-3 px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
+              className="w-full mb-3 px-3 py-2 rounded-lg bg-gradient-to-r from-amber-600 to-amber-700 text-white text-sm font-semibold hover:from-amber-700 hover:to-amber-800 disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {triageCopilotLoading ? 'Analyzing...' : 'Analyze + Apply Copilot Priority'}
+              <Brain className="w-4 h-4" />
+              {triageCopilotLoading ? 'Analyzing...' : 'Analyze + Apply Copilot'}
             </button>
+
+            {/* Copilot Result */}
             {triageCopilotResult && (
-              <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-900">
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 space-y-2">
                 {(() => {
                   const rl = String(triageCopilotResult.riskLevel || '').toLowerCase();
                   const actionMap: Record<string, { label: string; action: string; colorClass: string }> = {
-                    critical: { label: 'CRITICAL', action: 'Call doctor NOW — do not leave patient unattended.', colorClass: 'text-red-700' },
-                    high: { label: 'HIGH', action: 'Fetch senior nurse or doctor within 10 minutes.', colorClass: 'text-orange-700' },
-                    medium: { label: 'MEDIUM', action: 'Monitor every 30 min; escalate if deteriorates.', colorClass: 'text-amber-700' },
-                    low: { label: 'LOW', action: 'Routine care; reassess in 1 hour.', colorClass: 'text-green-700' },
+                    critical: { label: 'CRITICAL', action: 'Call doctor NOW', colorClass: 'text-red-700' },
+                    high: { label: 'HIGH', action: 'Escalate within 10 min', colorClass: 'text-orange-700' },
+                    medium: { label: 'MEDIUM', action: 'Monitor every 30 min', colorClass: 'text-amber-700' },
+                    low: { label: 'LOW', action: 'Routine care', colorClass: 'text-green-700' },
                   };
                   const entry = actionMap[rl];
                   return entry ? (
-                    <div className="mb-1">
-                      <p><strong>Risk:</strong> <span className={`font-bold ${entry.colorClass}`}>{entry.label}</span></p>
-                      <p className={`font-semibold ${entry.colorClass}`}>⚡ {entry.action}</p>
+                    <div>
+                      <p><strong>Risk:</strong> <span className={`font-bold ${entry.colorClass}`}>{entry.label}</span> — {entry.action}</p>
                     </div>
-                  ) : (
-                    <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
-                  );
+                  ) : null;
                 })()}
-                <p><strong>Suggested:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
-                <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={() => handleTriageCopilotDecision('accept')} className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold">Accept</button>
-                  <button type="button" onClick={() => handleTriageCopilotDecision('modify')} className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold">Modify</button>
-                  <button type="button" onClick={() => handleTriageCopilotDecision('reject')} className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold">Reject</button>
-                </div>
+                <p><strong>Suggested:</strong> {triageCopilotResult.suggestedTriageLevel?.toUpperCase() || 'n/a'}</p>
                 <input
                   type="text"
                   value={copilotDecisionNote}
                   onChange={(e) => setCopilotDecisionNote(e.target.value)}
-                  placeholder="Optional reason for modify/reject"
-                  className="w-full mt-2 px-2 py-1 border border-amber-200 rounded text-xs focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  placeholder="Optional rationale for decision"
+                  className="w-full px-2 py-1 border border-amber-200 rounded text-xs focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 />
+                <div className="flex gap-1.5 pt-1">
+                  <button type="button" onClick={() => handleTriageCopilotDecision('accept')} className="flex-1 px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">Accept</button>
+                  <button type="button" onClick={() => handleTriageCopilotDecision('modify')} className="flex-1 px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700">Modify</button>
+                  <button type="button" onClick={() => handleTriageCopilotDecision('reject')} className="flex-1 px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700">Reject</button>
+                </div>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              {(['urgent','high','normal','low'] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPriority(p)}
-                  className={`px-3 py-2 rounded-xl border text-sm font-semibold transition-all ${
-                    priority === p
-                      ? 'bg-gradient-to-r from-pink-500 to-rose-600 text-white border-transparent'
-                      : 'border-slate-300 hover:bg-white'
-                  }`}
-                >
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl">
-                <Activity className="w-5 h-5 text-white" />
-              </div>
-              <h4 className="text-sm font-bold text-slate-900">Triage severity index (derived)</h4>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-indigo-600">{severityScore}</span>
-              <span className="text-slate-600">/ 10</span>
-            </div>
-            <p className="text-xs text-slate-500 mt-2">Calculated from pain, priority and onset hints.</p>
           </div>
 
           {appointments.length > 0 && (
