@@ -314,17 +314,16 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
           reason: copilotDecisionNote || undefined,
           patientId: selectedPatient.id,
           recommendationSummary: `Risk ${cdssInsights.risk.risk_level || 'unknown'} | ${topRecommendation}`,
+          acuteDeterioration: Boolean(cdssInsights.risk.acute_safety?.acute_deterioration),
         },
         token,
         tenantSlug,
       );
 
       showSuccess('Decision Captured', `Vitals insight marked as ${decision}.`);
-      if (decision === 'accept') {
-        setCopilotDecisionNote('');
-      }
+      setCopilotDecisionNote('');
     } catch {
-      showError('Error', 'Failed to capture vitals copilot decision');
+      showError('Error', 'Failed to capture vitals copilot decision — a written rationale may be required during a critical state.');
     } finally {
       setCopilotDecisionSaving(false);
     }
@@ -653,43 +652,51 @@ const VitalsPanel: React.FC<VitalsPanelProps> = ({ patient, onClose, onSave }) =
                 <p className="text-xs font-semibold text-indigo-900">Copilot Decision (required for governance)</p>
                 {cdssInsights.risk.acute_safety?.acute_deterioration && (
                   <p className="text-xs font-medium text-red-700">
-                    ⚠ Active acute deterioration — a written rationale is required to Accept during a critical state.
+                    ⚠ Active acute deterioration — a written rationale is required to Accept, Modify, or Reject during a critical state.
                   </p>
                 )}
                 <input
                   type="text"
                   value={copilotDecisionNote}
                   onChange={(e) => setCopilotDecisionNote(e.target.value)}
-                  placeholder={cdssInsights.risk.acute_safety?.acute_deterioration ? 'Rationale required to Accept during acute deterioration' : 'Optional note (e.g. override rationale)'}
+                  placeholder={cdssInsights.risk.acute_safety?.acute_deterioration ? 'Rationale required during acute deterioration' : 'Optional note (e.g. override rationale)'}
                   className="w-full px-3 py-2 text-sm rounded-md border border-indigo-200 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
                 />
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={copilotDecisionSaving || (cdssInsights.risk.acute_safety?.acute_deterioration && !copilotDecisionNote.trim())}
-                    title={cdssInsights.risk.acute_safety?.acute_deterioration && !copilotDecisionNote.trim() ? 'Enter a rationale to Accept during acute deterioration' : undefined}
-                    onClick={() => handleVitalsCopilotDecision('accept')}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    disabled={copilotDecisionSaving}
-                    onClick={() => handleVitalsCopilotDecision('modify')}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
-                  >
-                    Modify
-                  </button>
-                  <button
-                    type="button"
-                    disabled={copilotDecisionSaving}
-                    onClick={() => handleVitalsCopilotDecision('reject')}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
-                  >
-                    Reject
-                  </button>
-                </div>
+                {(() => {
+                  const rationaleMissing = Boolean(cdssInsights.risk.acute_safety?.acute_deterioration) && !copilotDecisionNote.trim();
+                  const rationaleTitle = rationaleMissing ? 'Enter a rationale during acute deterioration' : undefined;
+                  return (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={copilotDecisionSaving || rationaleMissing}
+                        title={rationaleTitle}
+                        onClick={() => handleVitalsCopilotDecision('accept')}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        disabled={copilotDecisionSaving || rationaleMissing}
+                        title={rationaleTitle}
+                        onClick={() => handleVitalsCopilotDecision('modify')}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Modify
+                      </button>
+                      <button
+                        type="button"
+                        disabled={copilotDecisionSaving || rationaleMissing}
+                        title={rationaleTitle}
+                        onClick={() => handleVitalsCopilotDecision('reject')}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Recommendations Section */}

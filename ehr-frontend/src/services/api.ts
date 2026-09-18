@@ -1501,6 +1501,7 @@ export const ehrApi = {
       reason?: string;
       patientId?: string;
       recommendationSummary?: string;
+      acuteDeterioration?: boolean;
       context?: any;
     },
     token: string,

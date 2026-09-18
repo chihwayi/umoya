@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject, BadRequestException } from '@nestjs/common';
 import { StoreroomIntelligenceService } from './storeroom-intelligence.service';
 import { ClinicalNlpService, ClinicalEntities } from './clinical-nlp.service';
 import { DataSource } from 'typeorm';
@@ -4460,6 +4460,18 @@ export class CdssService {
     const copilotType = String(payload?.copilotType || payload?.actionType || 'unknown').toLowerCase();
     const reason = payload?.reason ? String(payload.reason) : null;
     const patientId = payload?.patientId ? String(payload.patientId) : null;
+
+    // A UI-only disabled button is not governance — anything calling this
+    // endpoint directly (or a future caller) must be stopped server-side too.
+    // Applies to every decision type: silently Rejecting or Modifying a
+    // critical/acute-deterioration recommendation with no rationale is at
+    // least as dangerous as an ungoverned Accept.
+    const criticalState = Boolean(payload?.acuteDeterioration || payload?.criticalState);
+    if (criticalState && ['accept', 'modify', 'reject'].includes(decision) && !reason?.trim()) {
+      throw new BadRequestException(
+        'A written rationale is required to record a copilot decision during a critical/acute-deterioration state.',
+      );
+    }
     const recommendationSummary =
       payload?.recommendationSummary
         ? String(payload.recommendationSummary)
