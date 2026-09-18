@@ -185,11 +185,13 @@ export class TerminologyService {
       // and intersect — rather than trying to push ECL semantics into the
       // full-text SQL query itself.
       if (ecl && ecl.trim()) {
-        const [textResults, eclMatches] = await Promise.all([
+        const [textResults, eclSet] = await Promise.all([
           this.postgresService.searchConcepts(masterDb, term, Math.max(limit * 5, 200), 0, activeOnly),
-          this.eclService.evaluate(masterDb, ecl.trim(), 5000),
+          // Full (untruncated) membership set — filtering must not miss a
+          // real match because it fell outside an arbitrary result cutoff.
+          // Cheap now that EclService caches the underlying closure.
+          this.eclService.evaluateFull(masterDb, ecl.trim()),
         ]);
-        const eclSet = new Set(eclMatches);
         const filtered = textResults.concepts.filter((c) => eclSet.has(c.conceptId));
         return {
           concepts: filtered.slice(offset, offset + limit),

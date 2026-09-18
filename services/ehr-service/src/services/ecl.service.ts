@@ -39,6 +39,59 @@ type EclNode =
 export class EclService {
   private readonly logger = new Logger(EclService.name);
 
+  // Descendants/ancestors of a broad root (e.g. "Clinical finding",
+  // 404684003, ~138k descendants) require an unbounded recursive CTE over
+  // snomed_relationships that takes ~30s+ per call — recomputing that on
+  // every keystroke of every SNOMED search using that root (finding/
+  // symptom/condition all map to it) is untenable. SNOMED CT reference
+  // data is static between admin terminology re-imports, so the resolved
+  // set is safe to cache indefinitely in-process; clearCache() is called
+  // by TerminologyImportService after a re-import to avoid staleness.
+  private readonly closureCache = new Map<string, Set<string>>();
+
+  clearCache(): void {
+    this.closureCache.clear();
+    this.inFlightClosures.clear();
+    this.logger.log('ECL descendant/ancestor closure cache cleared');
+  }
+
+  // Coalesces concurrent requests for the same uncached root so a burst of
+  // keystrokes (or concurrent nurses) triggers one ~30s recursive query
+  // instead of one per request.
+  private readonly inFlightClosures = new Map<string, Promise<Set<string>>>();
+
+  private async getOrComputeClosure(
+    tenantDb: DataSource,
+    direction: 'desc' | 'anc',
+    conceptId: string,
+    sql: string,
+  ): Promise<Set<string>> {
+    const key = `${direction}:${conceptId}`;
+    const cached = this.closureCache.get(key);
+    if (cached) return cached;
+
+    const inFlight = this.inFlightClosures.get(key);
+    if (inFlight) return inFlight;
+
+    const promise = (async () => {
+      const started = Date.now();
+      const rows = await tenantDb.query(sql, [conceptId]);
+      const set = new Set<string>(rows.map((r: any) => r.concept_id));
+      this.closureCache.set(key, set);
+      this.logger.log(
+        `ECL ${direction === 'desc' ? 'descendants' : 'ancestors'} of ${conceptId} computed and cached: ${set.size} concepts in ${Date.now() - started}ms`,
+      );
+      return set;
+    })();
+
+    this.inFlightClosures.set(key, promise);
+    try {
+      return await promise;
+    } finally {
+      this.inFlightClosures.delete(key);
+    }
+  }
+
   /** Tokenizes and parses an ECL expression into an AST. */
   parse(ecl: string): EclNode {
     const tokens = this.tokenize(ecl);
@@ -149,9 +202,17 @@ export class EclService {
 
   /** Evaluates a parsed ECL AST against the real relationship tables, returning matching active concept IDs. */
   async evaluate(tenantDb: DataSource, ecl: string, limit = 500): Promise<string[]> {
-    const ast = this.parse(ecl);
-    const ids = await this.evalNode(tenantDb, ast);
+    const ids = await this.evaluateFull(tenantDb, ecl);
     return Array.from(ids).slice(0, limit);
+  }
+
+  // For membership-testing (e.g. intersecting against a separate text-search
+  // candidate pool) — truncating the match set before testing membership
+  // silently drops real matches that fall outside an arbitrary cutoff. Only
+  // truncate at the point of returning a final result list (see evaluate()).
+  async evaluateFull(tenantDb: DataSource, ecl: string): Promise<Set<string>> {
+    const ast = this.parse(ecl);
+    return this.evalNode(tenantDb, ast);
   }
 
   private async evalNode(tenantDb: DataSource, node: EclNode): Promise<Set<string>> {
@@ -160,8 +221,7 @@ export class EclService {
         return new Set([node.conceptId]);
 
       case 'descendants': {
-        const rows = await tenantDb.query(
-          `
+        const base = await this.getOrComputeClosure(tenantDb, 'desc', node.conceptId, `
           WITH RECURSIVE descendants AS (
             SELECT r.source_id AS concept_id FROM snomed_relationships r
             WHERE r.destination_id = $1 AND r.type_id = '116680003' AND r.active = true
@@ -172,17 +232,14 @@ export class EclService {
           )
           SELECT DISTINCT d.concept_id FROM descendants d
           JOIN snomed_concepts c ON c.concept_id = d.concept_id AND c.active = true
-          `,
-          [node.conceptId],
-        );
-        const set = new Set<string>(rows.map((r: any) => r.concept_id));
+        `);
+        const set = new Set(base);
         if (node.includeSelf) set.add(node.conceptId);
         return set;
       }
 
       case 'ancestors': {
-        const rows = await tenantDb.query(
-          `
+        const base = await this.getOrComputeClosure(tenantDb, 'anc', node.conceptId, `
           WITH RECURSIVE ancestors AS (
             SELECT r.destination_id AS concept_id FROM snomed_relationships r
             WHERE r.source_id = $1 AND r.type_id = '116680003' AND r.active = true
@@ -193,10 +250,8 @@ export class EclService {
           )
           SELECT DISTINCT a.concept_id FROM ancestors a
           JOIN snomed_concepts c ON c.concept_id = a.concept_id AND c.active = true
-          `,
-          [node.conceptId],
-        );
-        const set = new Set<string>(rows.map((r: any) => r.concept_id));
+        `);
+        const set = new Set(base);
         if (node.includeSelf) set.add(node.conceptId);
         return set;
       }
