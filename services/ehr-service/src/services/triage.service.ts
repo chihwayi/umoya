@@ -321,13 +321,15 @@ export class TriageService {
     }
 
     // Bug B: Server-side governance — enforce severity/priority alignment
-    // If severity is high (>= 7) but priority is still at default/unescalated level,
-    // require a written mismatch rationale (matching VitalsPanel governance pattern).
+    // independently of the client. The mismatch condition is derived here
+    // from severityScore/priority directly — NOT from a client-supplied
+    // "severityPriorityMismatch" flag, which a caller could simply omit to
+    // bypass the check entirely. Real server-side enforcement must not
+    // trust the client's own assessment of whether a gate applies.
     const severityHigh = Number(data.severityScore || 0) >= 7;
     const priorityNotEscalated = !data.priority || data.priority === 'normal' || data.priority === 'low';
-    const severityPriorityMismatch = Boolean((data as any).severityPriorityMismatch);
 
-    if (severityHigh && priorityNotEscalated && severityPriorityMismatch) {
+    if (severityHigh && priorityNotEscalated) {
       const mismatchRationale = (data as any).mismatchRationale ? String((data as any).mismatchRationale) : null;
       if (!mismatchRationale?.trim()) {
         throw new BadRequestException(

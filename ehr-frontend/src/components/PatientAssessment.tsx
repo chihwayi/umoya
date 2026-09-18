@@ -11,6 +11,12 @@ import ModalPortal from './ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import Icd10Suggestions from './Icd10Suggestions';
 
+// Appointment "reason" is a scheduling category (Consultation, Follow-up,
+// Check-up...), not a clinical complaint — prefilling Chief Complaint with
+// it let a nurse save a triage assessment where "Consultation" reads as
+// the documented reason for the visit instead of an actual symptom.
+const VISIT_REASON_PATTERNS = /^(follow[- ]?up|routine|review|check[- ]?up|consultation|antenatal|postnatal|post[- ]?natal|well[- ]?baby|immunis|immuniz|vaccin|scheduled|annual|periodic)/i;
+
 interface Patient {
   id: string;
   patientNumber: string;
@@ -50,8 +56,9 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   const { showSuccess, showError } = useNotification();
 
   const [chiefComplaint, setChiefComplaint] = useState(() => {
-    if (appointments.length > 0 && appointments[0]?.reason) {
-      return appointments[0].reason;
+    const reason = appointments.length > 0 ? appointments[0]?.reason?.trim() : '';
+    if (reason && !VISIT_REASON_PATTERNS.test(reason)) {
+      return reason;
     }
     return '';
   });
@@ -589,7 +596,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                         ? Math.floor((new Date().getTime() - new Date(patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
                         : undefined;
                       
-                      const VISIT_REASON_PATTERNS = /^(follow[- ]?up|routine|review|check[- ]?up|consultation|antenatal|postnatal|post[- ]?natal|well[- ]?baby|immunis|immuniz|vaccin|scheduled|annual|periodic)/i;
                       const symptomsArray = [
                         // Only include chiefComplaint when it looks like a real symptom, not a visit reason
                         chiefComplaint && !VISIT_REASON_PATTERNS.test(chiefComplaint.trim()) ? chiefComplaint : null,
