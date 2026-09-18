@@ -301,6 +301,7 @@ const TenantScopedModuleRoute: React.FC<{ moduleKey: string; children: React.Rea
               subscriptionState: data.subscriptionState,
               packageName: data.packageName,
               billingSummary: data.billingSummary,
+              featureFlags: data.featureFlags,
             }
           : null;
         setTenantInfo(nextTenantInfo);
@@ -384,6 +385,7 @@ const RoleProtectedRoute: React.FC<{ allowedRoles: string[]; moduleKey?: string;
               subscriptionState: data.subscriptionState,
               packageName: data.packageName,
               billingSummary: data.billingSummary,
+              featureFlags: data.featureFlags,
             }
           : null;
         setTenantInfo(nextTenantInfo);

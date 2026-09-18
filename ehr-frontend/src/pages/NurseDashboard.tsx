@@ -2091,7 +2091,8 @@ const NurseDashboard: React.FC = () => {
   };
 
   const handleRecordVitals = (appointment: Appointment) => {
-    if (appointment.paymentStatus === 'awaiting_payment' && !isNurseAccountsUser()) {
+    const isPaymentWaived = tenantInfo?.featureFlags?.waivePaymentLock ?? false;
+    if (appointment.paymentStatus === 'awaiting_payment' && !isNurseAccountsUser() && !isPaymentWaived) {
       notifyPaymentBlocked(appointment, 'Vitals cannot be recorded while payment is pending');
       return;
     }
@@ -2100,7 +2101,8 @@ const NurseDashboard: React.FC = () => {
   };
 
   const handleTriageAssessment = (appointment: Appointment) => {
-    if (appointment.paymentStatus === 'awaiting_payment' && !isNurseAccountsUser()) {
+    const isPaymentWaived = tenantInfo?.featureFlags?.waivePaymentLock ?? false;
+    if (appointment.paymentStatus === 'awaiting_payment' && !isNurseAccountsUser() && !isPaymentWaived) {
       notifyPaymentBlocked(appointment, 'Triage assessment is locked until payment is confirmed');
       return;
     }
@@ -2199,8 +2201,9 @@ const NurseDashboard: React.FC = () => {
       return;
     }
 
+    const isPaymentWaived = tenantInfo?.featureFlags?.waivePaymentLock ?? false;
     const awaitingAppointment = upcomingAppointments.find(apt => apt.paymentStatus === 'awaiting_payment');
-    if (awaitingAppointment && !isNurseAccountsUser()) {
+    if (awaitingAppointment && !isNurseAccountsUser() && !isPaymentWaived) {
       notifyPaymentBlocked(awaitingAppointment, 'Vitals cannot be recorded until payment is confirmed');
       return;
     }
@@ -2385,7 +2388,7 @@ const NurseDashboard: React.FC = () => {
                       {appointment.reason}
                     </p>
                   )}
-                  {awaitingPayment && (
+                  {awaitingPayment && !(tenantInfo?.featureFlags?.waivePaymentLock ?? false) && (
                     <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Lock className="w-3 h-3" />

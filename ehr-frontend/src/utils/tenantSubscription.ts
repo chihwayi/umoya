@@ -26,6 +26,7 @@ export interface TenantSubscriptionInfo {
   subscriptionState?: 'demo' | 'active' | 'grace' | 'suspended' | 'expired';
   packageName?: string | null;
   billingSummary?: TenantBillingSummary;
+  featureFlags?: Record<string, boolean>;
 }
 
 const FULL_EHR_BASE_MODULES = new Set(['finance', 'nurse_general']);

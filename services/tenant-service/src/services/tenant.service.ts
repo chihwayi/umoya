@@ -1150,12 +1150,14 @@ export class TenantService implements OnModuleInit {
             medicalRecords: false,
             basicBilling: false,
             medicalAidClaims: true,
+            waivePaymentLock: false,
           }
         : {
             patientManagement: true,
             appointments: true,
             medicalRecords: true,
             basicBilling: true,
+            waivePaymentLock: false,
           };
 
     let tierFeatures: Record<string, boolean> = {};
