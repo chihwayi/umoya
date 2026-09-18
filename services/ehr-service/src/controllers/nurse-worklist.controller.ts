@@ -28,7 +28,10 @@ export class NurseWorklistController {
   @ApiOperation({ summary: 'Get cross-module specialist escalation feed for nurse workflow' })
   @ApiResponse({ status: 200, description: 'Cross-module escalation feed fetched' })
   async getCrossModuleFeed(@Request() req: RequestWithTenant) {
-    return this.nurseWorklistService.getCrossModuleEscalationFeed(req.tenantDb);
+    const user = req.user as any;
+    return this.nurseWorklistService.getCrossModuleEscalationFeed(req.tenantDb, {
+      requestingRole: user?.role,
+    });
   }
 
   @Get('clinical-escalations')
@@ -104,9 +107,11 @@ export class NurseWorklistController {
     @Query('includeAcknowledged') includeAcknowledgedRaw: string,
     @Request() req: RequestWithTenant,
   ) {
+    const user = req.user as any;
     return this.nurseWorklistService.getDoctorSynchronizationFeed(req.tenantDb, {
       focus,
       includeAcknowledged: String(includeAcknowledgedRaw || '').toLowerCase() === 'true',
+      requestingUserId: user?.role === 'doctor' ? user?.id : undefined,
     });
   }
 

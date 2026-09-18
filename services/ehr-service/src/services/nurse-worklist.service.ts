@@ -3966,7 +3966,10 @@ export class NurseWorklistService {
     };
   }
 
-  async getCrossModuleEscalationFeed(tenantDb: DataSource) {
+  async getCrossModuleEscalationFeed(
+    tenantDb: DataSource,
+    options?: { requestingRole?: string },
+  ) {
     const [
       workflowRows,
       destinationUsers,
@@ -5930,11 +5933,19 @@ export class NurseWorklistService {
         );
       });
 
+    const requestingRole = String(options?.requestingRole || '').toLowerCase();
+
     const items = [
       ...generatedItems,
       ...workflowOnlyItems,
     ]
       .filter((item) => item.module === 'maternity' || item.workflow_status !== 'completed')
+      // Doctor-destined items (e.g. "doctor review recommended" telemedicine
+      // consent checkpoints) are PHI scoped to a specific clinician's review
+      // queue, not nurse action items — the nurse-facing feed must exclude
+      // them. getDoctorSynchronizationFeed() calls this without
+      // requestingRole so it still sees the full unfiltered set.
+      .filter((item) => requestingRole !== 'nurse' || String(item.destination_role || '').toLowerCase() !== 'doctor')
       .sort((a, b) => {
         const severityDiff = this.getSeverityRank(b.severity) - this.getSeverityRank(a.severity);
         if (severityDiff !== 0) {
@@ -5994,14 +6005,22 @@ export class NurseWorklistService {
     options?: {
       focus?: string;
       includeAcknowledged?: boolean;
+      requestingUserId?: string;
     },
   ) {
     const feed = await this.getCrossModuleEscalationFeed(tenantDb);
     const requestedFocus = this.normalizeText(options?.focus)?.toLowerCase() || 'all';
     const includeAcknowledged = options?.includeAcknowledged === true;
+    const requestingUserId = options?.requestingUserId || null;
 
     const items = (Array.isArray(feed?.items) ? feed.items : [])
       .filter((item: any) => this.isDoctorSyncCandidate(item))
+      // Scope to the requesting doctor's own patients — items with no
+      // destination_user_id are unassigned/broadcast escalations any doctor
+      // may triage, but an item assigned to a specific doctor (e.g. a
+      // telemedicine consent checkpoint tied to that doctor's consultation)
+      // must not be visible to every other doctor in the tenant.
+      .filter((item: any) => !requestingUserId || !item.destination_user_id || item.destination_user_id === requestingUserId)
       .map((item: any) => ({
         ...item,
         coordination_focus: this.classifyDoctorSyncFocus(item),

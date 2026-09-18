@@ -524,13 +524,32 @@ const NurseDashboard: React.FC = () => {
       return;
     }
 
-    setActiveSection('hiv');
-    setActiveTab('hiv-patients');
+    if (item.module === 'telemedicine') {
+      navigate(`/ehr/${tenantSlug}/telemedicine`);
+      showSuccess(
+        'Opened telemedicine workflow',
+        item.patient_name
+          ? `Review telemedicine visit-prep context for ${item.patient_name}.`
+          : 'Review the telemedicine workspace for the selected escalation.',
+      );
+      return;
+    }
+
+    if (item.module === 'hiv') {
+      setActiveSection('hiv');
+      setActiveTab('hiv-patients');
+      showSuccess(
+        'Opened HIV workflow',
+        item.enrollment_number
+          ? `Review HIV enrollment ${item.enrollment_number} in the HIV workspace.`
+          : 'Review the HIV workspace for the selected escalation.',
+      );
+      return;
+    }
+
     showSuccess(
-      'Opened HIV workflow',
-      item.enrollment_number
-        ? `Review HIV enrollment ${item.enrollment_number} in the HIV workspace.`
-        : 'Review the HIV workspace for the selected escalation.',
+      'Workflow not available',
+      'This escalation type does not have a dedicated workspace view yet.',
     );
   };
 
