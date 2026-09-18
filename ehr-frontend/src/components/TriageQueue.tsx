@@ -501,9 +501,9 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
       </div>
 
       {/* Patient Queue */}
-      <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50 overflow-hidden">
-        
-        <div className="bg-gradient-to-r from-slate-50 to-pink-50 p-8 border-b border-slate-200/50">
+      <div className="bg-gradient-to-br from-white to-slate-50 rounded-2xl shadow-lg border border-slate-200/50">
+
+        <div className="bg-gradient-to-r from-slate-50 to-pink-50 p-8 border-b border-slate-200/50 rounded-t-2xl">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-r from-pink-500 to-rose-600 rounded-xl">
               <Users className="w-6 h-6 text-white" />
