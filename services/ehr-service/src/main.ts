@@ -67,6 +67,11 @@ function validateCriticalSecurityEnv(): void {
 async function bootstrap() {
   validateCriticalSecurityEnv();
   const app = await NestFactory.create(EhrModule);
+  // Behind Caddy (single reverse-proxy hop): without this, Express's req.ip
+  // resolves to the proxy's own address for every request, so the IP-keyed
+  // rate limiters below collapse ALL clients into one shared bucket — a
+  // handful of login attempts from anyone exhausts the quota for everyone.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.use(helmet({
     // Swagger UI (served from this same app) needs inline scripts/styles;
     // a strict default-src would break it, so CSP is left to a reverse-proxy
