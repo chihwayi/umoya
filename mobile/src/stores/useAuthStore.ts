@@ -52,6 +52,24 @@ const KEYS = {
   TENANT: 'umoya_tenant',
 } as const;
 
+// SecureStore is backed by the Android Keystore, which on some devices
+// (locked/corrupted keystore, certain security policies) can hang forever
+// instead of rejecting — leaving the caller stuck with no error to catch.
+// Every read/write below is bounded so a stuck keystore surfaces as a
+// catchable error instead of silently freezing the UI.
+const STORE_TIMEOUT_MS = 5000;
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`SecureStore "${label}" timed out after ${STORE_TIMEOUT_MS}ms`)), STORE_TIMEOUT_MS),
+    ),
+  ]);
+}
+const secureGet = (key: string) => withTimeout(SecureStore.getItemAsync(key), `get:${key}`);
+const secureSet = (key: string, value: string) => withTimeout(SecureStore.setItemAsync(key, value), `set:${key}`);
+const secureDelete = (key: string) => withTimeout(SecureStore.deleteItemAsync(key), `delete:${key}`);
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   jwt: null,
   role: null,
@@ -63,10 +81,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hydrate: async () => {
     try {
       const [jwt, role, userRaw, tenantRaw] = await Promise.all([
-        SecureStore.getItemAsync(KEYS.JWT),
-        SecureStore.getItemAsync(KEYS.ROLE),
-        SecureStore.getItemAsync(KEYS.USER),
-        SecureStore.getItemAsync(KEYS.TENANT),
+        secureGet(KEYS.JWT),
+        secureGet(KEYS.ROLE),
+        secureGet(KEYS.USER),
+        secureGet(KEYS.TENANT),
       ]);
       set({
         jwt: jwt ?? null,
@@ -75,25 +93,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         tenant: tenantRaw ? JSON.parse(tenantRaw) : null,
         isLoading: false,
       });
-    } catch {
+    } catch (error) {
+      console.error('[AuthStore] hydrate failed (SecureStore unavailable?):', error);
       set({ isLoading: false });
     }
   },
 
   login: async (jwt, role, user) => {
     await Promise.all([
-      SecureStore.setItemAsync(KEYS.JWT, jwt),
-      SecureStore.setItemAsync(KEYS.ROLE, role),
-      SecureStore.setItemAsync(KEYS.USER, JSON.stringify(user)),
+      secureSet(KEYS.JWT, jwt),
+      secureSet(KEYS.ROLE, role),
+      secureSet(KEYS.USER, JSON.stringify(user)),
     ]);
     set({ jwt, role, user });
   },
 
   logout: async () => {
     await Promise.all([
-      SecureStore.deleteItemAsync(KEYS.JWT),
-      SecureStore.deleteItemAsync(KEYS.ROLE),
-      SecureStore.deleteItemAsync(KEYS.USER),
+      secureDelete(KEYS.JWT),
+      secureDelete(KEYS.ROLE),
+      secureDelete(KEYS.USER),
       OfflineCache.clearAll(),
     ]);
     set({ jwt: null, role: null, user: null, isUnlocked: false });
@@ -105,16 +124,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   lock: () => set({ isUnlocked: false }),
 
   setTenant: async (tenant) => {
-    await SecureStore.setItemAsync(KEYS.TENANT, JSON.stringify(tenant));
+    await secureSet(KEYS.TENANT, JSON.stringify(tenant));
     set({ tenant });
   },
 
   clearTenant: async () => {
     await Promise.all([
-      SecureStore.deleteItemAsync(KEYS.TENANT),
-      SecureStore.deleteItemAsync(KEYS.JWT),
-      SecureStore.deleteItemAsync(KEYS.ROLE),
-      SecureStore.deleteItemAsync(KEYS.USER),
+      secureDelete(KEYS.TENANT),
+      secureDelete(KEYS.JWT),
+      secureDelete(KEYS.ROLE),
+      secureDelete(KEYS.USER),
       OfflineCache.clearAll(),
     ]);
     set({ tenant: null, jwt: null, role: null, user: null, isUnlocked: false });

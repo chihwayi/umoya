@@ -116,13 +116,20 @@ export const TenantSelectScreen: React.FC<TenantSelectScreenProps> = ({ onSelect
 
   const select = async (tenant: Tenant) => {
     Keyboard.dismiss();
+    console.log('[TenantSelect] Selecting clinic:', tenant.slug);
     try {
       await setTenant(tenant);
       buildApiClient(tenant.baseUrl);
+      console.log('[TenantSelect] Clinic selected OK:', tenant.slug);
       onSelected();
     } catch (error) {
       console.error('[TenantSelect] Failed to select clinic:', error);
-      Alert.alert('Failed to select clinic', 'Please check your connection and try again.');
+      Alert.alert(
+        'Failed to select clinic',
+        error instanceof Error && error.message.includes('timed out')
+          ? 'Your device took too long to save this — please try again.'
+          : 'Please check your connection and try again.',
+      );
     }
   };
 
