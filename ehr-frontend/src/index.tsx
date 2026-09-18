@@ -50,4 +50,15 @@ if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
       .register('/sw.js')
       .catch((error) => console.warn('Service worker registration failed:', error));
   });
+} else if ('serviceWorker' in navigator) {
+  // A service worker installed during an earlier production-mode deploy of this
+  // origin persists across reloads (even hard refreshes) and cache-first-serves
+  // stale /static/ assets. Outside production, proactively evict it so this
+  // environment can never get stuck serving an old bundle.
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => registration.unregister());
+  });
+  if ('caches' in window) {
+    caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+  }
 }
