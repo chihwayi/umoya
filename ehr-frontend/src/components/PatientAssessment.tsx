@@ -359,16 +359,16 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   return (
     <div className="space-y-6">
       {/* Patient Header */}
-      <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-6 border border-pink-200/50">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+      <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-4 border border-pink-200/50">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
             {patient.firstName.charAt(0)}{patient.lastName.charAt(0)}
           </div>
           <div className="flex-1">
-            <h3 className="text-xl font-bold text-slate-900">
+            <h3 className="text-lg font-bold text-slate-900">
               {patient.firstName} {patient.lastName}
             </h3>
-            <p className="text-slate-600">ID: {patient.patientNumber}</p>
+            <p className="text-sm text-slate-600">ID: {patient.patientNumber}</p>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm text-slate-600">
             <div className="flex items-center gap-2">
@@ -564,7 +564,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
           <button
             type="button"
             onClick={() => setAssessmentOpen(o => !o)}
-            className="w-full flex items-center justify-between px-5 py-3 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
           >
             <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <Stethoscope className="w-4 h-4 text-pink-500" />
@@ -573,7 +573,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${assessmentOpen ? 'rotate-180' : ''}`} />
           </button>
           {assessmentOpen && <>
-          <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
+          <div className="p-4 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-semibold text-slate-700">Chief Complaint</label>
               {chiefComplaint && chiefComplaint.length > 10 && (
@@ -669,7 +669,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
               rows={3}
               placeholder="Patient's primary concern in their own words"
             />
-            <div className="mt-2">
+            <div className="mt-1.5">
               <SnomedConceptPicker
                 value={chiefComplaintConcept}
                 onChange={setChiefComplaintConcept}
@@ -750,16 +750,16 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
             )}
           </div>
 
-          <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
+          <div className="p-4 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
             <label className="block text-sm font-semibold text-slate-700 mb-2">Symptoms</label>
             <textarea
               value={symptoms}
               onChange={(e) => setSymptoms(e.target.value)}
-              className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-              rows={3}
+              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none text-sm"
+              rows={2}
               placeholder="List specific symptoms (e.g. fever, cough, headache)"
             />
-            <div className="mt-2">
+            <div className="mt-1.5">
               <SnomedConceptPicker
                 value={pendingSymptomConcept}
                 onChange={setPendingSymptomConcept}
@@ -777,7 +777,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                     setSymptomsConcepts([...symptomsConcepts, pendingSymptomConcept]);
                     setPendingSymptomConcept(null);
                   }}
-                  className="mt-2 px-3 py-1.5 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-sm font-medium flex items-center gap-1"
+                  className="mt-1.5 px-2 py-1 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors text-xs font-medium flex items-center gap-1"
                 >
                   <Plus className="w-3 h-3" />
                   Add Symptom
@@ -805,26 +805,26 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Onset and Course</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-3 bg-white/70 rounded-xl border border-slate-200/60 shadow-sm">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Onset and Course</label>
               <input
                 value={onset}
                 onChange={(e) => setOnset(e.target.value)}
-                className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                className="w-full px-2 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 placeholder="e.g., Sudden onset 2 hours ago"
               />
             </div>
-            <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Pain Score (0-10)</label>
+            <div className="p-3 bg-white/70 rounded-xl border border-slate-200/60 shadow-sm">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Pain Score (0-10)</label>
               <input
                 type="number"
                 min={0}
                 max={10}
                 value={painScore}
                 onChange={(e) => setPainScore(Number(e.target.value))}
-                className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                placeholder="0 (no pain) to 10 (worst pain)"
+                className="w-full px-2 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                placeholder="0–10"
               />
             </div>
           </div>
@@ -834,7 +834,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
           <button
             type="button"
             onClick={() => setBackgroundOpen(o => !o)}
-            className="w-full flex items-center justify-between px-5 py-3 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
           >
             <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <ClipboardList className="w-4 h-4 text-slate-500" />
@@ -843,27 +843,27 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${backgroundOpen ? 'rotate-180' : ''}`} />
           </button>
           {backgroundOpen && <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-semibold text-slate-700">Allergies</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-white/70 rounded-xl border border-slate-200/60 shadow-sm">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700">Allergies</label>
                 <button
                   onClick={() => setShowAllergiesModal(true)}
-                  className="flex items-center gap-1 text-xs px-2 py-1 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors"
+                  className="flex items-center gap-1 text-xs px-1.5 py-0.5 bg-rose-50 text-rose-700 rounded-lg hover:bg-rose-100 transition-colors"
                   title="Manage structured allergies"
                 >
-                  <Edit2 className="w-3 h-3" />
+                  <Edit2 className="w-2.5 h-2.5" />
                   Manage
                 </button>
               </div>
               {structuredAllergies.length > 0 && (
-                <div className="mb-2 space-y-1">
-                  {structuredAllergies.slice(0, 3).map((a: any, idx: number) => (
-                    <div key={idx} className="text-xs flex items-center gap-2">
-                      <AlertTriangle className="w-3 h-3 text-rose-600" />
+                <div className="mb-2 space-y-0.5">
+                  {structuredAllergies.slice(0, 2).map((a: any, idx: number) => (
+                    <div key={idx} className="text-xs flex items-center gap-1.5">
+                      <AlertTriangle className="w-2.5 h-2.5 text-rose-600 flex-shrink-0" />
                       <span className="font-medium text-slate-700">{a.allergen}</span>
                       {a.severity && (
-                        <span className={`px-1.5 py-0.5 rounded text-xs ${
+                        <span className={`px-1 py-0 rounded text-[10px] ${
                           a.severity === 'severe' ? 'bg-red-100 text-red-700' :
                           a.severity === 'moderate' ? 'bg-orange-100 text-orange-700' :
                           'bg-yellow-100 text-yellow-700'
@@ -873,27 +873,26 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
                       )}
                     </div>
                   ))}
-                  {structuredAllergies.length > 3 && (
-                    <div className="text-xs text-slate-500">+{structuredAllergies.length - 3} more</div>
+                  {structuredAllergies.length > 2 && (
+                    <div className="text-xs text-slate-500">+{structuredAllergies.length - 2} more</div>
                   )}
                 </div>
               )}
               <textarea
                 value={allergies}
                 onChange={(e) => setAllergies(e.target.value)}
-                className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                rows={3}
-                placeholder="Quick note: Allergies are managed via 'Manage' button. Type here for temporary notes during triage."
+                className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                rows={2}
+                placeholder="Notes (use 'Manage' for structured data)"
               />
-              <p className="text-xs text-slate-500 mt-1">Note: Use "Manage" button to add/edit structured allergies</p>
             </div>
-            <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Current Medications</label>
+            <div className="p-4 bg-white/70 rounded-xl border border-slate-200/60 shadow-sm">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Current Medications</label>
               <textarea
                 value={medications}
                 onChange={(e) => setMedications(e.target.value)}
-                className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-                rows={3}
+                className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+                rows={2}
                 placeholder="List active medications"
               />
               <div className="mt-2">
@@ -943,14 +942,14 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
             </div>
           </div>
 
-          <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Relevant History</label>
+          <div className="p-4 bg-white/70 rounded-xl border border-slate-200/60 shadow-sm">
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Relevant History</label>
             <textarea
               value={history}
               onChange={(e) => setHistory(e.target.value)}
-              className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-              rows={3}
-              placeholder="Brief past medical/surgical history relevant to the visit"
+              className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+              rows={2}
+              placeholder="Brief past medical/surgical history"
             />
             <div className="mt-2">
               <SnomedConceptPicker
@@ -998,14 +997,14 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
             </div>
           </div>
 
-          <div className="p-6 bg-white/70 rounded-2xl border border-slate-200/60 shadow-sm">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Nurse Observations</label>
+          <div className="p-4 bg-white/70 rounded-xl border border-slate-200/60 shadow-sm">
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Nurse Observations</label>
             <textarea
               value={observations}
               onChange={(e) => setObservations(e.target.value)}
-              className="w-full px-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
-              rows={4}
-              placeholder="General appearance, orientation, distress, etc."
+              className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
+              rows={2}
+              placeholder="Appearance, orientation, distress, etc."
             />
             <div className="mt-2">
               <SnomedConceptPicker
@@ -1157,17 +1156,15 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
           </div>
 
           {appointments.length > 0 && (
-            <div className="p-6 bg-gradient-to-br from-white to-slate-50 rounded-2xl border border-slate-200/60 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-gradient-to-r from-slate-500 to-slate-700 rounded-xl">
-                  <Calendar className="w-5 h-5 text-white" />
-                </div>
-                <h4 className="text-sm font-bold text-slate-900">Current Appointment</h4>
+            <div className="p-4 bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200/60 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-4 h-4 text-slate-600" />
+                <h4 className="text-xs font-bold text-slate-900">Current Appointment</h4>
               </div>
-              <div className="text-sm text-slate-700">
+              <div className="text-xs text-slate-700 space-y-0.5">
                 <div className="font-semibold">{appointments[0].appointmentType}</div>
                 <div className="text-slate-600">{formatDateTimeToDDMMYYYYHHMM(appointments[0].appointmentDate)}</div>
-                <div className="text-slate-500">Reason: {appointments[0].reason || '—'}</div>
+                {appointments[0].reason && <div className="text-slate-500">Reason: {appointments[0].reason}</div>}
               </div>
             </div>
           )}
@@ -1176,26 +1173,26 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
 
       {/* Footer actions */}
       {patient && (
-        <div className="flex items-center justify-end gap-4 pt-6 border-t border-slate-200">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
           <button
             onClick={onClose}
-            className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 transition-all duration-200 font-semibold"
+            className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-all duration-200 text-sm font-semibold"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={loading}
-            className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-xl hover:from-pink-600 hover:to-rose-700 transition-all duration-200 font-semibold disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg hover:from-pink-600 hover:to-rose-700 transition-all duration-200 text-sm font-semibold disabled:opacity-50 flex items-center gap-2"
           >
             {loading ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
                 Saving...
               </>
             ) : (
               <>
-                <Save className="w-4 h-4" />
+                <Save className="w-3.5 h-3.5" />
                 Save Assessment
               </>
             )}
