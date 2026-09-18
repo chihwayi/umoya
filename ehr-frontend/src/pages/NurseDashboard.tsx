@@ -4493,17 +4493,19 @@ const NurseDashboard: React.FC = () => {
                     })()}
                     <p><strong>Suggested Triage Level:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
                     {(() => {
+                      const safeText = (v: any, depth = 0): string => {
+                        if (v === null || v === undefined) return '';
+                        if (typeof v !== 'object') return String(v);
+                        if (depth >= 3) return '';
+                        const candidate = v.text ?? v.term ?? v.label ?? v.name ?? v.factor ?? v.description;
+                        if (candidate !== undefined && candidate !== v) return safeText(candidate, depth + 1);
+                        try { return JSON.stringify(v); } catch { return ''; }
+                      };
                       let topReason: string | null = null;
                       if (Array.isArray(triageCopilotResult.reasons) && triageCopilotResult.reasons.length > 0) {
-                        const r = triageCopilotResult.reasons[0];
-                        topReason = typeof r === 'object' && r !== null
-                          ? String(r.text || r.term || r.label || r.name || r.description || JSON.stringify(r))
-                          : String(r);
+                        topReason = safeText(triageCopilotResult.reasons[0]) || null;
                       } else if (Array.isArray(triageCopilotResult.risk?.factors) && triageCopilotResult.risk.factors.length > 0) {
-                        const f = triageCopilotResult.risk.factors[0];
-                        topReason = typeof f === 'object' && f !== null
-                          ? String(f.name || f.factor || f.label || f.text || f.description || JSON.stringify(f))
-                          : String(f || '');
+                        topReason = safeText(triageCopilotResult.risk.factors[0]) || null;
                       }
                       return topReason ? (
                         <p><strong>Top Reason:</strong> {topReason}</p>

@@ -209,6 +209,24 @@ export interface CareGapDetectionOptions {
   module?: string;
 }
 
+function safeReasonText(value: any, depth = 0): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object' && depth < 3) {
+    const candidate = value.text ?? value.term ?? value.label ?? value.name ?? value.factor ?? value.description;
+    if (candidate !== undefined && candidate !== value) {
+      return safeReasonText(candidate, depth + 1);
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  }
+  return String(value);
+}
+
 @Injectable()
 export class CdssService {
   private readonly logger = new Logger(CdssService.name);
@@ -4208,9 +4226,12 @@ export class CdssService {
     const riskLevel = risk?.risk_level || diagnosis?.urgencyLevel || 'unknown';
     const suggestedTriageLevel = this.mapRiskToTriageLevel(riskLevel);
     const reasons: string[] = [
-      ...(Array.isArray(diagnosis?.red_flags) ? diagnosis.red_flags : []),
-      ...(Array.isArray(risk?.factors) ? risk.factors.map((f: any) => String(f?.name || f?.factor || f)) : []),
-    ].slice(0, 8);
+      ...(Array.isArray(diagnosis?.red_flags) ? diagnosis.red_flags.map((f: any) => safeReasonText(f)) : []),
+      ...(Array.isArray(risk?.factors) ? risk.factors.map((f: any) => safeReasonText(f)) : []),
+    ]
+      .map((r) => r?.trim())
+      .filter(Boolean)
+      .slice(0, 8);
 
     const missingData: string[] = [];
     if (!triageInput.vitals) missingData.push('vitals');
