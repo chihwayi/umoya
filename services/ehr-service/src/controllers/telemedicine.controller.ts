@@ -17,6 +17,7 @@ import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
+import { Public } from '../decorators/public.decorator';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { TelemedicineService } from '../services/telemedicine.service';
 import { RemoteMonitoringService } from '../services/remote-monitoring.service';
@@ -24,6 +25,7 @@ import { TelemedicineConsentService } from '../services/telemedicine-consent.ser
 import { DigitalPrescriptionService } from '../services/digital-prescription.service';
 import {
   CreateTelemedicineConsultationDto,
+  JoinAsGuestDto,
   UpdateTelemedicineConsultationDto,
   JoinConsultationDto,
   RecordSatisfactionDto,
@@ -171,6 +173,39 @@ export class TelemedicineController {
   async stopRecording(@Param('id') id: string, @Req() req: RequestWithTenant) {
     const userId = (req.user as any)?.id || (req.user as any)?.userId;
     return this.telemedicineService.stopRecording(req.tenantDb, id, userId);
+  }
+
+  @Post('consultations/:id/guest-link')
+  @Roles('doctor')
+  @ApiOperation({ summary: 'Generate a shareable, unauthenticated guest-join link for this call (doctor only)' })
+  @ApiParam({ name: 'id', description: 'Consultation ID' })
+  @ApiResponse({ status: 200, description: 'Guest link token and expiry' })
+  async createGuestLink(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.telemedicineService.createGuestLink(req.tenantDb, id, userId);
+  }
+
+  @Delete('consultations/:id/guest-link')
+  @Roles('doctor')
+  @ApiOperation({ summary: 'Revoke the active guest-join link for this call (doctor only)' })
+  @ApiParam({ name: 'id', description: 'Consultation ID' })
+  @ApiResponse({ status: 200, description: 'Guest link revoked' })
+  async revokeGuestLink(@Param('id') id: string, @Req() req: RequestWithTenant) {
+    const userId = (req.user as any)?.id || (req.user as any)?.userId;
+    return this.telemedicineService.revokeGuestLink(req.tenantDb, id, userId);
+  }
+
+  @Public()
+  @Post('consultations/:id/guest-join')
+  @ApiOperation({ summary: 'Unauthenticated guest join — validates the guest-link token and issues a scoped LiveKit token' })
+  @ApiParam({ name: 'id', description: 'Consultation ID' })
+  @ApiResponse({ status: 200, description: 'Guest meeting token issued' })
+  async joinAsGuest(
+    @Param('id') id: string,
+    @Body() dto: JoinAsGuestDto,
+    @Req() req: RequestWithTenant,
+  ) {
+    return this.telemedicineService.joinAsGuest(req.tenantDb, id, dto.token, dto.name ?? 'Guest');
   }
 
   @Post('consultations/:id/technical-issue')

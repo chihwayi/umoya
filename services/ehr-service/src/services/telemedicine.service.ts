@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
+import { randomBytes, randomUUID } from 'crypto';
 import { TelemedicineVideoService } from './telemedicine-video.service';
 import { BillingService } from './billing.service';
 import { NotificationsService } from './notifications.service';
@@ -764,5 +765,92 @@ export class TelemedicineService {
       throw new BadRequestException('Only the assigned doctor can stop recording');
     }
     return this.videoService.stopRecording(consultationId, consultation.meeting_room_id);
+  }
+
+  /**
+   * Mints an unauthenticated guest-join link for this call (doctor-initiated).
+   * The token is opaque and stored on the consultation row — anyone with the
+   * link can join as a guest until it expires, so it is deliberately
+   * short-lived and scoped to just this one room.
+   */
+  async createGuestLink(tenantDb: DataSource, consultationId: string, userId: string) {
+    this.ensureTenantDb(tenantDb);
+    const consultation = await this.getConsultation(tenantDb, consultationId);
+    if (!consultation.meeting_room_id) {
+      throw new BadRequestException('Meeting room not created for this consultation');
+    }
+    if (consultation.doctor_id !== userId) {
+      throw new BadRequestException('Only the assigned doctor can create a guest link');
+    }
+    if (consultation.status === 'completed' || consultation.status === 'cancelled') {
+      throw new BadRequestException(`Cannot create a guest link for a ${consultation.status} consultation`);
+    }
+
+    const guestToken = randomBytes(24).toString('base64url');
+    const expiresAt = new Date(Date.now() + 3 * 60 * 60 * 1000); // 3h, matches the guest LiveKit token TTL
+
+    await tenantDb.query(
+      `UPDATE telemedicine_consultations
+       SET guest_token = $1, guest_token_expires_at = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [guestToken, expiresAt.toISOString(), consultationId],
+    );
+
+    return { guestToken, expiresAt: expiresAt.toISOString() };
+  }
+
+  async revokeGuestLink(tenantDb: DataSource, consultationId: string, userId: string) {
+    this.ensureTenantDb(tenantDb);
+    const consultation = await this.getConsultation(tenantDb, consultationId);
+    if (consultation.doctor_id !== userId) {
+      throw new BadRequestException('Only the assigned doctor can revoke the guest link');
+    }
+    await tenantDb.query(
+      `UPDATE telemedicine_consultations
+       SET guest_token = NULL, guest_token_expires_at = NULL, updated_at = NOW()
+       WHERE id = $1`,
+      [consultationId],
+    );
+    return { revoked: true };
+  }
+
+  /**
+   * Unauthenticated join — validates the guest token server-side (never
+   * trusts the client) before issuing a scoped LiveKit token. Guests get a
+   * random identity, not a real user ID, so they never collide with staff.
+   */
+  async joinAsGuest(tenantDb: DataSource, consultationId: string, guestToken: string, guestName: string) {
+    this.ensureTenantDb(tenantDb);
+    const consultation = await this.getConsultation(tenantDb, consultationId);
+
+    if (!consultation.meeting_room_id) {
+      throw new BadRequestException('Meeting room not created for this consultation');
+    }
+    if (consultation.status === 'completed' || consultation.status === 'cancelled') {
+      throw new BadRequestException(`Cannot join a ${consultation.status} consultation`);
+    }
+    if (!consultation.guest_token || consultation.guest_token !== guestToken) {
+      throw new BadRequestException('Invalid or revoked guest link');
+    }
+    if (!consultation.guest_token_expires_at || new Date(consultation.guest_token_expires_at) < new Date()) {
+      throw new BadRequestException('This guest link has expired');
+    }
+
+    const displayName = (guestName || 'Guest').trim().slice(0, 60) || 'Guest';
+    const guestIdentity = `guest-${randomUUID()}`;
+    const token = await this.videoService.getMeetingToken(
+      consultation.meeting_room_id,
+      guestIdentity,
+      'guest',
+      displayName,
+    );
+
+    return {
+      token,
+      meetingUrl: consultation.meeting_url,
+      meetingRoomId: consultation.meeting_room_id,
+      role: 'guest' as const,
+      expiresInSeconds: 3 * 60 * 60,
+    };
   }
 }

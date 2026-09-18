@@ -6611,6 +6611,28 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  createTelemedicineGuestLink: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/telemedicine/consultations/${id}/guest-link`, {}, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  revokeTelemedicineGuestLink: async (id: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.delete(`/telemedicine/consultations/${id}/guest-link`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  /** No auth token — the guest link's own opaque token is the credential. */
+  joinTelemedicineAsGuest: async (id: string, guestToken: string, name: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/telemedicine/consultations/${id}/guest-join`, { token: guestToken, name }, {
+      headers: { 'X-Tenant-ID': tenantSlug },
+    });
+    return { data: response.data };
+  },
+
   getTelemedicineMonitoringAlerts: async (token: string, tenantSlug: string, patientId?: string) => {
     const response = await ehrAxios.get('/telemedicine/monitoring/alerts', {
       params: patientId ? { patientId } : {},

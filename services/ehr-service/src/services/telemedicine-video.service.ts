@@ -119,13 +119,14 @@ export class TelemedicineVideoService {
    * Returns a signed LiveKit access token (JWT) for a specific participant.
    * Generated locally — no network call to the LiveKit server needed.
    * Doctor gets roomAdmin=true (can mute/remove others, end the room).
-   * Patient gets roomAdmin=false.
-   * Token expires in 2 hours.
+   * Patient/guest get roomAdmin=false. Guests additionally get a short TTL
+   * regardless of the caller's request, since the link itself (not this
+   * token) is the thing that should ever be re-shared.
    */
   async getMeetingToken(
     meetingRoomId: string,
     userId: string,
-    role: 'doctor' | 'patient',
+    role: 'doctor' | 'patient' | 'guest',
     displayName?: string,
   ): Promise<string> {
     if (!this.apiKey || !this.apiSecret) {
@@ -134,17 +135,18 @@ export class TelemedicineVideoService {
       );
     }
 
+    const defaultName = role === 'doctor' ? 'Doctor' : role === 'guest' ? 'Guest' : 'Patient';
     const at = new AccessToken(this.apiKey, this.apiSecret, {
       identity: userId,
-      name: displayName ?? (role === 'doctor' ? 'Doctor' : 'Patient'),
-      ttl: '2h',
+      name: displayName ?? defaultName,
+      ttl: role === 'guest' ? '3h' : '2h',
     });
     at.addGrant({
       room: meetingRoomId,
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
-      canPublishData: true,
+      canPublishData: role !== 'guest',
       roomAdmin: role === 'doctor',
     });
 

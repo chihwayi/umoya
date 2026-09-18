@@ -115,6 +115,7 @@ const PharmacyIntelligenceDashboard = lazy(() => import('./pages/PharmacyIntelli
 const AiGovernanceDashboard = lazy(() => import('./pages/AiGovernanceDashboard'));
 const ResearchPortalAdmin = lazy(() => import('./pages/ResearchPortalAdmin'));
 const ResearchDownloadPage = lazy(() => import('./pages/ResearchDownloadPage'));
+const GuestTelehealthPage = lazy(() => import('./pages/GuestTelehealthPage'));
 const MessagingDashboard = lazy(() => import('./pages/MessagingDashboard'));
 const OpenMrsMflDashboard = lazy(() => import('./pages/OpenMrsMflDashboard'));
 const InteropDashboard = lazy(() => import('./components/InteropDashboard'));
@@ -1685,6 +1686,7 @@ function App() {
               }
             />
             <Route path="/research" element={<ResearchDownloadPage />} />
+            <Route path="/telehealth/guest/:tenantSlug/:consultationId/:guestToken" element={<GuestTelehealthPage />} />
             </Routes>
           </Suspense>
         </Router>

@@ -21,6 +21,8 @@ interface TelehealthCallStageProps {
   recordingBusy: boolean;
   onToggleRecording: () => void;
   onLeave: () => void;
+  /** Guests can't start/stop recording — only the doctor who owns the call can. */
+  canControlRecording?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -30,7 +32,7 @@ function formatDuration(seconds: number): string {
 }
 
 export const TelehealthCallStage: React.FC<TelehealthCallStageProps> = ({
-  remoteName, isRecording, recordingBusy, onToggleRecording, onLeave,
+  remoteName, isRecording, recordingBusy, onToggleRecording, onLeave, canControlRecording = true,
 }) => {
   const { localParticipant, isMicrophoneEnabled, isCameraEnabled, isScreenShareEnabled } = useLocalParticipant();
   const remoteParticipants = useRemoteParticipants();
@@ -130,14 +132,16 @@ export const TelehealthCallStage: React.FC<TelehealthCallStageProps> = ({
         >
           {isScreenShareEnabled ? <ScreenShareOff size={18} /> : <ScreenShare size={18} />}
         </button>
-        <button
-          className={`th-btn th-btn-record ${isRecording ? 'th-btn-recording' : ''}`}
-          onClick={onToggleRecording}
-          disabled={recordingBusy}
-          title={isRecording ? 'Stop recording' : 'Start recording'}
-        >
-          {isRecording ? <Square size={16} fill="currentColor" /> : <Circle size={18} fill="currentColor" />}
-        </button>
+        {canControlRecording && (
+          <button
+            className={`th-btn th-btn-record ${isRecording ? 'th-btn-recording' : ''}`}
+            onClick={onToggleRecording}
+            disabled={recordingBusy}
+            title={isRecording ? 'Stop recording' : 'Start recording'}
+          >
+            {isRecording ? <Square size={16} fill="currentColor" /> : <Circle size={18} fill="currentColor" />}
+          </button>
+        )}
         <button className="th-btn th-btn-end" onClick={onLeave} title="End call">
           <PhoneOff size={18} />
         </button>

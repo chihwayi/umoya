@@ -140,6 +140,18 @@ export class JoinConsultationDto {
   role: 'patient' | 'doctor';
 }
 
+export class JoinAsGuestDto {
+  @ApiProperty({ description: 'Opaque guest-link token from the join URL' })
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+
+  @ApiProperty({ description: 'Display name the guest entered', required: false })
+  @IsString()
+  @IsOptional()
+  name?: string;
+}
+
 export class RecordSatisfactionDto {
   @ApiProperty({ description: 'Satisfaction rating (1-5)' })
   @IsInt()

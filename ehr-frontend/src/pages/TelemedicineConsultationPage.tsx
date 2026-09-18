@@ -16,6 +16,9 @@ import {
   Sparkles,
   ArrowRight,
   ClipboardList,
+  Link2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { LiveKitRoom } from '@livekit/components-react';
 import '@livekit/components-styles/components';
@@ -45,6 +48,10 @@ const TelemedicineConsultationPage: React.FC = () => {
   const [endingConsultation, setEndingConsultation] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingBusy, setRecordingBusy] = useState(false);
+  const [guestLinkUrl, setGuestLinkUrl] = useState('');
+  const [guestLinkBusy, setGuestLinkBusy] = useState(false);
+  const [showGuestModal, setShowGuestModal] = useState(false);
+  const [guestLinkCopied, setGuestLinkCopied] = useState(false);
 
   // CDSS Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
@@ -127,6 +134,31 @@ const TelemedicineConsultationPage: React.FC = () => {
     }
   };
 
+  const handleCreateGuestLink = async () => {
+    setGuestLinkBusy(true);
+    try {
+      const res = await ehrApi.createTelemedicineGuestLink(consultationId!, token, tenantSlug!);
+      const url = `${window.location.origin}/telehealth/guest/${tenantSlug}/${consultationId}/${res.data.guestToken}`;
+      setGuestLinkUrl(url);
+      setShowGuestModal(true);
+      setGuestLinkCopied(false);
+    } catch (error: any) {
+      showError('Could not create guest link', error.response?.data?.message || 'Please try again');
+    } finally {
+      setGuestLinkBusy(false);
+    }
+  };
+
+  const handleCopyGuestLink = async () => {
+    try {
+      await navigator.clipboard.writeText(guestLinkUrl);
+      setGuestLinkCopied(true);
+      setTimeout(() => setGuestLinkCopied(false), 2000);
+    } catch {
+      showError('Could not copy', 'Please copy the link manually');
+    }
+  };
+
   const buildPostVisitUrl = () => {
     const params = new URLSearchParams();
     if (consultation?.patient_id) params.set('patientId', consultation.patient_id);
@@ -199,6 +231,37 @@ const TelemedicineConsultationPage: React.FC = () => {
   return (
     <>
       {Dialog}
+      {showGuestModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
+          <div className="max-w-md w-full bg-slate-900 border border-white/10 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-1">Guest invite link</h3>
+            <p className="text-sm text-white/60 mb-4">
+              Anyone with this link can join this call without an Umoya account — no recording controls, expires in 3 hours.
+            </p>
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                readOnly
+                value={guestLinkUrl}
+                className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white/80 text-xs font-mono truncate"
+                onFocus={e => e.target.select()}
+              />
+              <button
+                onClick={handleCopyGuestLink}
+                className="p-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex-shrink-0"
+                title="Copy link"
+              >
+                {guestLinkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+            <button
+              onClick={() => setShowGuestModal(false)}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
       {/* Header */}
       <div className="border-b border-white/10 bg-black/20 backdrop-blur-sm">
@@ -222,6 +285,15 @@ const TelemedicineConsultationPage: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={handleCreateGuestLink}
+                disabled={guestLinkBusy}
+                className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-60 text-white transition-colors flex items-center gap-2"
+                title="Invite a guest with a shareable link"
+              >
+                <Link2 className="w-4 h-4" />
+                <span className="hidden sm:inline text-sm font-medium">{guestLinkBusy ? 'Creating…' : 'Invite Guest'}</span>
+              </button>
               <button
                 onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
                 className={`px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
