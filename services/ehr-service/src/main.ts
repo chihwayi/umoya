@@ -81,6 +81,24 @@ async function bootstrap() {
   }));
   app.use(compression());
 
+  // CORS must be registered before the rate limiters below — otherwise a
+  // 429 response from express-rate-limit never gets a CORS header, and the
+  // browser reports a misleading "CORS header missing" error instead of
+  // surfacing the real 429 the frontend could actually handle (retry timer,
+  // "too many attempts" message).
+  const corsOrigins = envConfig.security.corsOrigins;
+  if (corsOrigins.length === 0 && !isDevLikeEnv()) {
+    throw new Error('CORS_ORIGINS must be set to an explicit allow-list in non-development environments.');
+  }
+
+  app.enableCors({
+    origin: corsOrigins.length > 0 ? corsOrigins : true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Tenant-Slug', 'x-session-id', 'X-Request-ID'],
+    exposedHeaders: ['X-Request-ID'],
+  });
+
   // Brute-force protection: tight limit on auth endpoints, looser general
   // limit on everything else under /api. Keyed on IP; a reverse proxy in
   // front of this service is expected to forward the real client IP.
@@ -120,24 +138,6 @@ async function bootstrap() {
 
   // Enable global exception filter for detailed error logging
   app.useGlobalFilters(new AllExceptionsFilter());
-
-  // Enable CORS from environment variables. Falling back to "allow any
-  // origin" is only acceptable for local/dev convenience — in a real
-  // deployment an empty CORS_ORIGINS means misconfiguration, and silently
-  // opening the API to every origin would undermine the credentialed
-  // (cookie/Authorization-bearing) requests this app makes.
-  const corsOrigins = envConfig.security.corsOrigins;
-  if (corsOrigins.length === 0 && !isDevLikeEnv()) {
-    throw new Error('CORS_ORIGINS must be set to an explicit allow-list in non-development environments.');
-  }
-
-  app.enableCors({
-    origin: corsOrigins.length > 0 ? corsOrigins : true,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Tenant-Slug', 'x-session-id', 'X-Request-ID'],
-    exposedHeaders: ['X-Request-ID'],
-  });
 
   // B-012/MOAS-16: liveness/readiness must be reachable at the bare,
   // unprefixed /health path — the conventional, stable location orchestrators
