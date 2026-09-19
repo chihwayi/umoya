@@ -12142,12 +12142,13 @@ export class DatabaseProvisioningService {
           observations_snomed JSONB DEFAULT '[]'::jsonb,
           priority VARCHAR(20) NOT NULL CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
           severity_score INTEGER CHECK (severity_score >= 0 AND severity_score <= 10),
+          mismatch_rationale TEXT,
           recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           recorded_by UUID NOT NULL REFERENCES users(id),
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
-      
+
       CREATE TABLE nursing_notes (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,

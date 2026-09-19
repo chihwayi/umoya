@@ -62,6 +62,12 @@ export class TriageAssessment {
   @Column({ name: 'severity_score', type: 'int', nullable: true })
   severityScore?: number;
 
+  // Clinical justification a nurse must provide when saving a high-severity
+  // (>=7/10) assessment at a default/low priority — see triage.service.ts's
+  // recordAssessment() governance gate. Persisted for audit review.
+  @Column({ name: 'mismatch_rationale', type: 'text', nullable: true })
+  mismatchRationale?: string;
+
   @Column({ name: 'recorded_at', type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
   recordedAt: Date;
 

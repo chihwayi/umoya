@@ -328,10 +328,10 @@ export class TriageService {
     // trust the client's own assessment of whether a gate applies.
     const severityHigh = Number(data.severityScore || 0) >= 7;
     const priorityNotEscalated = !data.priority || data.priority === 'normal' || data.priority === 'low';
+    const mismatchRationale = (data as any).mismatchRationale ? String((data as any).mismatchRationale).trim() : null;
 
     if (severityHigh && priorityNotEscalated) {
-      const mismatchRationale = (data as any).mismatchRationale ? String((data as any).mismatchRationale) : null;
-      if (!mismatchRationale?.trim()) {
+      if (!mismatchRationale) {
         throw new BadRequestException(
           'A clinical rationale is required to save a triage assessment with high severity (≥7/10) at a default or low priority. ' +
           'Either use "Analyze + Apply Copilot Priority" to auto-escalate, or provide a written rationale explaining the discrepancy.'
@@ -354,9 +354,9 @@ export class TriageService {
         chief_complaint_snomed_module_id, chief_complaint_snomed_definition_status,
         onset, pain_score, allergies, medications, history, observations, observations_snomed,
         symptoms, symptoms_snomed, medications_snomed, history_snomed,
-        priority, severity_score, recorded_at, recorded_by
+        priority, severity_score, mismatch_rationale, recorded_at, recorded_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18, $19, $20, $21)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22)
       RETURNING *
       `,
       [
@@ -379,6 +379,7 @@ export class TriageService {
         JSON.stringify(historyList),
         data.priority,
         data.severityScore ?? null,
+        mismatchRationale,
         data.recordedAt ?? new Date(),
         data.recordedBy,
       ],
