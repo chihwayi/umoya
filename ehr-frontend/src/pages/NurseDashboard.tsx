@@ -1067,13 +1067,9 @@ const NurseDashboard: React.FC = () => {
 
   // AI Guideline Search State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);
-  const [triageCopilotLoading, setTriageCopilotLoading] = useState(false);
   const [vitalsCopilotLoading, setVitalsCopilotLoading] = useState(false);
   const [notesCopilotLoading, setNotesCopilotLoading] = useState(false);
   const [handoffCopilotLoading, setHandoffCopilotLoading] = useState(false);
-  const [triageCopilotResult, setTriageCopilotResult] = useState<any | null>(null);
-  const [triageCopilotPanelExpanded, setTriageCopilotPanelExpanded] = useState(true);
-  const [triageSuggestedPriority, setTriageSuggestedPriority] = useState<'urgent' | 'high' | 'normal' | 'low' | null>(null);
   const [vitalsCopilotResult, setVitalsCopilotResult] = useState<any | null>(null);
   const [notesCopilotDraft, setNotesCopilotDraft] = useState<string>('');
   const [notesCopilotProvenance, setNotesCopilotProvenance] = useState<string[]>([]);
@@ -1666,95 +1662,6 @@ const NurseDashboard: React.FC = () => {
     }
     const patientApt = appointments.find(a => a.patient.id === selectedPatient.id && a.vitals);
     return patientApt?.vitals || null;
-  };
-
-  const handleTriageCopilotAnalyze = async (targetPatient?: Patient, sourceAppointment?: Appointment) => {
-    try {
-      const token = localStorage.getItem('ehr_token');
-      const activeTenant = resolveTenantSlug();
-      let patientContext = targetPatient || selectedPatient;
-      if (!token || !activeTenant || !patientContext) {
-        showError('Missing context', 'Select a patient and ensure session is active.');
-        return;
-      }
-
-      if ((!patientContext.dateOfBirth || !patientContext.gender) && patientContext.id) {
-        try {
-          const enrichedResponse = await ehrApi.getPatientById(patientContext.id, token, activeTenant);
-          if (enrichedResponse?.data) {
-            patientContext = {
-              ...patientContext,
-              dateOfBirth: enrichedResponse.data.dateOfBirth || patientContext.dateOfBirth,
-              gender: enrichedResponse.data.gender || patientContext.gender,
-            };
-          }
-        } catch (e) {
-        }
-      }
-
-      const derivedAge =
-        typeof patientContext.age === 'number' && !Number.isNaN(patientContext.age)
-          ? patientContext.age
-          : patientContext.dateOfBirth
-          ? (() => {
-              const dob = new Date(patientContext.dateOfBirth);
-              if (Number.isNaN(dob.getTime())) {
-                return undefined;
-              }
-              const diffMs = new Date().getTime() - dob.getTime();
-              if (!Number.isFinite(diffMs) || diffMs <= 0) {
-                return undefined;
-              }
-              return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 365.25));
-            })()
-          : undefined;
-
-      const normalizedGender =
-        typeof patientContext.gender === 'string' && patientContext.gender.trim().length > 0
-          ? patientContext.gender
-          : undefined;
-      const patientContextId = patientContext.id;
-
-      setTriageCopilotLoading(true);
-      const vitals = sourceAppointment?.vitals || getSelectedPatientLatestVitals();
-      const response = await ehrApi.analyzeTriageCopilot(
-        {
-          patientId: patientContextId,
-          age: derivedAge,
-          gender: normalizedGender,
-          chiefComplaint: sourceAppointment?.reason || appointments.find(a => a.patient.id === patientContextId)?.reason || '',
-          symptoms: appointments
-            .filter(a => a.patient.id === patientContextId)
-            .map(a => a.reason)
-            .filter((r) => typeof r === 'string' && r.trim().length > 0),
-          vitals,
-          allergies: patientContext.allergies,
-          chronicConditions: patientContext.chronicConditions,
-        },
-        token,
-        activeTenant
-      );
-      setTriageCopilotResult(response.data || null);
-      if (response.data?.suggestedTriageLevel) {
-        const level = String(response.data.suggestedTriageLevel).toLowerCase();
-        let mapped: 'urgent' | 'high' | 'normal' | 'low' | null = null;
-        if (level.includes('resuscitation') || level.includes('emergency') || level === 'immediate') {
-          mapped = 'urgent';
-        } else if (level.includes('semi-urgent') || level.includes('semiurgent') || level === 'semi_urgent') {
-          mapped = 'high';
-        } else if (level.includes('non-urgent') || level.includes('nonurgent') || level === 'non_urgent') {
-          mapped = 'normal';
-        } else if (['urgent', 'high', 'normal', 'low'].includes(level)) {
-          mapped = level as 'urgent' | 'high' | 'normal' | 'low';
-        }
-        setTriageSuggestedPriority(mapped);
-      }
-      showSuccess('Triage Copilot Ready', 'Review and confirm suggestions before applying clinically.');
-    } catch {
-      showError('Triage Copilot Error', 'Unable to analyze triage context right now.');
-    } finally {
-      setTriageCopilotLoading(false);
-    }
   };
 
   const handleVitalsCopilotInterpret = async () => {
@@ -4422,173 +4329,13 @@ const NurseDashboard: React.FC = () => {
         {activeTab === 'triage' && (
           <div className="w-full overflow-x-auto space-y-4">
             <PageHeader title="Triage Assessment" description="Structured patient assessment with decision support." icon={ClipboardList} />
-            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-amber-900">Triage Copilot</h3>
-                    <p className="text-xs text-amber-700">Use as decision support only. Confirm before saving triage.</p>
-                  </div>
-                  {triageCopilotResult && (
-                    <button
-                      type="button"
-                      onClick={() => setTriageCopilotPanelExpanded(e => !e)}
-                      className="p-1 rounded hover:bg-amber-100 text-amber-700 ml-1"
-                      title={triageCopilotPanelExpanded ? 'Collapse result' : 'Expand result'}
-                    >
-                      <ChevronDown className={`w-4 h-4 transition-transform ${triageCopilotPanelExpanded ? 'rotate-180' : ''}`} />
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleTriageCopilotAnalyze()}
-                    disabled={triageCopilotLoading || !selectedPatient}
-                    className="px-3 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
-                  >
-                    {triageCopilotLoading ? 'Analyzing...' : 'Analyze Triage Context'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveSection('main');
-                      setActiveTab('copilot-metrics');
-                    }}
-                    className="px-3 py-2 rounded-lg border border-amber-300 text-amber-800 text-xs font-semibold bg-amber-50 hover:bg-amber-100"
-                  >
-                    View Copilot KPIs
-                  </button>
-                </div>
-              </div>
-              {triageCopilotResult && triageCopilotPanelExpanded && (
-                <div className="mt-3 text-sm text-slate-700 space-y-2">
-                  <div>
-                    {(() => {
-                      const rl = String(triageCopilotResult.riskLevel || '').toLowerCase();
-                      const actionMap: Record<string, { label: string; action: string; colorClass: string }> = {
-                        critical: { label: 'CRITICAL', action: 'Call doctor NOW — do not leave patient unattended.', colorClass: 'text-red-700' },
-                        high: { label: 'HIGH', action: 'Fetch senior nurse or doctor within 10 minutes.', colorClass: 'text-orange-700' },
-                        medium: { label: 'MEDIUM', action: 'Monitor every 30 minutes; escalate if condition deteriorates.', colorClass: 'text-amber-700' },
-                        low: { label: 'LOW', action: 'Routine care; reassess in 1 hour.', colorClass: 'text-green-700' },
-                      };
-                      const entry = actionMap[rl];
-                      return entry ? (
-                        <div className="mb-2">
-                          <p><strong>Risk Level:</strong> <span className={`font-bold ${entry.colorClass}`}>{entry.label}</span></p>
-                          <p className={`text-xs mt-1 font-semibold ${entry.colorClass}`}>⚡ {entry.action}</p>
-                        </div>
-                      ) : (
-                        <p><strong>Risk:</strong> {triageCopilotResult.riskLevel || 'unknown'}</p>
-                      );
-                    })()}
-                    <p><strong>Suggested Triage Level:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
-                    {(() => {
-                      // Ensemble risk-model entries (shape: { category, score, level, model })
-                      // span domains beyond acute triage (e.g. 30-day readmission, no-show) —
-                      // meaningless to a nurse triaging right now, so only acute-relevant
-                      // categories are kept and turned into plain-English text.
-                      const ACUTE_CATEGORY_LABELS: Record<string, string> = {
-                        deterioration: 'Clinical deterioration risk',
-                        sepsis: 'Sepsis risk',
-                      };
-                      const safeText = (v: any, depth = 0): string => {
-                        if (v === null || v === undefined) return '';
-                        if (typeof v !== 'object') return String(v);
-                        if (depth >= 3) return '';
-                        if (typeof v.category === 'string' && ('level' in v || 'score' in v)) {
-                          const label = ACUTE_CATEGORY_LABELS[v.category];
-                          return label ? `${label}: ${String(v.level || 'unknown').toUpperCase()}` : '';
-                        }
-                        const candidate = v.text ?? v.term ?? v.label ?? v.name ?? v.factor ?? v.description;
-                        if (candidate !== undefined && candidate !== v) return safeText(candidate, depth + 1);
-                        try { return JSON.stringify(v); } catch { return ''; }
-                      };
-                      let topReason: string | null = null;
-                      if (Array.isArray(triageCopilotResult.reasons) && triageCopilotResult.reasons.length > 0) {
-                        topReason = triageCopilotResult.reasons.map((r: any) => safeText(r)).find(Boolean) || null;
-                      } else if (Array.isArray(triageCopilotResult.risk?.factors) && triageCopilotResult.risk.factors.length > 0) {
-                        topReason = triageCopilotResult.risk.factors.map((f: any) => safeText(f)).find(Boolean) || null;
-                      }
-                      return topReason ? (
-                        <p><strong>Top Reason:</strong> {topReason}</p>
-                      ) : null;
-                    })()}
-                    {Array.isArray(triageCopilotResult.missingData) && triageCopilotResult.missingData.length > 0 && (
-                      <p>
-                        <strong>Missing data:</strong>{' '}
-                        {triageCopilotResult.missingData
-                          .map((field: string) => {
-                            if (!field) return '';
-                            const key = field.toString();
-                            if (key === 'chiefComplaint') return 'Chief complaint';
-                            if (key === 'age') return 'Age';
-                            if (key === 'gender') return 'Gender';
-                            if (key === 'vitals') return 'Vitals';
-                            return key;
-                          })
-                          .filter(Boolean)
-                          .join(', ')}
-                      </p>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    AI decision support — {triageCopilotResult.source || 'CDSS'} · Review before acting
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleCopilotDecision('triage', 'accept', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)}
-                      className="px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCopilotDecision('triage', 'modify', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)}
-                      className="px-2 py-1 rounded bg-amber-600 text-white text-xs font-semibold"
-                    >
-                      Modify
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCopilotDecision('triage', 'reject', `Suggested ${triageCopilotResult.suggestedTriageLevel || 'n/a'}`)}
-                      className="px-2 py-1 rounded bg-rose-600 text-white text-xs font-semibold"
-                    >
-                      Reject
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!triageCopilotResult?.suggestedTriageLevel) return;
-                        const level = String(triageCopilotResult.suggestedTriageLevel).toLowerCase();
-                        let mapped: 'urgent' | 'high' | 'normal' | 'low' | null = null;
-                        if (level.includes('resuscitation') || level.includes('emergency') || level === 'immediate') {
-                          mapped = 'urgent';
-                        } else if (level.includes('semi-urgent') || level.includes('semiurgent') || level === 'semi_urgent') {
-                          mapped = 'high';
-                        } else if (level.includes('non-urgent') || level.includes('nonurgent') || level === 'non_urgent') {
-                          mapped = 'normal';
-                        } else if (['urgent', 'high', 'normal', 'low'].includes(level)) {
-                          mapped = level as 'urgent' | 'high' | 'normal' | 'low';
-                        }
-                        setTriageSuggestedPriority(mapped);
-                        if (mapped) {
-                          showSuccess('Suggestion applied', `Triage priority set to ${mapped} from copilot recommendation.`);
-                        }
-                      }}
-                      className="px-2 py-1 rounded border border-amber-300 text-amber-800 text-xs font-semibold bg-amber-50 hover:bg-amber-100"
-                    >
-                      Apply suggestion to form
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
             <PatientAssessment
               patient={selectedPatient || undefined}
               appointments={appointments.filter(a => String(a.patient.id) === String(selectedPatient?.id))}
-              suggestedPriority={triageSuggestedPriority || undefined}
+              onViewCopilotKpis={() => {
+                setActiveSection('main');
+                setActiveTab('copilot-metrics');
+              }}
               onClose={() => { setSelectedPatient(null); setActiveTab('queue'); }}
               onSave={() => {
                 fetchTodayAppointments();
@@ -5200,7 +4947,10 @@ const NurseDashboard: React.FC = () => {
               <PatientAssessment
                 patient={selectedPatient}
                 appointments={appointments.filter(apt => apt.patient.id === selectedPatient?.id)}
-                suggestedPriority={triageSuggestedPriority || undefined}
+                onViewCopilotKpis={() => {
+                  setActiveSection('main');
+                  setActiveTab('copilot-metrics');
+                }}
                 onClose={() => setShowAssessmentModal(false)}
                 onSave={() => {
                   setShowAssessmentModal(false);

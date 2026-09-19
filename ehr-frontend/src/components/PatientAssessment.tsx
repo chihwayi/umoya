@@ -43,7 +43,7 @@ interface PatientAssessmentProps {
   appointments?: AppointmentLite[];
   onClose?: () => void;
   onSave?: () => void;
-  suggestedPriority?: 'urgent' | 'high' | 'normal' | 'low';
+  onViewCopilotKpis?: () => void;
 }
 
 const PatientAssessment: React.FC<PatientAssessmentProps> = ({
@@ -51,7 +51,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   appointments = [],
   onClose,
   onSave,
-  suggestedPriority,
+  onViewCopilotKpis,
 }) => {
   const { showSuccess, showError } = useNotification();
 
@@ -304,12 +304,6 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
       setChiefComplaint(prev => prev || reason);
     }
   }, [appointments]);
-
-  useEffect(() => {
-    if (suggestedPriority) {
-      setPriority(suggestedPriority);
-    }
-  }, [suggestedPriority]);
 
   // Load existing allergies from structured table when patient is selected
   useEffect(() => {
@@ -1071,6 +1065,15 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
               <Brain className="w-4 h-4" />
               {triageCopilotLoading || loadingDiagnosis ? 'Analyzing...' : 'Analyze + Apply Copilot'}
             </button>
+            {onViewCopilotKpis && (
+              <button
+                type="button"
+                onClick={onViewCopilotKpis}
+                className="w-full mb-3 -mt-2 px-3 py-1.5 rounded-lg border border-amber-300 text-amber-800 text-xs font-semibold bg-amber-50 hover:bg-amber-100"
+              >
+                View Copilot KPIs
+              </button>
+            )}
 
             {/* Copilot Result */}
             {triageCopilotResult && (
