@@ -214,6 +214,9 @@ function safeReasonText(value: any, depth = 0): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (typeof value === 'object' && depth < 3) {
+    if (isEnsembleRiskFactor(value)) {
+      return describeEnsembleRiskFactor(value) ?? '';
+    }
     const candidate = value.text ?? value.term ?? value.label ?? value.name ?? value.factor ?? value.description;
     if (candidate !== undefined && candidate !== value) {
       return safeReasonText(candidate, depth + 1);
@@ -225,6 +228,29 @@ function safeReasonText(value: any, depth = 0): string {
     }
   }
   return String(value);
+}
+
+// The general /risk/calculate endpoint returns an ensemble of risk models
+// (shape: { category, score, level, model }) spanning domains well beyond
+// acute triage — e.g. 30-day readmission or missed-appointment risk. Those
+// are meaningless to a nurse triaging a patient right now and must never
+// surface as a plain-English "reason"; only acute-relevant categories are
+// kept, and even then translated out of raw JSON.
+const ACUTE_RISK_CATEGORIES = new Set(['deterioration', 'sepsis']);
+const RISK_CATEGORY_LABELS: Record<string, string> = {
+  deterioration: 'Clinical deterioration risk',
+  sepsis: 'Sepsis risk',
+};
+
+function isEnsembleRiskFactor(v: any): v is { category: string; score?: number; level?: string; model?: string } {
+  return v && typeof v === 'object' && typeof v.category === 'string' && ('level' in v || 'score' in v);
+}
+
+function describeEnsembleRiskFactor(f: { category: string; level?: string; model?: string }): string | null {
+  if (!ACUTE_RISK_CATEGORIES.has(f.category)) return null;
+  const label = RISK_CATEGORY_LABELS[f.category] || f.model || f.category;
+  const level = String(f.level || 'unknown').toUpperCase();
+  return `${label}: ${level}`;
 }
 
 @Injectable()
@@ -4153,8 +4179,20 @@ export class CdssService {
     });
     const suppressedRecommendations = baseRecommendations.filter((rec) => !filteredBaseRecommendations.includes(rec));
 
+    // baseRisk.factors can include entries from an ensemble risk model (shape:
+    // { category, score, level, model }) covering domains beyond acute triage,
+    // e.g. 30-day readmission or no-show risk. Drop irrelevant categories and
+    // turn the rest into plain-English text (see describeEnsembleRiskFactor).
+    const relevantBaseFactors = (Array.isArray(baseRisk?.factors) ? baseRisk!.factors : [])
+      .filter((f: any) => (isEnsembleRiskFactor(f) ? ACUTE_RISK_CATEGORIES.has(f.category) : true))
+      .map((f: any) => {
+        if (!isEnsembleRiskFactor(f)) return f;
+        const level = String(f.level || 'unknown').toUpperCase();
+        return { factor: describeEnsembleRiskFactor(f), impact: level === 'CRITICAL' || level === 'HIGH' ? 'major' : 'minor' };
+      });
+
     const combinedFactors = [
-      ...(Array.isArray(baseRisk?.factors) ? baseRisk!.factors : []),
+      ...relevantBaseFactors,
       ...factors.map((f) => ({ factor: f, impact: 'major' })),
     ];
 

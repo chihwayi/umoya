@@ -4493,19 +4493,31 @@ const NurseDashboard: React.FC = () => {
                     })()}
                     <p><strong>Suggested Triage Level:</strong> {triageCopilotResult.suggestedTriageLevel || 'n/a'}</p>
                     {(() => {
+                      // Ensemble risk-model entries (shape: { category, score, level, model })
+                      // span domains beyond acute triage (e.g. 30-day readmission, no-show) —
+                      // meaningless to a nurse triaging right now, so only acute-relevant
+                      // categories are kept and turned into plain-English text.
+                      const ACUTE_CATEGORY_LABELS: Record<string, string> = {
+                        deterioration: 'Clinical deterioration risk',
+                        sepsis: 'Sepsis risk',
+                      };
                       const safeText = (v: any, depth = 0): string => {
                         if (v === null || v === undefined) return '';
                         if (typeof v !== 'object') return String(v);
                         if (depth >= 3) return '';
+                        if (typeof v.category === 'string' && ('level' in v || 'score' in v)) {
+                          const label = ACUTE_CATEGORY_LABELS[v.category];
+                          return label ? `${label}: ${String(v.level || 'unknown').toUpperCase()}` : '';
+                        }
                         const candidate = v.text ?? v.term ?? v.label ?? v.name ?? v.factor ?? v.description;
                         if (candidate !== undefined && candidate !== v) return safeText(candidate, depth + 1);
                         try { return JSON.stringify(v); } catch { return ''; }
                       };
                       let topReason: string | null = null;
                       if (Array.isArray(triageCopilotResult.reasons) && triageCopilotResult.reasons.length > 0) {
-                        topReason = safeText(triageCopilotResult.reasons[0]) || null;
+                        topReason = triageCopilotResult.reasons.map((r: any) => safeText(r)).find(Boolean) || null;
                       } else if (Array.isArray(triageCopilotResult.risk?.factors) && triageCopilotResult.risk.factors.length > 0) {
-                        topReason = safeText(triageCopilotResult.risk.factors[0]) || null;
+                        topReason = triageCopilotResult.risk.factors.map((f: any) => safeText(f)).find(Boolean) || null;
                       }
                       return topReason ? (
                         <p><strong>Top Reason:</strong> {topReason}</p>
