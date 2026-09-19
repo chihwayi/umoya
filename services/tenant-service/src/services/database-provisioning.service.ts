@@ -12149,6 +12149,19 @@ export class DatabaseProvisioningService {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
+      CREATE TABLE copilot_decisions (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          copilot_type VARCHAR(20) NOT NULL,
+          decision VARCHAR(20) NOT NULL,
+          reason TEXT,
+          patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+          recorded_by UUID NOT NULL REFERENCES users(id),
+          recommendation_summary TEXT,
+          model_version VARCHAR(100),
+          prompt_context_hash VARCHAR(64),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
       CREATE TABLE nursing_notes (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -12337,7 +12350,12 @@ export class DatabaseProvisioningService {
       CREATE INDEX idx_triage_recorded_by ON triage_assessments(recorded_by);
       CREATE INDEX idx_triage_chief_complaint_snomed ON triage_assessments(chief_complaint_snomed_code);
       CREATE INDEX idx_triage_observations_snomed ON triage_assessments USING GIN(observations_snomed);
-      
+
+      CREATE INDEX idx_copilot_decisions_patient_id ON copilot_decisions(patient_id);
+      CREATE INDEX idx_copilot_decisions_recorded_by ON copilot_decisions(recorded_by);
+      CREATE INDEX idx_copilot_decisions_created_at ON copilot_decisions(created_at);
+      CREATE INDEX idx_copilot_decisions_type ON copilot_decisions(copilot_type);
+
       CREATE INDEX idx_nursing_notes_patient_id ON nursing_notes(patient_id);
       CREATE INDEX idx_nursing_notes_note_type ON nursing_notes(note_type);
       CREATE INDEX idx_nursing_notes_recorded_at ON nursing_notes(recorded_at);

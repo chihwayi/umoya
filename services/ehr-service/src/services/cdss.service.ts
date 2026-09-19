@@ -3,6 +3,7 @@ import { StoreroomIntelligenceService } from './storeroom-intelligence.service';
 import { ClinicalNlpService, ClinicalEntities } from './clinical-nlp.service';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
+import { CopilotDecision } from '../entities/copilot-decision.entity';
 import axios, { AxiosHeaders, AxiosInstance, AxiosRequestConfig } from 'axios';
 import FormData from 'form-data';
 import { config as envConfig } from '@umoya/config';
@@ -4514,7 +4515,7 @@ export class CdssService {
     }
   }
 
-  async recordCopilotAction(payload: any, tenantId?: string) {
+  async recordCopilotAction(payload: any, tenantId?: string, tenantDb?: DataSource, recordedBy?: string) {
     const decision = String(payload?.decision || payload?.userAction || 'unknown').toLowerCase();
     const copilotType = String(payload?.copilotType || payload?.actionType || 'unknown').toLowerCase();
     const reason = payload?.reason ? String(payload.reason) : null;
@@ -4545,19 +4546,43 @@ export class CdssService {
       this.metricsService?.recordNurseCopilotAlertResponseTime(alertResponseSeconds);
     }
 
+    const audit = this.buildCopilotAuditMetadata(
+      `copilot_${copilotType}_decision`,
+      tenantId,
+      payload,
+      recommendationSummary,
+    );
+
+    // Durable per-decision audit record — the metric above is aggregate-only
+    // and can't answer "who decided what, for which patient, and why" during
+    // an incident review. See CopilotDecision entity.
+    let persistedId: string | null = null;
+    if (tenantDb && recordedBy) {
+      const decisionRepo = tenantDb.getRepository(CopilotDecision);
+      const saved = await decisionRepo.save(
+        decisionRepo.create({
+          copilotType: copilotType as any,
+          decision: decision as any,
+          reason: reason ?? undefined,
+          patientId: patientId ?? undefined,
+          recordedBy,
+          recommendationSummary,
+          modelVersion: audit.modelVersion,
+          promptContextHash: audit.promptContextHash,
+        }),
+      );
+      persistedId = saved.id;
+    }
+
     return {
       ok: true,
+      id: persistedId,
       copilotType,
       decision,
       reason,
       patientId,
       source: 'ehr_cdss_proxy',
-      audit: this.buildCopilotAuditMetadata(
-        `copilot_${copilotType}_decision`,
-        tenantId,
-        payload,
-        recommendationSummary,
-      ),
+      audit,
     };
   }
 

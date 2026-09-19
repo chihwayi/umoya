@@ -11,6 +11,7 @@ import { LabOrderSet } from '../entities/lab-order-set.entity';
 import { Bill } from '../entities/billing.entity';
 import { Vitals } from '../entities/vitals.entity';
 import { TriageAssessment } from '../entities/triage-assessment.entity';
+import { CopilotDecision } from '../entities/copilot-decision.entity';
 import { NursingNote } from '../entities/nursing-note.entity';
 import { Order } from '../entities/order.entity';
 import { Problem } from '../entities/problem.entity';
@@ -735,6 +736,7 @@ export class TenantService {
         Bill,
         Vitals,
         TriageAssessment,
+        CopilotDecision,
         NursingNote,
         Order,
         Problem,

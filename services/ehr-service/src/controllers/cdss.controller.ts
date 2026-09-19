@@ -257,7 +257,7 @@ export class CdssController {
   @ApiOperation({ summary: 'Record copilot decision lifecycle event (accept/modify/reject)' })
   @ApiResponse({ status: 200, description: 'Copilot action recorded' })
   async recordCopilotAction(@Body() body: any, @Request() req: RequestWithTenant) {
-    return this.cdssService.recordCopilotAction(body, req.tenantId);
+    return this.cdssService.recordCopilotAction(body, req.tenantId, req.tenantDb, req.user?.id);
   }
 
   // ── Sprint 119: Clinical Order Intelligence ──────────────────────────
