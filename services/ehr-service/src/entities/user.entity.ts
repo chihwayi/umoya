@@ -30,7 +30,13 @@ export class User {
   @Column()
   phone: string;
 
-  @Column({ name: 'password_hash' })
+  // select: false — these three columns must never come back on a plain
+  // find()/findOne()/query-builder select, since User is joined into dozens
+  // of unrelated API responses (appointments, vitals, lab orders, charges...)
+  // across the codebase for display purposes only. Call sites that
+  // genuinely need to read one of these (auth.service.ts) must opt back in
+  // explicitly via .addSelect('user.passwordHash') on a query builder.
+  @Column({ name: 'password_hash', select: false })
   passwordHash: string;
 
   @Column({ name: 'must_change_password', default: false })
@@ -58,12 +64,12 @@ export class User {
   @Column({ name: 'password_changed_at', nullable: true })
   passwordChangedAt: Date;
 
-  @Column({ name: 'two_factor_secret', length: 64, nullable: true })
+  @Column({ name: 'two_factor_secret', length: 64, nullable: true, select: false })
   twoFactorSecret: string;
 
   @Column({ name: 'two_factor_enabled', default: false })
   twoFactorEnabled: boolean;
-  @Column({ name: 'fcm_token', type: 'text', nullable: true })
+  @Column({ name: 'fcm_token', type: 'text', nullable: true, select: false })
   fcmToken?: string;
 
   @Column({ name: 'on_call', type: 'boolean', default: false })

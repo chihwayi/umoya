@@ -259,8 +259,10 @@ export class BcmaService {
         .where('mar.patient_id = :patientId', { patientId })
         .andWhere('mar.scheduled_time >= :startOfDay', { startOfDay })
         .andWhere('mar.scheduled_time <= :endOfDay', { endOfDay })
-        .leftJoinAndSelect('mar.administeredBy', 'administeredBy')
-        .leftJoinAndSelect('mar.witnessedBy', 'witnessedBy')
+        .leftJoin('mar.administeredBy', 'administeredBy')
+        .addSelect(['administeredBy.id', 'administeredBy.firstName', 'administeredBy.lastName'])
+        .leftJoin('mar.witnessedBy', 'witnessedBy')
+        .addSelect(['witnessedBy.id', 'witnessedBy.firstName', 'witnessedBy.lastName'])
         .orderBy('mar.scheduled_time', 'ASC')
         .getMany();
     } catch (error) {

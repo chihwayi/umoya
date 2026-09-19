@@ -84,7 +84,11 @@ export class UsersService {
       }
     }
 
-    return Object.assign(savedUser, { tempPassword });
+    // savedUser was built via .create({ ...passwordHash }), so the hash is
+    // present on this in-memory object regardless of the entity's
+    // select:false — strip it before this reaches the API response.
+    const { passwordHash: _omit, ...safeUser } = savedUser;
+    return Object.assign(safeUser as User, { tempPassword });
   }
 
   async updateUser(id: string, updateUserDto: UpdateUserDto, tenantDb: DataSource): Promise<User> {

@@ -61,8 +61,10 @@ export class RevenueCycleService {
 
     const query = repository.createQueryBuilder('charge')
       .where('charge.patientId = :patientId', { patientId })
-      .leftJoinAndSelect('charge.orderingProvider', 'orderingProvider')
-      .leftJoinAndSelect('charge.capturedBy', 'capturedBy')
+      .leftJoin('charge.orderingProvider', 'orderingProvider')
+      .addSelect(['orderingProvider.id', 'orderingProvider.firstName', 'orderingProvider.lastName'])
+      .leftJoin('charge.capturedBy', 'capturedBy')
+      .addSelect(['capturedBy.id', 'capturedBy.firstName', 'capturedBy.lastName'])
       .orderBy('charge.serviceDate', 'DESC');
 
     if (admissionId) {
@@ -345,8 +347,10 @@ export class RevenueCycleService {
     const charges = await repository
       .createQueryBuilder('charge')
       .leftJoinAndSelect('charge.patient', 'patient')
-      .leftJoinAndSelect('charge.orderingProvider', 'orderingProvider')
-      .leftJoinAndSelect('charge.capturedBy', 'capturedBy')
+      .leftJoin('charge.orderingProvider', 'orderingProvider')
+      .addSelect(['orderingProvider.id', 'orderingProvider.firstName', 'orderingProvider.lastName'])
+      .leftJoin('charge.capturedBy', 'capturedBy')
+      .addSelect(['capturedBy.id', 'capturedBy.firstName', 'capturedBy.lastName'])
       .where('charge.orderingProviderId = :doctorId', { doctorId })
       .andWhere('charge.chargeStatus IN (:...statuses)', { statuses: ['pending', 'reviewed'] })
       .orderBy('charge.serviceDate', 'DESC')

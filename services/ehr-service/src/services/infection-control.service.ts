@@ -101,7 +101,8 @@ export class InfectionControlService {
       .where('infection.infectionDate >= :startDate', { startDate })
       .andWhere('infection.infectionDate <= :endDate', { endDate })
       .leftJoinAndSelect('infection.patient', 'patient')
-      .leftJoinAndSelect('infection.detectedBy', 'detectedBy')
+      .leftJoin('infection.detectedBy', 'detectedBy')
+      .addSelect(['detectedBy.id', 'detectedBy.firstName', 'detectedBy.lastName'])
       .orderBy('infection.infectionDate', 'DESC')
       .getMany();
   }

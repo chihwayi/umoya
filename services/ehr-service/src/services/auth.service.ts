@@ -16,6 +16,17 @@ interface TenantSecurityPolicy {
 export class AuthService {
   constructor(private jwtService: JwtService) {}
 
+  // passwordHash/twoFactorSecret are select:false on the User entity (they
+  // must never leak into the dozens of unrelated API responses User gets
+  // joined into elsewhere) — this re-selects them for the handful of auth
+  // flows that genuinely need to read one.
+  private userWithSecrets(tenantDb: DataSource) {
+    return tenantDb
+      .getRepository(User)
+      .createQueryBuilder('user')
+      .addSelect(['user.passwordHash', 'user.twoFactorSecret']);
+  }
+
   async login(
     loginDto: LoginDto,
     tenantDb: DataSource,
@@ -25,10 +36,10 @@ export class AuthService {
     tenantPolicy: TenantSecurityPolicy = {},
   ) {
     const userRepository = tenantDb.getRepository(User);
-    
-    const user = await userRepository.findOne({
-      where: { email: loginDto.email }
-    });
+
+    const user = await this.userWithSecrets(tenantDb)
+      .where('user.email = :email', { email: loginDto.email })
+      .getOne();
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -106,7 +117,7 @@ export class AuthService {
   async changePassword(userId: string, oldPassword: string, newPassword: string, tenantDb: DataSource, currentJti?: string) {
     const userRepository = tenantDb.getRepository(User);
 
-    const user = await userRepository.findOne({ where: { id: userId } });
+    const user = await this.userWithSecrets(tenantDb).where('user.id = :id', { id: userId }).getOne();
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
@@ -170,8 +181,10 @@ export class AuthService {
     };
   }
 
+  // Internal-use only — never return this result directly from a controller,
+  // it carries passwordHash/twoFactorSecret for the auth flows that need them.
   async findUserById(userId: string, tenantDb: DataSource): Promise<User | null> {
-    return tenantDb.getRepository(User).findOne({ where: { id: userId } });
+    return this.userWithSecrets(tenantDb).where('user.id = :id', { id: userId }).getOne();
   }
 
   async setup2FA(userId: string, tenantDb: DataSource): Promise<{ secret: string; otpauthUrl: string }> {
@@ -188,7 +201,7 @@ export class AuthService {
 
   async verify2FA(userId: string, token: string, tenantDb: DataSource): Promise<void> {
     const userRepository = tenantDb.getRepository(User);
-    const user = await userRepository.findOne({ where: { id: userId } });
+    const user = await this.userWithSecrets(tenantDb).where('user.id = :id', { id: userId }).getOne();
     if (!user || !user.twoFactorSecret) throw new BadRequestException('2FA not set up');
     const valid = authenticator.verify({ token, secret: user.twoFactorSecret });
     if (!valid) throw new UnauthorizedException('Invalid authenticator code');
@@ -217,7 +230,7 @@ export class AuthService {
 
   async disable2FA(userId: string, token: string, tenantDb: DataSource): Promise<void> {
     const userRepository = tenantDb.getRepository(User);
-    const user = await userRepository.findOne({ where: { id: userId } });
+    const user = await this.userWithSecrets(tenantDb).where('user.id = :id', { id: userId }).getOne();
     if (!user || !user.twoFactorSecret) throw new BadRequestException('2FA not enabled');
     const valid = authenticator.verify({ token, secret: user.twoFactorSecret });
     if (!valid) throw new UnauthorizedException('Invalid authenticator code');
@@ -241,7 +254,7 @@ export class AuthService {
     }
     if (!payload._2fa || !payload.sub) throw new UnauthorizedException('Invalid token');
     const userRepository = tenantDb.getRepository(User);
-    const user = await userRepository.findOne({ where: { id: payload.sub } });
+    const user = await this.userWithSecrets(tenantDb).where('user.id = :id', { id: payload.sub }).getOne();
     if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) throw new UnauthorizedException('2FA not enabled');
     const valid = authenticator.verify({ token: code, secret: user.twoFactorSecret });
     if (!valid) throw new UnauthorizedException('Invalid authenticator code');

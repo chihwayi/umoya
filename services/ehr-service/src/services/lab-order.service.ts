@@ -674,7 +674,8 @@ export class LabOrderService {
     
     let queryBuilder = labOrderRepository.createQueryBuilder('labOrder')
       .leftJoinAndSelect('labOrder.patient', 'patient')
-      .leftJoinAndSelect('labOrder.orderingProvider', 'provider');
+      .leftJoin('labOrder.orderingProvider', 'provider')
+      .addSelect(['provider.id', 'provider.firstName', 'provider.lastName']);
     
     if (status) {
       queryBuilder.andWhere('labOrder.status = :status', { status });
