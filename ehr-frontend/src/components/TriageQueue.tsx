@@ -83,7 +83,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedVitalsId, setExpandedVitalsId] = useState<string | null>(null);
   const [openMoreMenuId, setOpenMoreMenuId] = useState<string | null>(null);
-  const [moreMenuPosition, setMoreMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const [moreMenuPosition, setMoreMenuPosition] = useState<{ left: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
   const { showError, showSuccess } = useNotification();
 
   // The dropdown is rendered into document.body (see MoreMenuPortal below) so no
@@ -660,7 +660,16 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                             return;
                           }
                           const rect = e.currentTarget.getBoundingClientRect();
-                          setMoreMenuPosition({ top: rect.bottom + 6, left: rect.right - 224 });
+                          const left = Math.max(8, rect.right - 224);
+                          const spaceBelow = window.innerHeight - rect.bottom - 12;
+                          const spaceAbove = rect.top - 12;
+                          // Flip the menu above the trigger when there isn't enough room
+                          // below, so it's never pushed past the bottom of the viewport.
+                          if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+                            setMoreMenuPosition({ bottom: window.innerHeight - rect.top + 6, left, maxHeight: spaceAbove });
+                          } else {
+                            setMoreMenuPosition({ top: rect.bottom + 6, left, maxHeight: spaceBelow });
+                          }
                           setOpenMoreMenuId(appointment.id);
                         }}
                         className="p-1 rounded-lg hover:bg-slate-200 transition-colors flex-shrink-0"
@@ -672,8 +681,13 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                         <>
                           <div className="fixed inset-0 z-40" onClick={closeMoreMenu} />
                           <div
-                            className="fixed w-56 bg-white border border-slate-200/50 rounded-xl shadow-lg z-50 overflow-hidden py-1.5"
-                            style={{ top: moreMenuPosition.top, left: Math.max(8, moreMenuPosition.left) }}
+                            className="fixed w-56 bg-white border border-slate-200/50 rounded-xl shadow-lg z-50 overflow-y-auto py-1.5"
+                            style={{
+                              top: moreMenuPosition.top,
+                              bottom: moreMenuPosition.bottom,
+                              left: moreMenuPosition.left,
+                              maxHeight: Math.max(120, moreMenuPosition.maxHeight),
+                            }}
                           >
                             {onViewVitalsHistory && (
                               <button
