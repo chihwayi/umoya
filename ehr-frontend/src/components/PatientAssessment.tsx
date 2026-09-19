@@ -97,28 +97,29 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
   const [lastSavedAssessment, setLastSavedAssessment] = useState<{ id: string; recordedAt: string } | null>(null);
   const [severityPriorityMismatchNote, setSeverityPriorityMismatchNote] = useState('');
 
+  const loadTriageHistory = async (patientId: string) => {
+    try {
+      const token = localStorage.getItem('ehr_token');
+      const tenantSlug = localStorage.getItem('ehr_tenant_slug');
+      if (!token || !tenantSlug) return;
+
+      const response = await Api.ehrApi.getTriageAssessments(patientId, token, tenantSlug);
+      if (response.data && response.data.assessments) {
+        setTriageHistory(response.data.assessments);
+      } else if (Array.isArray(response.data)) {
+        setTriageHistory(response.data);
+      } else {
+        setTriageHistory([]);
+      }
+    } catch (e) {
+      console.error('Failed to load triage history:', e);
+    }
+  };
+
   // Load triage history when patient changes
   useEffect(() => {
     if (patient?.id) {
-      const loadHistory = async () => {
-        try {
-          const token = localStorage.getItem('ehr_token');
-          const tenantSlug = localStorage.getItem('ehr_tenant_slug');
-          if (!token || !tenantSlug) return;
-          
-          const response = await Api.ehrApi.getTriageAssessments(patient.id, token, tenantSlug);
-          if (response.data && response.data.assessments) {
-            setTriageHistory(response.data.assessments);
-          } else if (Array.isArray(response.data)) {
-            setTriageHistory(response.data);
-          } else {
-            setTriageHistory([]);
-          }
-        } catch (e) {
-          console.error('Failed to load triage history:', e);
-        }
-      };
-      loadHistory();
+      loadTriageHistory(patient.id);
     } else {
       setTriageHistory([]);
     }
@@ -412,6 +413,7 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
       });
       setSeverityPriorityMismatchNote('');
       showSuccess('Recorded', `Triage assessment saved for ${patient.firstName} ${patient.lastName}`);
+      await loadTriageHistory(patient.id);
       onSave?.();
     } catch (e) {
       console.error(e);
