@@ -263,8 +263,13 @@ export class AppointmentService {
     const queryBuilder = appointmentRepository
       .createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoinAndSelect('appointment.doctor', 'doctor')
-      .leftJoinAndSelect('appointment.createdByUser', 'createdByUser');
+      // Explicit column allowlist — leftJoinAndSelect would pull the full User
+      // row (passwordHash, twoFactorSecret, fcmToken) into an API response
+      // that reaches the browser.
+      .leftJoin('appointment.doctor', 'doctor')
+      .addSelect(['doctor.id', 'doctor.firstName', 'doctor.lastName', 'doctor.role', 'doctor.specialization'])
+      .leftJoin('appointment.createdByUser', 'createdByUser')
+      .addSelect(['createdByUser.id', 'createdByUser.firstName', 'createdByUser.lastName']);
 
     // Apply filters
     if (query.startDate && query.endDate) {
@@ -1108,7 +1113,8 @@ export class AppointmentService {
     const appointments = await appointmentRepository
       .createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.patient', 'patient')
-      .leftJoinAndSelect('appointment.doctor', 'doctor')
+      .leftJoin('appointment.doctor', 'doctor')
+      .addSelect(['doctor.id', 'doctor.firstName', 'doctor.lastName', 'doctor.role', 'doctor.specialization'])
       .where('patient.firstName ILIKE :query', { query: `%${query}%` })
       .orWhere('patient.lastName ILIKE :query', { query: `%${query}%` })
       .orWhere('patient.patientNumber ILIKE :query', { query: `%${query}%` })

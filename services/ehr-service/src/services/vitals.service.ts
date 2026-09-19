@@ -396,7 +396,11 @@ export class VitalsService {
     const repo  = await this.getRepository(tenantId);
     const query = repo
       .createQueryBuilder('vitals')
-      .leftJoinAndSelect('vitals.recordedByUser', 'recordedByUser')
+      // Explicit column allowlist — leftJoinAndSelect would pull the full User
+      // row (passwordHash, twoFactorSecret, fcmToken) into an API response
+      // that reaches the browser and even gets forwarded to the CDSS service.
+      .leftJoin('vitals.recordedByUser', 'recordedByUser')
+      .addSelect(['recordedByUser.id', 'recordedByUser.firstName', 'recordedByUser.lastName', 'recordedByUser.role'])
       .where('vitals.patientId = :patientId', { patientId })
       .orderBy('vitals.recordedAt', 'DESC');
 

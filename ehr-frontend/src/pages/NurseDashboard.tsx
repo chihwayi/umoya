@@ -1664,6 +1664,26 @@ const NurseDashboard: React.FC = () => {
     return patientApt?.vitals || null;
   };
 
+  // Narrows a vitals record to just the clinical fields before it's forwarded
+  // to any AI/CDSS payload. The raw record can carry a nested recordedByUser
+  // and a full cdssInsights blob — never send those wholesale to an external
+  // call just because they happen to be attached to the object in memory.
+  const getSelectedPatientVitalsSummary = () => {
+    const vitals: any = getSelectedPatientLatestVitals();
+    if (!vitals) return null;
+    return {
+      bloodPressure: vitals.bloodPressure,
+      heartRate: vitals.heartRate,
+      temperature: vitals.temperature,
+      oxygenSaturation: vitals.oxygenSaturation,
+      respiratoryRate: vitals.respiratoryRate,
+      weight: vitals.weight,
+      height: vitals.height,
+      bmi: vitals.bmi,
+      recordedAt: vitals.recordedAt,
+    };
+  };
+
   const handleVitalsCopilotInterpret = async () => {
     try {
       const token = localStorage.getItem('ehr_token');
@@ -1719,7 +1739,7 @@ const NurseDashboard: React.FC = () => {
           chiefComplaint: relatedAppointments[0]?.reason || '',
           observations: relatedAppointments[0]?.notes || '',
           previousNotes: relatedAppointments.map(a => a.notes).filter(Boolean),
-          vitals: getSelectedPatientLatestVitals(),
+          vitals: getSelectedPatientVitalsSummary(),
         },
         token,
         activeTenant
@@ -1762,7 +1782,7 @@ const NurseDashboard: React.FC = () => {
           shiftNotes: patientAppointments.map(a => a.notes).filter(Boolean),
           pendingTasks: [`Pending tasks: ${taskCounts.pending}`, `In progress tasks: ${taskCounts.inProgress}`],
           alerts: [`Active alerts: ${alertCounts.active}`, `Critical alerts: ${alertCounts.critical}`],
-          vitals: getSelectedPatientLatestVitals(),
+          vitals: getSelectedPatientVitalsSummary(),
         },
         token,
         activeTenant

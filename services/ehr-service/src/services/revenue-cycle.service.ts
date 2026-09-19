@@ -139,10 +139,16 @@ export class RevenueCycleService {
     const charges = await repository
       .createQueryBuilder('charge')
       .where('charge.admissionId = :admissionId', { admissionId })
-      .leftJoinAndSelect('charge.orderingProvider', 'orderingProvider')
-      .leftJoinAndSelect('charge.capturedBy', 'capturedBy')
-      .leftJoinAndSelect('charge.reviewedBy', 'reviewedBy')
-      .leftJoinAndSelect('charge.approvedBy', 'approvedBy')
+      // Explicit column allowlist — leftJoinAndSelect would pull the full User
+      // row (passwordHash, twoFactorSecret, fcmToken) into an API response.
+      .leftJoin('charge.orderingProvider', 'orderingProvider')
+      .addSelect(['orderingProvider.id', 'orderingProvider.firstName', 'orderingProvider.lastName'])
+      .leftJoin('charge.capturedBy', 'capturedBy')
+      .addSelect(['capturedBy.id', 'capturedBy.firstName', 'capturedBy.lastName'])
+      .leftJoin('charge.reviewedBy', 'reviewedBy')
+      .addSelect(['reviewedBy.id', 'reviewedBy.firstName', 'reviewedBy.lastName'])
+      .leftJoin('charge.approvedBy', 'approvedBy')
+      .addSelect(['approvedBy.id', 'approvedBy.firstName', 'approvedBy.lastName'])
       .orderBy('charge.serviceDate', 'DESC')
       .getMany();
 
@@ -366,10 +372,16 @@ export class RevenueCycleService {
     const query = repository
       .createQueryBuilder('charge')
       .leftJoinAndSelect('charge.patient', 'patient')
-      .leftJoinAndSelect('charge.orderingProvider', 'orderingProvider')
-      .leftJoinAndSelect('charge.capturedBy', 'capturedBy')
-      .leftJoinAndSelect('charge.reviewedBy', 'reviewedBy')
-      .leftJoinAndSelect('charge.approvedBy', 'approvedBy')
+      // Explicit column allowlist — leftJoinAndSelect would pull the full User
+      // row (passwordHash, twoFactorSecret, fcmToken) into an API response.
+      .leftJoin('charge.orderingProvider', 'orderingProvider')
+      .addSelect(['orderingProvider.id', 'orderingProvider.firstName', 'orderingProvider.lastName'])
+      .leftJoin('charge.capturedBy', 'capturedBy')
+      .addSelect(['capturedBy.id', 'capturedBy.firstName', 'capturedBy.lastName'])
+      .leftJoin('charge.reviewedBy', 'reviewedBy')
+      .addSelect(['reviewedBy.id', 'reviewedBy.firstName', 'reviewedBy.lastName'])
+      .leftJoin('charge.approvedBy', 'approvedBy')
+      .addSelect(['approvedBy.id', 'approvedBy.firstName', 'approvedBy.lastName'])
       .where('charge.orderingProviderId = :doctorId', { doctorId });
 
     if (!includeResolved) {
@@ -681,7 +693,10 @@ export class RevenueCycleService {
       .createQueryBuilder('notification')
       .leftJoinAndSelect('notification.patient', 'patient')
       .leftJoinAndSelect('notification.admission', 'admission')
-      .leftJoinAndSelect('notification.createdBy', 'createdBy')
+      // Explicit column allowlist — leftJoinAndSelect would pull the full User
+      // row (passwordHash, twoFactorSecret, fcmToken) into an API response.
+      .leftJoin('notification.createdBy', 'createdBy')
+      .addSelect(['createdBy.id', 'createdBy.firstName', 'createdBy.lastName'])
       .orderBy('notification.createdAt', 'DESC');
 
     if (status) {

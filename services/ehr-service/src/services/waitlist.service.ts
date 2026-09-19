@@ -48,7 +48,7 @@ export class WaitlistService {
     },
   ): Promise<AppointmentWaitlist[]> {
     const repository = this.waitlistRepository(tenantDb);
-    const query = repository.createQueryBuilder('waitlist').leftJoinAndSelect('waitlist.patient', 'patient').leftJoinAndSelect('waitlist.doctor', 'doctor').orderBy('waitlist.priority', 'DESC').addOrderBy('waitlist.createdAt', 'ASC');
+    const query = repository.createQueryBuilder('waitlist').leftJoinAndSelect('waitlist.patient', 'patient').leftJoin('waitlist.doctor', 'doctor').addSelect(['doctor.id', 'doctor.firstName', 'doctor.lastName', 'doctor.role', 'doctor.specialization']).orderBy('waitlist.priority', 'DESC').addOrderBy('waitlist.createdAt', 'ASC');
 
     if (filters?.status) {
       query.andWhere('waitlist.status = :status', { status: filters.status });

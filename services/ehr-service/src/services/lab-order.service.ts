@@ -754,8 +754,12 @@ export class LabOrderService {
       
       const results = await labOrderRepository
         .createQueryBuilder('labOrder')
-        .leftJoinAndSelect('labOrder.orderingProvider', 'orderingProvider')
-        .leftJoinAndSelect('labOrder.reviewedBy', 'reviewedBy')
+        // Explicit column allowlist — leftJoinAndSelect would pull the full User
+        // row (passwordHash, twoFactorSecret, fcmToken) into an API response.
+        .leftJoin('labOrder.orderingProvider', 'orderingProvider')
+        .addSelect(['orderingProvider.id', 'orderingProvider.firstName', 'orderingProvider.lastName'])
+        .leftJoin('labOrder.reviewedBy', 'reviewedBy')
+        .addSelect(['reviewedBy.id', 'reviewedBy.firstName', 'reviewedBy.lastName'])
         .where('labOrder.patientId = :patientId', { patientId })
         .andWhere('labOrder.status = :status', { status: LabOrderStatus.COMPLETED })
         .orderBy('labOrder.reviewedAt', 'DESC', 'NULLS LAST')
