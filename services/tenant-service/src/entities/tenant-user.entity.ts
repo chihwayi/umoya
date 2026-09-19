@@ -41,7 +41,9 @@ export class TenantUser {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  // select: false — TenantUser rows get listed/returned directly by
+  // TenantUserService without ever needing the hash back out.
+  @Column({ select: false })
   passwordHash: string;
 
   @Column()

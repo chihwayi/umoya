@@ -14,7 +14,12 @@ export class AdminUser {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  // select: false — GET /auth/profile returns req.user (the result of
+  // AuthService.validateUser()) directly to the client; without this guard
+  // that response included the live password hash and 2FA secret for every
+  // admin on every page load. Call sites that genuinely need to read one
+  // (login, changePassword) opt back in via .addSelect() on a query builder.
+  @Column({ select: false })
   passwordHash: string;
 
   @Column()
@@ -45,7 +50,7 @@ export class AdminUser {
   @Column({ nullable: true })
   lastLogin: Date;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, select: false })
   twoFactorSecret: string;
 
   @Column({ default: false })

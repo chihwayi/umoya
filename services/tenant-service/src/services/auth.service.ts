@@ -32,12 +32,19 @@ export class AuthService {
     private tokenDenylist: TokenDenylistService,
   ) {}
 
+  // passwordHash is select:false on AdminUser (it must never leak into
+  // req.user / GET /auth/profile) — this re-selects it for the two flows
+  // that genuinely need to read it.
+  private adminWithSecrets() {
+    return this.adminUserRepository.createQueryBuilder('user').addSelect('user.passwordHash');
+  }
+
   async login(loginDto: LoginDto, ipAddress: string, userAgent: string) {
     const { email, password } = loginDto;
-    
-    const user = await this.adminUserRepository.findOne({
-      where: { email: email.toLowerCase() }
-    });
+
+    const user = await this.adminWithSecrets()
+      .where('user.email = :email', { email: email.toLowerCase() })
+      .getOne();
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials');
@@ -116,9 +123,7 @@ export class AuthService {
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string) {
-    const user = await this.adminUserRepository.findOne({
-      where: { id: userId }
-    });
+    const user = await this.adminWithSecrets().where('user.id = :id', { id: userId }).getOne();
 
     if (!user) {
       throw new BadRequestException('User not found');
@@ -172,7 +177,8 @@ export class AuthService {
       mustChangePassword: true,
     });
 
-    return this.adminUserRepository.save(user);
+    const saved = await this.adminUserRepository.save(user);
+    return this.toSafeAdmin(saved);
   }
 
   // ── Multi-admin management (RBAC) ──────────────────────────────────────────

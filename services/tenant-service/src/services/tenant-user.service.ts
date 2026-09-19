@@ -5,6 +5,14 @@ import * as bcrypt from 'bcrypt';
 import { TenantUser, UserStatus } from '../entities/tenant-user.entity';
 import { CreateTenantUserDto } from '../dto/create-tenant-user.dto';
 
+// passwordHash is select:false on TenantUser, but an entity built via
+// .create({ passwordHash }) still carries the real value in memory until
+// it's stripped — select:false only hides it on a fresh SELECT.
+function omitPasswordHash(user: TenantUser): TenantUser {
+  const { passwordHash: _omit, ...rest } = user as any;
+  return rest as TenantUser;
+}
+
 @Injectable()
 export class TenantUserService {
   constructor(
@@ -32,7 +40,8 @@ export class TenantUserService {
       mustChangePassword: true,
     });
 
-    return this.tenantUserRepository.save(user);
+    const saved = await this.tenantUserRepository.save(user);
+    return omitPasswordHash(saved);
   }
 
   async getTenantUsers(tenantId: string): Promise<TenantUser[]> {
@@ -66,7 +75,8 @@ export class TenantUserService {
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     user.mustChangePassword = true;
-    return this.tenantUserRepository.save(user);
+    const saved = await this.tenantUserRepository.save(user);
+    return omitPasswordHash(saved);
   }
 
   async deleteUser(userId: string): Promise<void> {
