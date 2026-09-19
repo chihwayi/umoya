@@ -1757,12 +1757,6 @@ const NurseDashboard: React.FC = () => {
     }
   };
 
-  const handleQueueTriageCopilotAnalyze = async (appointment: Appointment) => {
-    setSelectedPatient(appointment.patient);
-    setActiveTab('triage');
-    await handleTriageCopilotAnalyze(appointment.patient, appointment);
-  };
-
   const handleVitalsCopilotInterpret = async () => {
     try {
       const token = localStorage.getItem('ehr_token');
@@ -4067,9 +4061,6 @@ const NurseDashboard: React.FC = () => {
             appointments={appointments}
             onRecordVitals={handleRecordVitals}
             onTriageAssessment={handleTriageAssessment}
-            onTriageCopilotAnalyze={handleQueueTriageCopilotAnalyze}
-            triageCopilotLoading={triageCopilotLoading}
-            triageCopilotPatientId={selectedPatient?.id || null}
             onViewCarePlans={(patientId, patientName) => {
               setCarePlansPatientId(patientId);
               setCarePlansPatientName(patientName);

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users, Clock, AlertTriangle, CheckCircle, Activity, Eye,
   Heart, Thermometer, Droplets, Plus, Search, Filter,
   ArrowUp, ArrowDown, User, Calendar, Stethoscope, ClipboardList,
-  CreditCard, Lock, Target, TestTube, Brain, MoreVertical, ChevronDown
+  CreditCard, Lock, Target, TestTube, MoreVertical, ChevronDown
 } from 'lucide-react';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import { useNotification } from './GlobalNotification';
@@ -58,9 +59,6 @@ interface TriageQueueProps {
   appointments: Appointment[];
   onRecordVitals: (appointment: Appointment) => void;
   onTriageAssessment: (appointment: Appointment) => void;
-  onTriageCopilotAnalyze?: (appointment: Appointment) => Promise<void> | void;
-  triageCopilotLoading?: boolean;
-  triageCopilotPatientId?: string | null;
   onViewCarePlans?: (patientId: string, patientName: string) => void;
   onViewLabResults?: (patientId: string, patientName: string) => void;
   onViewVitalsHistory?: (patientId: string, patientName: string) => void;
@@ -72,9 +70,6 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   appointments,
   onRecordVitals,
   onTriageAssessment,
-  onTriageCopilotAnalyze,
-  triageCopilotLoading = false,
-  triageCopilotPatientId = null,
   onViewCarePlans,
   onViewLabResults,
   onViewVitalsHistory,
@@ -88,7 +83,26 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [expandedVitalsId, setExpandedVitalsId] = useState<string | null>(null);
   const [openMoreMenuId, setOpenMoreMenuId] = useState<string | null>(null);
+  const [moreMenuPosition, setMoreMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const { showError, showSuccess } = useNotification();
+
+  // The dropdown is rendered into document.body (see MoreMenuPortal below) so no
+  // ancestor's overflow/scroll clipping or stacking context can hide or clip it.
+  const closeMoreMenu = () => {
+    setOpenMoreMenuId(null);
+    setMoreMenuPosition(null);
+  };
+
+  useEffect(() => {
+    if (!openMoreMenuId) return;
+    const handleScrollOrResize = () => closeMoreMenu();
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [openMoreMenuId]);
 
   const formatCurrency = (value?: number | string | null) => {
     if (value === null || value === undefined) return null;
@@ -348,17 +362,6 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
 
   const handleTriageClick = (appointment: Appointment) => {
     if (!isWaived(appointment) && !ensurePaymentCleared(appointment, 'Triage assessment is locked until payment is confirmed')) {
-      return;
-    }
-    onTriageAssessment(appointment);
-  };
-
-  const handleTriageCopilotClick = async (appointment: Appointment) => {
-    if (!isWaived(appointment) && !ensurePaymentCleared(appointment, 'AI triage support is locked until payment is confirmed')) {
-      return;
-    }
-    if (onTriageCopilotAnalyze) {
-      await onTriageCopilotAnalyze(appointment);
       return;
     }
     onTriageAssessment(appointment);
@@ -647,18 +650,31 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                         </button>
                       )}
 
-                      {/* More menu button */}
-                      <div className="relative">
-                        <button
-                          onClick={() => setOpenMoreMenuId(moreMenuOpen ? null : appointment.id)}
-                          className="p-1 rounded-lg hover:bg-slate-200 transition-colors flex-shrink-0"
-                        >
-                          <MoreVertical className="w-4 h-4 text-slate-600" />
-                        </button>
+                      {/* More menu button — the menu itself is portaled to <body> (see
+                          below) so no ancestor's rounded-corner clipping, overflow, or
+                          sticky/fixed header can hide or cut it off. */}
+                      <button
+                        onClick={(e) => {
+                          if (moreMenuOpen) {
+                            closeMoreMenu();
+                            return;
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setMoreMenuPosition({ top: rect.bottom + 6, left: rect.right - 224 });
+                          setOpenMoreMenuId(appointment.id);
+                        }}
+                        className="p-1 rounded-lg hover:bg-slate-200 transition-colors flex-shrink-0"
+                      >
+                        <MoreVertical className="w-4 h-4 text-slate-600" />
+                      </button>
 
-                        {/* Dropdown menu */}
-                        {moreMenuOpen && (
-                          <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200/50 rounded-xl shadow-lg z-10 overflow-hidden py-1.5">
+                      {moreMenuOpen && moreMenuPosition && createPortal(
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={closeMoreMenu} />
+                          <div
+                            className="fixed w-56 bg-white border border-slate-200/50 rounded-xl shadow-lg z-50 overflow-hidden py-1.5"
+                            style={{ top: moreMenuPosition.top, left: Math.max(8, moreMenuPosition.left) }}
+                          >
                             {onViewVitalsHistory && (
                               <button
                                 type="button"
@@ -667,7 +683,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                     appointment.patient.id,
                                     `${appointment.patient.firstName} ${appointment.patient.lastName}`,
                                   );
-                                  setOpenMoreMenuId(null);
+                                  closeMoreMenu();
                                 }}
                                 className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors group"
                               >
@@ -681,7 +697,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                               <button
                                 onClick={() => {
                                   onViewCarePlans(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`);
-                                  setOpenMoreMenuId(null);
+                                  closeMoreMenu();
                                 }}
                                 className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors group"
                               >
@@ -695,7 +711,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                               <button
                                 onClick={() => {
                                   onViewLabResults(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`);
-                                  setOpenMoreMenuId(null);
+                                  closeMoreMenu();
                                 }}
                                 className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors group"
                               >
@@ -705,27 +721,12 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                 Lab Results
                               </button>
                             )}
-                            <button
-                              onClick={() => {
-                                handleTriageCopilotClick(appointment);
-                                setOpenMoreMenuId(null);
-                              }}
-                              disabled={(awaitingPayment && !isWaived(appointment)) || (triageCopilotLoading && triageCopilotPatientId === appointment.patient.id)}
-                              className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors group disabled:text-slate-400 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            >
-                              <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-orange-100 text-orange-600 group-hover:bg-orange-200 transition-colors flex-shrink-0 group-disabled:bg-slate-100 group-disabled:text-slate-400">
-                                <Brain className="w-4 h-4" />
-                              </span>
-                              {triageCopilotLoading && triageCopilotPatientId === appointment.patient.id
-                                ? 'AI Analyzing...'
-                                : 'AI Suggest + Open'}
-                            </button>
                             {awaitingPayment && !isWaived(appointment) && canManagePayments && onOpenPayment && (
                               <button
                                 type="button"
                                 onClick={() => {
                                   onOpenPayment(appointment);
-                                  setOpenMoreMenuId(null);
+                                  closeMoreMenu();
                                 }}
                                 className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 transition-colors group border-t border-slate-100 mt-1 pt-2.5"
                               >
@@ -736,8 +737,9 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                               </button>
                             )}
                           </div>
-                        )}
-                      </div>
+                        </>,
+                        document.body
+                      )}
                     </div>
                   </div>
 
