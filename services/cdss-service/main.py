@@ -4593,6 +4593,7 @@ async def summarize_patient_history(request: PatientSummaryRequest, req: Request
     try:
         assert_no_phi_in_payload(request.dict())
     except RuntimeError as e:
+        logging.getLogger(__name__).warning("PHI guard rejected /patient/summarize payload: %r", request.dict())
         raise HTTPException(status_code=400, detail=str(e))
 
     effective_ai_policy = _resolve_ai_policy(ai_policy)
