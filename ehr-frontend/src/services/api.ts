@@ -20,7 +20,11 @@ if (!TENANT_API_URL || !EHR_API_URL) {
 
 // Create axios instance with response interceptor
 const createAxiosInstance = (baseURL: string) => {
-  const instance = axios.create({ baseURL });
+  // Without a timeout, a stalled request (server slow/warming up, dropped
+  // connection) hangs forever client-side — the UI is stuck on "Signing
+  // in..." with no error and no retry, since the ECONNABORTED/ETIMEDOUT
+  // retry logic below only ever fires once a timeout actually elapses.
+  const instance = axios.create({ baseURL, timeout: 30000 });
   const RETRYABLE_CODES = new Set(['ECONNABORTED', 'ETIMEDOUT', 'ERR_NETWORK']);
   const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
   const MAX_RETRIES = 2;

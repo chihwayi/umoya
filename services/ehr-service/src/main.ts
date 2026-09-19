@@ -102,13 +102,32 @@ async function bootstrap() {
   // Brute-force protection: tight limit on auth endpoints, looser general
   // limit on everything else under /api. Keyed on IP; a reverse proxy in
   // front of this service is expected to forward the real client IP.
+  //
+  // message is shaped as { message } — both the web and mobile login screens
+  // parse errors as err.response.data.message, and express-rate-limit's
+  // plain-text default body doesn't match that shape. Without this, a
+  // rate-limited login looks identical to a wrong password ("Invalid
+  // credentials"), which pushes a slow/retried login into exactly the kind
+  // of repeated-attempt loop that trips the limiter in the first place.
   app.use(
     ['/api/auth/login', '/api/patient-portal/login'],
-    rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false }),
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { message: 'Too many login attempts. Please wait a few minutes and try again.' },
+    }),
   );
   app.use(
     '/api',
-    rateLimit({ windowMs: 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }),
+    rateLimit({
+      windowMs: 60 * 1000,
+      max: 300,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { message: 'Too many requests. Please slow down and try again shortly.' },
+    }),
   );
 
   app.use(bodyParser.json({ limit: '10mb' }));
