@@ -186,9 +186,27 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
       );
       setTriageCopilotResult(response.data || null);
 
+      // The Copilot returns ESI/SATS-style triage levels (emergency,
+      // semi-urgent, non-urgent, immediate, ...), not the form's priority
+      // vocabulary (urgent/high/normal/low) — map between them rather than
+      // requiring an exact match, or levels like "emergency" silently fail
+      // to apply.
       const suggested = response.data?.suggestedTriageLevel;
-      if (suggested && ['urgent', 'high', 'normal', 'low'].includes(suggested)) {
-        setPriority(suggested as 'urgent' | 'high' | 'normal' | 'low');
+      if (suggested) {
+        const level = String(suggested).toLowerCase();
+        let mapped: 'urgent' | 'high' | 'normal' | 'low' | null = null;
+        if (level.includes('resuscitation') || level.includes('emergency') || level === 'immediate') {
+          mapped = 'urgent';
+        } else if (level.includes('semi-urgent') || level.includes('semiurgent') || level === 'semi_urgent') {
+          mapped = 'high';
+        } else if (level.includes('non-urgent') || level.includes('nonurgent') || level === 'non_urgent') {
+          mapped = 'normal';
+        } else if (['urgent', 'high', 'normal', 'low'].includes(level)) {
+          mapped = level as 'urgent' | 'high' | 'normal' | 'low';
+        }
+        if (mapped) {
+          setPriority(mapped);
+        }
       }
       showSuccess('Copilot Ready', 'Review suggestion before final save.');
     } catch (error) {
