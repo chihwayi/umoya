@@ -689,7 +689,12 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                               maxHeight: Math.max(120, moreMenuPosition.maxHeight),
                             }}
                           >
-                            {onViewVitalsHistory && (
+                            {awaitingPayment && !isWaived(appointment) && (
+                              <p className="px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 border-b border-amber-100">
+                                Clinical records are locked until payment is confirmed.
+                              </p>
+                            )}
+                            {onViewVitalsHistory && (!awaitingPayment || isWaived(appointment)) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -707,7 +712,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                 Vitals History
                               </button>
                             )}
-                            {onViewCarePlans && (
+                            {onViewCarePlans && (!awaitingPayment || isWaived(appointment)) && (
                               <button
                                 onClick={() => {
                                   onViewCarePlans(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`);
@@ -721,7 +726,7 @@ const TriageQueue: React.FC<TriageQueueProps> = ({
                                 Care Plans
                               </button>
                             )}
-                            {onViewLabResults && (
+                            {onViewLabResults && (!awaitingPayment || isWaived(appointment)) && (
                               <button
                                 onClick={() => {
                                   onViewLabResults(appointment.patient.id, `${appointment.patient.firstName} ${appointment.patient.lastName}`);
