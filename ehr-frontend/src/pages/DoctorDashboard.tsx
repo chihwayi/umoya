@@ -3211,46 +3211,57 @@ const DoctorDashboard: React.FC = () => {
                         <div className="bg-white/90 rounded-xl p-4 border-2 border-orange-300/50 mb-3">
                           <p className="text-xs text-slate-600 mb-1">Overall Risk Score</p>
                           {(() => {
-                            // Calculate actual risk score from factors if overall_score is 0
                             const riskFactors = patientRiskAssessment.factors || [];
-                            const calculatedScore = riskFactors.length > 0 
+                            // risk_level is 'unknown' when the CDSS engine had no
+                            // scoreable inputs at all (no age/vitals/meds/diagnoses) —
+                            // that's a real "not assessed" state, not a 0% low-risk
+                            // score, so it must render distinctly rather than as a
+                            // fabricated number.
+                            const isUnassessed = patientRiskAssessment.risk_level === 'unknown' || riskFactors.length === 0;
+                            const displayScore = riskFactors.length > 0
                               ? riskFactors.reduce((sum: number, f: any) => sum + (f.score || 0), 0) / riskFactors.length
                               : patientRiskAssessment.overall_score;
-                            const displayScore = calculatedScore > 0 ? calculatedScore : (riskFactors.length > 0 ? 5 : 0);
-                            
+
                             return (
                               <>
                                 <div className="flex items-baseline gap-2">
                                   <p className={`text-3xl font-bold ${
+                                    isUnassessed ? 'text-slate-400' :
                                     patientRiskAssessment.risk_level === 'critical' ? 'text-red-600' :
                                     patientRiskAssessment.risk_level === 'high' ? 'text-orange-600' :
                                     patientRiskAssessment.risk_level === 'moderate' ? 'text-yellow-600' :
                                     'text-green-600'
                                   }`}>
-                                    {displayScore.toFixed(1)}%
+                                    {isUnassessed ? '—' : `${displayScore.toFixed(1)}%`}
                                   </p>
                                 </div>
                                 <span className={`text-xs px-2 py-1 rounded-full mt-2 inline-block ${
+                                  isUnassessed ? 'bg-slate-100 text-slate-600' :
                                   patientRiskAssessment.risk_level === 'critical' ? 'bg-red-100 text-red-700' :
                                   patientRiskAssessment.risk_level === 'high' ? 'bg-orange-100 text-orange-700' :
                                   patientRiskAssessment.risk_level === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
                                   'bg-green-100 text-green-700'
                                 }`}>
-                                  {patientRiskAssessment.risk_level.toUpperCase()} RISK
+                                  {isUnassessed ? 'INSUFFICIENT DATA' : `${patientRiskAssessment.risk_level.toUpperCase()} RISK`}
                                 </span>
-                                <div className="mt-2">
-                                  <RiskTierBadge
-                                    tier={
-                                      patientRiskAssessment.risk_level === 'critical' ? 'critical'
-                                      : patientRiskAssessment.risk_level === 'high' ? 'high'
-                                      : patientRiskAssessment.risk_level === 'moderate' ? 'medium'
-                                      : patientRiskAssessment.risk_level === 'low' ? 'low'
-                                      : 'minimal'
-                                    }
-                                    compositeScore={displayScore / 100}
-                                    compact
-                                  />
-                                </div>
+                                {isUnassessed ? (
+                                  <p className="text-xs text-slate-500 mt-2">
+                                    Not enough data to score this patient — record age, vitals, medications, or diagnoses to enable risk calculation.
+                                  </p>
+                                ) : (
+                                  <div className="mt-2">
+                                    <RiskTierBadge
+                                      tier={
+                                        patientRiskAssessment.risk_level === 'critical' ? 'critical'
+                                        : patientRiskAssessment.risk_level === 'high' ? 'high'
+                                        : patientRiskAssessment.risk_level === 'moderate' ? 'medium'
+                                        : 'low'
+                                      }
+                                      compositeScore={displayScore / 100}
+                                      compact
+                                    />
+                                  </div>
+                                )}
                                 {riskFactors.length > 0 && (
                                   <div className="mt-2 pt-2 border-t border-orange-200">
                                     <div className="grid grid-cols-2 gap-1 text-xs">
