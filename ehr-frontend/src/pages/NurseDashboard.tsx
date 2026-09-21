@@ -7,7 +7,7 @@ import {
   BarChart3, TestTube, ClipboardList, 
   ChevronDown, Settings, Shield, UserCircle, Menu, X, Package,
   CreditCard, Lock, FolderOpen, Target, LayoutDashboard, Leaf,
-  Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown, Brain, PawPrint, Baby, Wallet, MessageSquare
+  Bed, AlertCircle, BookOpen, Loader2, Sparkles, ArrowDown, Brain, PawPrint, Baby, Wallet, MessageSquare, UserPlus
 } from 'lucide-react';
 import { cdssApi, ehrApi, tenantApi, liteApi } from '../services/api';
 import LiteModeToggle from '../components/LiteModeToggle';
@@ -2863,13 +2863,10 @@ const NurseDashboard: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  if (selectedPatient) { setActiveTab('triage'); }
-                  else { setActiveTab('queue'); showSuccess('Select Patient', 'Pick a patient from the queue to start triage.'); }
-                }}
+                onClick={() => setShowCreatePatientModal(true)}
                 className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-slate-100"
               >
-                <ClipboardList className="h-4 w-4" /> Start triage
+                <UserPlus className="h-4 w-4" /> Register patient
               </button>
               <button
                 type="button"
