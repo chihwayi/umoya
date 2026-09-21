@@ -61,7 +61,7 @@ const ORBoardView: React.FC<ORBoardViewProps> = ({
                 <p className="text-slate-600 text-sm">{or.room_name}</p>
               </div>
               <div className={`px-3 py-1 rounded-full text-xs font-bold border-2 ${getORStatusColor(or.status)}`}>
-                {or.status.toUpperCase()}
+                {(or.status || 'unknown').toUpperCase()}
               </div>
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-600">

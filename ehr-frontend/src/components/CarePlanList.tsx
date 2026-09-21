@@ -142,7 +142,7 @@ const CarePlanList: React.FC<CarePlanListProps> = ({
           <div className="flex gap-3">
             <button
               onClick={() => setShowTemplates(true)}
-              className="px-4 py-2 bg-white/10 text-white border border-white/30 rounded-lg hover:bg-white/20 transition-colors flex items-center gap-2 text-sm font-semibold"
+              className="appearance-none px-4 py-2 bg-white/10 text-white border border-white/30 rounded-lg hover:bg-white/20 transition-colors flex items-center gap-2 text-sm font-semibold"
             >
               <FileText className="w-4 h-4" />
               Templates
@@ -158,7 +158,7 @@ const CarePlanList: React.FC<CarePlanListProps> = ({
               Create Care Plan
             </button>
             {onClose && (
-              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+              <button onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             )}

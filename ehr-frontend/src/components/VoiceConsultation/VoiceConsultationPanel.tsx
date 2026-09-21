@@ -88,7 +88,7 @@ const VoiceConsultationPanel: React.FC<VoiceConsultationPanelProps> = ({
           {onClose && (
             <button 
               onClick={onClose}
-              className="p-1 hover:bg-white/20 rounded-full text-white transition-colors"
+              className="appearance-none p-1 hover:bg-white/20 rounded-full text-white transition-colors"
             >
               <X className="w-5 h-5" />
             </button>

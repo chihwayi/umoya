@@ -139,7 +139,7 @@ const PatientConsentList: React.FC<PatientConsentListProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold border-2 ${getStatusColor(consent.status)}`}>
-                        {consent.status.toUpperCase()}
+                        {(consent.status || 'unknown').toUpperCase()}
                       </span>
                       {consent.validUntil && new Date(consent.validUntil) < new Date() && consent.status === 'signed' && (
                         <span className="px-3 py-1 rounded-full text-xs font-bold border-2 bg-orange-100 text-orange-800 border-orange-300">

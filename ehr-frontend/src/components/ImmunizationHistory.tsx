@@ -224,7 +224,7 @@ const ImmunizationHistory: React.FC<ImmunizationHistoryProps> = ({
                   <div>Due: <strong>{formatDateToDDMMYYYY(item.recommendedDate)}</strong></div>
                   <div className="flex items-center gap-1 text-amber-700 font-medium mt-2">
                     <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="text-xs sm:text-sm">{item.status.toUpperCase()}</span>
+                    <span className="text-xs sm:text-sm">{(item.status || 'due').toUpperCase()}</span>
                   </div>
                 </div>
               </div>

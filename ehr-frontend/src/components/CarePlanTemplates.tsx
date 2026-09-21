@@ -119,7 +119,7 @@ const CarePlanTemplates: React.FC<CarePlanTemplatesProps> = ({
             </h2>
             <p className="text-teal-100 text-sm mt-1">Choose a template to create a structured care plan</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+          <button onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -40,6 +40,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
   const [historyOfPresentIllness, setHistoryOfPresentIllness] = useState('');
   const [physicalExam, setPhysicalExam] = useState('');
   const [assessment, setAssessment] = useState('');
+  const [plan, setPlan] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState<any>(null);
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(false);
@@ -61,6 +62,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
           setHistoryOfPresentIllness(cd.historyOfPresentIllness || '');
           setPhysicalExam(cd.physicalExamination || '');
           setAssessment(cd.clinicalAssessment || '');
+          setPlan(cd.plan || '');
           setAdditionalNotes(cd.additionalNotes || parsed?.notes || '');
           setCodedDiagnoses(cd.codedDiagnoses || []);
         } catch {
@@ -72,6 +74,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
         setHistoryOfPresentIllness('');
         setPhysicalExam('');
         setAssessment('');
+        setPlan('');
         setAdditionalNotes('');
         setCodedDiagnoses([]);
       }
@@ -95,6 +98,7 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
         historyOfPresentIllness,
         physicalExamination: physicalExam,
         clinicalAssessment: assessment,
+        plan,
         additionalNotes,
       };
 
@@ -418,6 +422,16 @@ const ClinicalNotesModal: React.FC<ClinicalNotesModalProps> = ({ open, onClose, 
                   </div>
                 </div>
               )}
+            </div>
+            <div className="glass-section rounded-xl p-6">
+              <label className="block text-base font-bold text-slate-800 mb-3">Plan</label>
+              <textarea
+                value={plan}
+                onChange={(e) => setPlan(e.target.value)}
+                rows={4}
+                placeholder="Treatment plan, orders, follow-up (e.g. admit for IV fluids and antibiotics, repeat vitals q15min, follow up in 48 hours)"
+                className="glass-input w-full rounded-xl px-4 py-3 text-slate-800 placeholder:text-slate-400 resize-none"
+              />
             </div>
             <div className="glass-section rounded-xl p-6">
               <label className="block text-base font-bold text-slate-800 mb-3">Additional Notes</label>

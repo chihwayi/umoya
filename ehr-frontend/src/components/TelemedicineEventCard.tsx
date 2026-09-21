@@ -43,7 +43,7 @@ export const TelemedicineEventCard: React.FC<Props> = ({ event, onRetry }) => {
           borderRadius: 12, backgroundColor: statusColor + '20',
           color: statusColor,
         }}>
-          {event.status.toUpperCase()}
+          {(event.status || 'unknown').toUpperCase()}
         </span>
       </div>
 

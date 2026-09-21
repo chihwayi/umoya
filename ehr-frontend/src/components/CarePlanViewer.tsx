@@ -241,13 +241,13 @@ const CarePlanViewer: React.FC<CarePlanViewerProps> = ({
               {onEdit && (
                 <button
                   onClick={onEdit}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                  className="appearance-none p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
                   title="Edit Care Plan"
                 >
                   <Edit className="w-5 h-5" />
                 </button>
               )}
-              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+              <button onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>

@@ -422,10 +422,10 @@ const AppointmentWaitlist: React.FC<AppointmentWaitlistProps> = ({ tenantSlug, o
                         </span>
                       )}
                       <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${PRIORITY_BADGE[entry.priority]}`}>
-                        {entry.priority.toUpperCase()}
+                        {(entry.priority || 'unknown').toUpperCase()}
                       </span>
                       <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${STATUS_BADGE[entry.status]}`}>
-                        {entry.status.toUpperCase()}
+                        {(entry.status || 'unknown').toUpperCase()}
                       </span>
                     </div>
                     {entry.reason && <p className="text-sm text-slate-600 mt-2">{entry.reason}</p>}

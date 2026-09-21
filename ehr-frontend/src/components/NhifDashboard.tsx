@@ -132,7 +132,7 @@ const NhifDashboard: React.FC<NhifDashboardProps> = ({ patientId, token, tenantS
           <div className="p-4 border rounded bg-blue-50">
             <span className="block text-xs uppercase font-bold text-blue-600">Status</span>
             <span className={`text-lg font-semibold ${membership.status === 'active' ? 'text-green-600' : 'text-red-600'}`}>
-              {membership.status.toUpperCase()}
+              {(membership.status || 'unknown').toUpperCase()}
             </span>
           </div>
         </div>

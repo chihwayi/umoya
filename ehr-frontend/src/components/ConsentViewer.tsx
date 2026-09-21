@@ -134,7 +134,7 @@ const ConsentViewer: React.FC<ConsentViewerProps> = ({
                 </div>
                 <div className="text-xs sm:text-sm text-white/90">
                   <span className="block text-white/70">Status</span>
-                  <span className="font-semibold">{consent.status.toUpperCase()}</span>
+                  <span className="font-semibold">{(consent.status || 'unknown').toUpperCase()}</span>
                 </div>
               </div>
             </div>
