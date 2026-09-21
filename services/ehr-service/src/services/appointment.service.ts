@@ -377,7 +377,9 @@ export class AppointmentService {
           lastName: apt.patient?.lastName,
           patientNumber: apt.patient?.patientNumber,
           phone: apt.patient?.phone || null,
-          email: apt.patient?.email || null
+          email: apt.patient?.email || null,
+          dateOfBirth: apt.patient?.dateOfBirth || null,
+          gender: apt.patient?.gender || null
         },
         doctor: {
           id: apt.doctor?.id,
