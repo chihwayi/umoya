@@ -3206,7 +3206,15 @@ const DoctorDashboard: React.FC = () => {
                             <RefreshCw className={`w-3 h-3 ${loadingRiskAssessment ? 'animate-spin' : ''}`} />
                           </button>
                         </div>
-                        
+
+                        {patientRiskAssessment.governor_banner && (
+                          <div className="mb-3 p-3 rounded-xl bg-red-50 border-2 border-red-300 flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs font-semibold text-red-800">{patientRiskAssessment.governor_banner}</p>
+                          </div>
+                        )}
+
+
                         {/* Risk Score - Prominent Display */}
                         <div className="bg-white/90 rounded-xl p-4 border-2 border-orange-300/50 mb-3">
                           <p className="text-xs text-slate-600 mb-1">Overall Risk Score</p>
@@ -3261,6 +3269,12 @@ const DoctorDashboard: React.FC = () => {
                                       compact
                                     />
                                   </div>
+                                )}
+                                {patientRiskAssessment.readmission_assessment?.suppressed && (
+                                  <p className="text-xs text-red-700 mt-2">
+                                    The {displayScore.toFixed(1)}% figure above is the pre-deterioration readmission
+                                    score — deferred, not a current low-risk reading. {patientRiskAssessment.readmission_assessment.reason}
+                                  </p>
                                 )}
                                 {riskFactors.length > 0 && (
                                   <div className="mt-2 pt-2 border-t border-orange-200">
