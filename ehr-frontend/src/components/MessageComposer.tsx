@@ -159,7 +159,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           <h2 className="text-2xl font-bold">New Message</h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 transition hover:bg-white/20"
+            style={{ backgroundImage: 'none' }}
+            className="appearance-none rounded-lg p-2 transition hover:bg-white/20"
           >
             <X className="w-5 h-5 text-white" />
           </button>

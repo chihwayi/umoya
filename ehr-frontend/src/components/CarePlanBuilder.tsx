@@ -223,7 +223,7 @@ const CarePlanBuilder: React.FC<CarePlanBuilderProps> = ({
               {carePlan?.id ? 'Update care plan details, goals, and interventions' : 'Build a comprehensive care plan for the patient'}
             </p>
           </div>
-          <button onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
+          <button onClick={onClose} style={{ backgroundImage: 'none' }} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -199,7 +199,8 @@ export const Inbox: React.FC<InboxProps> = ({ onClose, onCompose, token, tenantS
             </button>
             <button
               onClick={onClose}
-              className="rounded-lg p-2 transition hover:bg-white/20"
+              style={{ backgroundImage: 'none' }}
+              className="appearance-none rounded-lg p-2 transition hover:bg-white/20"
             >
               <X className="w-5 h-5 text-white" />
             </button>
