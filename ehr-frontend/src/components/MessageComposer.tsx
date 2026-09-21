@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Send, User, Users, AlertCircle, Paperclip, FileText } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 
 interface MessageComposerProps {
   onClose: () => void;
@@ -159,7 +160,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           <h2 className="text-2xl font-bold">New Message</h2>
           <button
             onClick={onClose}
-            style={{ backgroundImage: 'none' }}
+            ref={noNativeButtonBackground}
             className="appearance-none rounded-lg p-2 transition hover:bg-white/20"
           >
             <X className="w-5 h-5 text-white" />

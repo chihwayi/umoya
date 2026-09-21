@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileText, Mic, Save, Copy, Check, RefreshCw, X } from 'lucide-react';
 import VoiceConsultationButton from './VoiceConsultationButton';
 import { ExtractedEntities } from '../../services/medical-entity-extractor.service';
+import { noNativeButtonBackground } from '../../hooks/useNoNativeButtonBackground';
 
 interface VoiceConsultationPanelProps {
   patientName: string;
@@ -88,7 +89,7 @@ const VoiceConsultationPanel: React.FC<VoiceConsultationPanelProps> = ({
           {onClose && (
             <button 
               onClick={onClose}
-              style={{ backgroundImage: 'none' }}
+              ref={noNativeButtonBackground}
               className="appearance-none p-1 hover:bg-white/20 rounded-full text-white transition-colors"
             >
               <X className="w-5 h-5" />

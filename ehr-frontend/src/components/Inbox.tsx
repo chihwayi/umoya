@@ -3,6 +3,7 @@ import { Mail, Search, Inbox as InboxIcon, Send, Archive, Trash2, Reply, Forward
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import { MessageComposer } from './MessageComposer';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 
 interface InboxProps {
   onClose: () => void;
@@ -199,7 +200,7 @@ export const Inbox: React.FC<InboxProps> = ({ onClose, onCompose, token, tenantS
             </button>
             <button
               onClick={onClose}
-              style={{ backgroundImage: 'none' }}
+              ref={noNativeButtonBackground}
               className="appearance-none rounded-lg p-2 transition hover:bg-white/20"
             >
               <X className="w-5 h-5 text-white" />

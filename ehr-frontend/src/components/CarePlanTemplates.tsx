@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, FileText, Target, Activity, Plus, Search } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 
 interface Template {
   id: string;
@@ -119,7 +120,7 @@ const CarePlanTemplates: React.FC<CarePlanTemplatesProps> = ({
             </h2>
             <p className="text-teal-100 text-sm mt-1">Choose a template to create a structured care plan</p>
           </div>
-          <button onClick={onClose} style={{ backgroundImage: 'none' }} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
+          <button onClick={onClose} ref={noNativeButtonBackground} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

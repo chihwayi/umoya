@@ -12,22 +12,15 @@
   box-sizing: border-box;
 }
 
-/* Some engines keep painting a native white/gradient button face via
-   background-image even with `appearance: none` set, overriding Tailwind's
-   own `background-image: none` from Preflight — confirmed live via
-   getComputedStyle. A button whose only background comes from a transparent
-   Tailwind utility (bg-white/NN, meant to tint through a colored header —
-   modal close icons, etc.) ends up as an invisible white box. Scoped to
-   buttons carrying that exact class pattern so buttons using a real
-   Tailwind gradient (bg-gradient-to-r, an opaque background-image utility
-   this rule must NOT clobber) are untouched. */
-button[class*="bg-white/"],
-button[class*="hover:bg-white/"] {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  -moz-appearance: none !important;
-  background-image: none !important;
-}
+/* NOTE: a button whose only background comes from a transparent Tailwind
+   utility (bg-white/NN, meant to tint through a colored header — modal close
+   icons, etc.) can render as an opaque white box in some engines: verified
+   live that a stylesheet rule here — even with `!important` and correct
+   specificity — cannot override it, because the native button face's
+   background-image is itself `!important` in the UA stylesheet and only an
+   author-level inline style with explicit `!important` priority wins. See
+   src/hooks/useNoNativeButtonBackground.ts, applied via `ref` on the
+   specific buttons that need it, rather than a blanket CSS rule here. */
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
