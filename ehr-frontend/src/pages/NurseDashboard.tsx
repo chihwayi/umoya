@@ -5165,6 +5165,11 @@ const NurseDashboard: React.FC = () => {
             fetchTodayAppointments();
             fetchPatients();
           }}
+          onViewExistingPatient={(patient) => {
+            setShowCreatePatientModal(false);
+            setPatientSearchTerm(patient.patientNumber || `${patient.firstName || ''} ${patient.lastName || ''}`.trim());
+            setActiveTab('patients');
+          }}
           tenantSlug={tenantSlug!}
         />
       )}

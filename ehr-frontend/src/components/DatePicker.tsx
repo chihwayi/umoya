@@ -70,7 +70,18 @@ export const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, 
   };
 
   const handleManualChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value;
+    // Auto-insert the slashes as digits are typed (e.g. "01022020" becomes
+    // "01/02/2020" live) so staff can just type the 8 digits instead of
+    // hitting the separators themselves. Driven purely off the digit
+    // content, so backspacing through a slash still removes a real digit
+    // rather than getting stuck on the punctuation.
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+    let v = digits;
+    if (digits.length > 4) {
+      v = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    } else if (digits.length > 2) {
+      v = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
     onChange(v);
     if (isValidDate(v)) {
       setCurrentMonth(parseDateFromInput(v));
@@ -93,6 +104,8 @@ export const DatePicker: React.FC<DatePickerProps> = ({ label, value, onChange, 
       <div className="relative">
         <input
           type="text"
+          inputMode="numeric"
+          maxLength={10}
           value={value}
           onChange={handleManualChange}
           onFocus={() => setOpen(true)}

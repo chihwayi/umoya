@@ -10,6 +10,7 @@ interface CreatePatientModalProps {
   onClose: () => void;
   onPatientCreated: () => void;
   tenantSlug: string;
+  onViewExistingPatient?: (patient: { id: string; firstName?: string; lastName?: string; patientNumber?: string }) => void;
 }
 
 const inputCls = 'w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20';
@@ -59,7 +60,7 @@ const toBadgeLabel = (value: string) =>
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (part) => part.toUpperCase());
 
-const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose, onPatientCreated, tenantSlug }) => {
+const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose, onPatientCreated, tenantSlug, onViewExistingPatient }) => {
   const [formData, setFormData] = useState(initialFormData);
   const [showExtended, setShowExtended] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -99,6 +100,15 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
   });
 
   const buildAssessmentSignature = () => JSON.stringify(buildAssessmentPayload());
+
+  // The duplicate/eligibility review must have actually run against the
+  // CURRENT form contents (not a stale run from before the last edit) before
+  // the record can be created — this is what backs the disabled Register
+  // Patient button below, not just the submit-time re-check.
+  const isReviewCurrent = Boolean(assessmentResult) && assessmentSignature === buildAssessmentSignature();
+  const hasUnreviewedDuplicates = duplicateQueue.some((item) => item.matchStatus === 'suggested');
+  const hasConfirmedDuplicate = duplicateQueue.some((item) => item.matchStatus === 'confirmed_duplicate' || item.matchStatus === 'merged');
+  const canRegister = isReviewCurrent && !hasUnreviewedDuplicates && !hasConfirmedDuplicate;
 
   const resetIntelligenceState = () => {
     setAssessmentResult(null);
@@ -538,38 +548,49 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
                               </p>
                               <p className="mt-1 text-xs text-slate-500">Status: {toBadgeLabel(item.matchStatus || 'suggested')}</p>
                             </div>
-                            {item.matchStatus === 'suggested' ? (
-                              <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap items-start gap-2">
+                              {onViewExistingPatient && item.candidatePatient?.id && (
                                 <button
                                   type="button"
-                                  disabled={duplicateReviewLoading === item.id}
-                                  onClick={() => reviewDuplicate(item.id, 'rejected')}
-                                  className="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50"
+                                  onClick={() => onViewExistingPatient(item.candidatePatient)}
+                                  className="px-3 py-1.5 rounded-lg bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
                                 >
-                                  Not a duplicate
+                                  View this patient
                                 </button>
-                                <button
-                                  type="button"
-                                  disabled={duplicateReviewLoading === item.id}
-                                  onClick={() => reviewDuplicate(item.id, 'needs_follow_up')}
-                                  className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
-                                >
-                                  Needs follow-up
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={duplicateReviewLoading === item.id}
-                                  onClick={() => reviewDuplicate(item.id, 'confirmed_duplicate')}
-                                  className="px-3 py-1.5 rounded-lg bg-rose-100 text-rose-800 hover:bg-rose-200 disabled:opacity-50"
-                                >
-                                  Confirm duplicate
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                                Reviewed
-                              </div>
-                            )}
+                              )}
+                              {item.matchStatus === 'suggested' ? (
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={duplicateReviewLoading === item.id}
+                                    onClick={() => reviewDuplicate(item.id, 'rejected')}
+                                    className="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50"
+                                  >
+                                    Not a duplicate
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={duplicateReviewLoading === item.id}
+                                    onClick={() => reviewDuplicate(item.id, 'needs_follow_up')}
+                                    className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
+                                  >
+                                    Needs follow-up
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={duplicateReviewLoading === item.id}
+                                    onClick={() => reviewDuplicate(item.id, 'confirmed_duplicate')}
+                                    className="px-3 py-1.5 rounded-lg bg-rose-100 text-rose-800 hover:bg-rose-200 disabled:opacity-50"
+                                  >
+                                    Confirm duplicate
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                                  Reviewed
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -789,6 +810,16 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
               )}
             </div>
 
+            {!canRegister && (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                {hasConfirmedDuplicate
+                  ? 'A matching patient record was confirmed above — use "View this patient" instead of creating a new record.'
+                  : hasUnreviewedDuplicates
+                  ? 'Resolve every duplicate suggestion above before registering this patient.'
+                  : 'Run "Review Registration" above to check for duplicates before registering this patient.'}
+              </p>
+            )}
+
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
@@ -799,8 +830,9 @@ const CreatePatientModal: React.FC<CreatePatientModalProps> = ({ isOpen, onClose
               </button>
               <button
                 type="submit"
-                disabled={loading}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all disabled:opacity-50"
+                disabled={loading || !canRegister}
+                title={canRegister ? undefined : 'Run the duplicate/eligibility review first'}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Registering...' : 'Register Patient'}
               </button>
