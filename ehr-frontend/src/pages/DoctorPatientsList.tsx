@@ -108,7 +108,7 @@ const DoctorPatientsList: React.FC<DoctorPatientsListProps> = ({ embedded = fals
       allPatients.map(async (p) => {
         try {
           const res = await ehrAxios.get(`/patients/${p.id}/mortality-risk`, {
-            headers: { Authorization: `Bearer ${token}`, 'x-tenant-slug': tenantSlug },
+            headers: { Authorization: `Bearer ${token}`, 'X-Tenant-ID': tenantSlug },
           });
           if (res?.data?.score != null) scores[p.id] = res.data;
         } catch {

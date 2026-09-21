@@ -130,6 +130,24 @@ const getActiveTenantSlug = (): string => {
   return localStorage.getItem('ehr_tenant_slug') || localStorage.getItem('ehr_tenant') || '';
 };
 
+// Several ehrAxios call sites set a header literally named 'x-tenant-slug'
+// instead of the 'X-Tenant-ID' the backend's tenant middleware actually reads
+// (req.headers['x-tenant-id']) — those requests silently carried no tenant
+// context and 400'd. Normalize that mistaken key here rather than hunting
+// down every call site, and backstop with the resolved active tenant slug.
+ehrAxios.interceptors.request.use((config) => {
+  const headers = config.headers as any;
+  if (!headers['X-Tenant-ID'] && !headers['x-tenant-id']) {
+    if (headers['x-tenant-slug']) {
+      headers['X-Tenant-ID'] = headers['x-tenant-slug'];
+    } else {
+      const slug = getActiveTenantSlug();
+      if (slug) headers['X-Tenant-ID'] = slug;
+    }
+  }
+  return config;
+});
+
 // CDSS endpoints are tenant-guarded; ensure every cdssAxios call carries X-Tenant-ID
 // (the proxy adds the service token). Only set when the caller didn't already.
 cdssAxios.interceptors.request.use((config) => {
