@@ -57,9 +57,16 @@ export class TerminologyPostgresService {
       // Replace spaces with & (AND operator) and handle special characters
       const tsquery = this.buildTsQuery(searchTerm);
 
-      // Query using full-text search on the materialized view
+      // Query using full-text search on the materialized view. ts_rank alone
+      // ties on any row containing the search lexeme once regardless of how
+      // much other text surrounds it, so a short exact match like
+      // "Paracetamol" ranked no higher than a 6-ingredient combination
+      // product's name and lost out to plain alphabetical ordering below the
+      // page-1 cutoff. Explicitly boost exact/prefix matches and shorter
+      // terms first so a precise, common match surfaces before compound
+      // products that merely mention the same word.
       const searchQuery = `
-        SELECT 
+        SELECT
           concept_id,
           term,
           term_type,
@@ -67,8 +74,14 @@ export class TerminologyPostgresService {
         FROM snomed_search_view
         WHERE search_vector @@ to_tsquery('english', $1)
           ${activeOnly ? 'AND active = true' : ''}
-        ORDER BY 
+        ORDER BY
+          CASE
+            WHEN LOWER(term) = LOWER($4) THEN 0
+            WHEN LOWER(term) LIKE LOWER($4) || '%' THEN 1
+            ELSE 2
+          END,
           ts_rank(search_vector, to_tsquery('english', $1)) DESC,
+          LENGTH(term) ASC,
           CASE WHEN term_type = 'FSN' THEN 1 ELSE 2 END,
           term
         LIMIT $2
@@ -84,7 +97,7 @@ export class TerminologyPostgresService {
 
       // Execute queries
       const [results, countResult] = await Promise.all([
-        tenantDb.query(searchQuery, [tsquery, limit, offset]),
+        tenantDb.query(searchQuery, [tsquery, limit, offset, searchTerm]),
         tenantDb.query(countQuery, [tsquery]),
       ]);
 
