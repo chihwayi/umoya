@@ -12,17 +12,21 @@
   box-sizing: border-box;
 }
 
-/* Tailwind's Preflight sets `background-image: none` on <button> but leaves
-   `appearance: button`, and some engines still paint native widget chrome
-   (a white/gradient button face) over author styles in that case — any
-   button relying on a transparent/tinted background (bg-white/NN on a
-   colored header, e.g. modal close icons) becomes an invisible white box.
-   Disabling native appearance app-wide lets our own Tailwind classes render
-   as authored everywhere, not just on the buttons we happen to have patched. */
-button {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
+/* Some engines keep painting a native white/gradient button face via
+   background-image even with `appearance: none` set, overriding Tailwind's
+   own `background-image: none` from Preflight — confirmed live via
+   getComputedStyle. A button whose only background comes from a transparent
+   Tailwind utility (bg-white/NN, meant to tint through a colored header —
+   modal close icons, etc.) ends up as an invisible white box. Scoped to
+   buttons carrying that exact class pattern so buttons using a real
+   Tailwind gradient (bg-gradient-to-r, an opaque background-image utility
+   this rule must NOT clobber) are untouched. */
+button[class*="bg-white/"],
+button[class*="hover:bg-white/"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background-image: none !important;
 }
 
 body {
