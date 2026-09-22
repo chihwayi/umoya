@@ -726,7 +726,16 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                   </div>
                   <div className="p-4 bg-white/50 rounded-xl border border-slate-200/50">
                     <label className="text-sm font-semibold text-slate-600 mb-2 block">Allergies</label>
-                    <p className="text-slate-900 font-medium">{patient.allergies || 'None known'}</p>
+                    {/* Structured allergiesList (below) is the real source of
+                        truth — patient.allergies is a legacy free-text field
+                        that can disagree with it and mislead a doctor
+                        glancing at this summary into thinking there's
+                        nothing documented. */}
+                    <p className="text-slate-900 font-medium">
+                      {allergiesList.length > 0
+                        ? allergiesList.map((a) => a.allergenSnomedTerm || a.allergen || 'Unknown allergen').join(', ')
+                        : patient.allergies || 'None known'}
+                    </p>
                   </div>
                   <div className="p-4 bg-white/50 rounded-xl border border-slate-200/50">
                     <label className="text-sm font-semibold text-slate-600 mb-2 block">Chronic Conditions</label>
