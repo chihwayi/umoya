@@ -131,17 +131,64 @@ const CarePlanBuilder: React.FC<CarePlanBuilderProps> = ({
     }
   }, [carePlan]);
 
+  // The care-plan GET endpoints return raw DB rows (snake_case columns,
+  // matching this form's internal field names — e.g. goal_text, start_date),
+  // but the create/update endpoints read a camelCase DTO (goalText,
+  // startDate, etc.) and insert straight into NOT NULL columns — sending the
+  // snake_case shape silently 500s ("null value in column ... violates
+  // not-null constraint") because every field the backend looks for is
+  // undefined. Translate at the API boundary rather than renaming every
+  // field throughout this form (which mirrors the DB/GET shape on purpose).
+  const toApiPayload = (data: CarePlan) => ({
+    patientId: data.patient_id,
+    name: data.name,
+    description: data.description,
+    category: data.category,
+    status: data.status,
+    startDate: data.start_date,
+    endDate: data.end_date,
+    targetCompletionDate: data.target_completion_date,
+    primaryProviderId: data.primary_provider_id,
+    careTeam: data.care_team,
+    diagnosisCodes: data.diagnosis_codes,
+    notes: data.notes,
+    goals: data.goals.map((g) => ({
+      goalText: g.goal_text,
+      goalType: g.goal_type,
+      targetValue: g.target_value,
+      currentValue: g.current_value,
+      measurementUnit: g.measurement_unit,
+      targetDate: g.target_date,
+      status: g.status,
+      priority: g.priority,
+      notes: g.notes,
+    })),
+    interventions: data.interventions.map((i) => ({
+      goalId: i.goal_id,
+      interventionText: i.intervention_text,
+      interventionType: i.intervention_type,
+      frequency: i.frequency,
+      duration: i.duration,
+      responsibleRole: i.responsible_role,
+      assignedTo: i.assigned_to,
+      status: i.status,
+      startDate: i.start_date,
+      endDate: i.end_date,
+    })),
+  });
+
   const handleSave = async () => {
     try {
       setSaving(true);
+      const payload = toApiPayload(formData);
 
       if (carePlan?.id) {
         // Update existing
-        await ehrApi.updateCarePlan(carePlan.id, formData, token, tenantSlug);
+        await ehrApi.updateCarePlan(carePlan.id, payload, token, tenantSlug);
         showSuccess('Success', 'Care plan updated successfully');
       } else {
         // Create new
-        await ehrApi.createCarePlan(formData, token, tenantSlug);
+        await ehrApi.createCarePlan(payload, token, tenantSlug);
         showSuccess('Success', 'Care plan created successfully');
       }
 
