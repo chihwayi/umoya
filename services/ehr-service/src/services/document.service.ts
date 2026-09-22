@@ -303,8 +303,33 @@ export class DocumentService {
     );
   }
 
-  async uploadNewVersion(documentId: string, fileData: any, changeSummary: string, userId: string, tenantDb: DataSource) {
+  async uploadNewVersion(
+    documentId: string,
+    fileData: any,
+    changeSummary: string,
+    userId: string,
+    tenantDb: DataSource,
+    fileBuffer?: Buffer,
+    tenantId?: string,
+  ) {
     this.ensureTenantDb(tenantDb);
+
+    const existing = await tenantDb.query(
+      `SELECT patient_id, document_name FROM patient_documents WHERE id = $1`,
+      [documentId],
+    );
+    if (existing.length === 0) {
+      throw new NotFoundException('Document not found');
+    }
+    const { patient_id: patientId, document_name: documentName } = existing[0];
+
+    let filePath = fileData.filePath || null;
+    if (fileBuffer) {
+      const tenantStorageKey = this.normalizeTenantKey(tenantId || '');
+      const fileKey = this.minioService.generateFileKey(tenantStorageKey, patientId, documentName);
+      await this.minioService.uploadFile(fileKey, fileBuffer, fileData.mimeType);
+      filePath = fileKey;
+    }
 
     // Get current version number
     const versions = await tenantDb.query(
@@ -321,14 +346,14 @@ export class DocumentService {
     );
 
     // Create new version
-    await this.createVersion(documentId, newVersionNumber, { ...fileData, changeSummary }, userId, tenantDb);
+    await this.createVersion(documentId, newVersionNumber, { ...fileData, filePath, changeSummary }, userId, tenantDb);
 
     // Update main document record
     await tenantDb.query(
-      `UPDATE patient_documents 
+      `UPDATE patient_documents
        SET file_path = $1, file_url = $2, file_size = $3, updated_at = NOW()
        WHERE id = $4`,
-      [fileData.filePath, fileData.fileUrl, fileData.fileSize, documentId],
+      [filePath, fileData.fileUrl || null, fileData.fileSize || null, documentId],
     );
 
     return this.getDocumentById(documentId, userId, tenantDb);

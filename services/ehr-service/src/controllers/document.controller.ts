@@ -14,6 +14,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
@@ -36,7 +37,7 @@ export class DocumentController {
   @ApiOperation({ summary: 'Upload a document' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Document uploaded successfully' })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadDocument(
     @Body() body: { patientId: string; documentType: string; documentName: string; description?: string },
     @UploadedFile() file: any,
@@ -154,7 +155,7 @@ export class DocumentController {
   @ApiParam({ name: 'id', description: 'Document ID' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'New version uploaded successfully' })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadNewVersion(
     @Param('id') id: string,
     @Body() body: { changeSummary: string },
@@ -167,13 +168,19 @@ export class DocumentController {
     await this.uploadSecurityService.assertCleanUpload(file, 'document');
 
     const fileData = {
-      filePath: `/uploads/${file.filename}`,
-      fileUrl: null,
       fileSize: file.size,
       mimeType: file.mimetype,
     };
 
-    return this.documentService.uploadNewVersion(id, fileData, body.changeSummary, (req.user.sub || req.user.id), req.tenantDb);
+    return this.documentService.uploadNewVersion(
+      id,
+      fileData,
+      body.changeSummary,
+      (req.user.sub || req.user.id),
+      req.tenantDb,
+      file.buffer,
+      req.tenantId,
+    );
   }
 
   @Post(':id/versions/:versionId/restore')
