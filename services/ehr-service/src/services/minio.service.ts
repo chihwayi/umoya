@@ -7,18 +7,38 @@ import { Readable } from 'stream';
 export class MinioService {
   private readonly logger = new Logger(MinioService.name);
   private readonly s3Client: S3Client;
+  private readonly presignClient: S3Client;
   private readonly bucketName = process.env.STORAGE_S3_BUCKET || 'umoya-documents';
 
   constructor() {
+    const region = process.env.STORAGE_S3_REGION || 'us-east-1';
+    const forcePathStyle = process.env.STORAGE_S3_FORCE_PATH_STYLE === 'true';
+    const credentials = {
+      accessKeyId: process.env.STORAGE_S3_ACCESS_KEY,
+      secretAccessKey: process.env.STORAGE_S3_SECRET_KEY,
+    };
+
+    // Internal endpoint (e.g. Docker-network hostname) for server-to-server
+    // PUT/GET — never reachable from a browser, so it must not be used to
+    // build signed URLs handed to the frontend.
     this.s3Client = new S3Client({
       endpoint: process.env.STORAGE_S3_ENDPOINT,
-      region: process.env.STORAGE_S3_REGION || 'us-east-1',
-      credentials: {
-        accessKeyId: process.env.STORAGE_S3_ACCESS_KEY,
-        secretAccessKey: process.env.STORAGE_S3_SECRET_KEY,
-      },
-      forcePathStyle: process.env.STORAGE_S3_FORCE_PATH_STYLE === 'true',
+      region,
+      credentials,
+      forcePathStyle,
     });
+
+    // Publicly reachable endpoint for presigned URLs. Falls back to the
+    // internal client if unset, matching the pre-existing behavior (and bug)
+    // rather than silently pointing signed URLs somewhere unconfigured.
+    this.presignClient = process.env.STORAGE_S3_PUBLIC_BASE_URL
+      ? new S3Client({
+          endpoint: process.env.STORAGE_S3_PUBLIC_BASE_URL,
+          region,
+          credentials,
+          forcePathStyle,
+        })
+      : this.s3Client;
   }
 
   async uploadFile(key: string, buffer: Buffer, mimeType: string): Promise<string> {
@@ -62,7 +82,7 @@ export class MinioService {
         Key: key,
       });
 
-      return await getSignedUrl(this.s3Client, command, { expiresIn });
+      return await getSignedUrl(this.presignClient, command, { expiresIn });
     } catch (error) {
       this.logger.error(`Failed to generate signed URL for ${key}:`, error);
       throw error;
