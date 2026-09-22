@@ -79,7 +79,7 @@ class DosingCalculator:
             'monitoring': ['electrolytes', 'renal function']
         },
         'ceftriaxone': {
-            'standard_dose': '1-2 g',
+            'standard_dose': '1000-2000 mg',
             'dosing_interval': 'daily',
             'renal_adjustment': False,
             'weight_based': False,
@@ -121,7 +121,7 @@ class DosingCalculator:
             'monitoring': ['hepatic function', 'neurological symptoms if prolonged']
         },
         'ampicillin': {
-            'standard_dose': '1-2 g',
+            'standard_dose': '1000-2000 mg',
             'dosing_interval': 'q6h',
             'renal_adjustment': True,
             'weight_based': False,
