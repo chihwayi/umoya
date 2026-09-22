@@ -530,11 +530,27 @@ class DiagnosticAssistant:
             if 'chest pain' in sym_text or 'chest_pain' in sym_text:
                 base_probability += 0.20
 
-        # ── Vitals boosts ──
+        # ── Sepsis ── every other diagnosis here gets a symptom-cluster boost;
+        # sepsis previously only got the generic tachycardia vitals boost
+        # below, so a classic fever + altered mental status + hypoxia
+        # presentation scored too low to make the top-10 despite being the
+        # single most urgent differential for it.
+        if 'sepsis' in diag_lower:
+            if 'fever' in sym_text and ('confusion' in sym_text or 'altered' in sym_text or 'lethargy' in sym_text or 'lethargic' in sym_text):
+                base_probability += 0.30
+            if 'hypoxia' in vitals_text:
+                base_probability += 0.20
+            if 'tachycardia' in vitals_text or 'tachypnea' in vitals_text:
+                base_probability += 0.15
+            if 'high fever' in vitals_text:
+                base_probability += 0.10
+
+        # ── Vitals boosts (sepsis handled above — its hypoxia/tachycardia
+        # weights differ from this generic block, don't double-apply) ──
         if vitals_clues:
             if 'hypoxia' in vitals_text and ('respiratory' in diag_lower or 'pneumonia' in diag_lower or 'heart failure' in diag_lower):
                 base_probability += 0.15
-            if 'tachycardia' in vitals_text and ('cardiac' in diag_lower or 'sepsis' in diag_lower or 'malaria' in diag_lower):
+            if 'tachycardia' in vitals_text and ('cardiac' in diag_lower or 'malaria' in diag_lower):
                 base_probability += 0.10
 
         return min(base_probability, 0.95)
