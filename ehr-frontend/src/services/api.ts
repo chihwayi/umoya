@@ -6677,6 +6677,14 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  getProTemplates: async (token: string, tenantSlug: string, includeInactive?: boolean) => {
+    const response = await ehrAxios.get('/pro/templates', {
+      params: includeInactive ? { includeInactive: true } : undefined,
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
   getPatientProSchedules: async (patientId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.get(`/pro/patients/${patientId}/schedules`, {
       headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
