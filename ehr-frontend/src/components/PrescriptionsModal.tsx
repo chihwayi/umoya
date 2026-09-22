@@ -10,7 +10,7 @@ import PrescriptionTemplateEditor from './PrescriptionTemplateEditor';
 
 interface Appointment {
   id: string;
-  patient: { id: string; firstName: string; lastName: string; patientNumber: string };
+  patient: { id: string; firstName: string; lastName: string; patientNumber: string; dateOfBirth?: string; gender?: string };
   appointmentDate: string;
   appointmentType: string;
   notes: string;
@@ -108,6 +108,9 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   const [crossReactLoading, setCrossReactLoading] = useState(false);
   const [crossReactWarnings, setCrossReactWarnings] = useState<any[]>([]);
   const [crossReactChecked, setCrossReactChecked] = useState(false);
+  const [dosingLoading, setDosingLoading] = useState<Record<number, boolean>>({});
+  const [dosingResult, setDosingResult] = useState<Record<number, any>>({});
+  const [dosingWeightKg, setDosingWeightKg] = useState<Record<number, string>>({});
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PrescriptionTemplate | null>(null);
@@ -308,6 +311,37 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
 
     return () => clearTimeout(timeoutId);
   }, [items.map(rx => rx.drugId).join(',')]);
+
+  const patientAgeYears = appointment.patient.dateOfBirth
+    ? Math.floor((Date.now() - new Date(appointment.patient.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25))
+    : undefined;
+
+  const runDosingRecommendation = async (idx: number) => {
+    const rx = items[idx];
+    const drugName = rx.foundDrug?.genericName || rx.name;
+    if (!drugName) return;
+    setDosingLoading((prev) => ({ ...prev, [idx]: true }));
+    try {
+      const weightRaw = dosingWeightKg[idx];
+      const weight = weightRaw ? Number(weightRaw) : undefined;
+      const res = await ehrApi.getDosingRecommendation(
+        {
+          drug_name: drugName,
+          patient_age: patientAgeYears,
+          patient_weight_kg: Number.isFinite(weight) ? weight : undefined,
+          patient_gender: appointment.patient.gender,
+        },
+        token,
+        tenantSlug,
+      );
+      setDosingResult((prev) => ({ ...prev, [idx]: res.data }));
+    } catch (e) {
+      console.error(e);
+      setDosingResult((prev) => ({ ...prev, [idx]: { source: 'error' } }));
+    } finally {
+      setDosingLoading((prev) => ({ ...prev, [idx]: false }));
+    }
+  };
 
   // A prior "all clear" cross-reactivity result becomes stale the moment the
   // medication list changes — don't let it keep showing as current.
@@ -1001,6 +1035,54 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                     <input className="border border-slate-300 rounded-xl p-3" placeholder="Frequency" value={rx.frequency} onChange={(e) => setItems(prev => prev.map((it, i) => i===idx ? { ...it, frequency: e.target.value } : it))} />
                     <input className="border border-slate-300 rounded-xl p-3" placeholder="Duration" value={rx.duration} onChange={(e) => setItems(prev => prev.map((it, i) => i===idx ? { ...it, duration: e.target.value } : it))} />
                   </div>
+
+                  {(rx.foundDrug?.genericName || rx.name) && (
+                    <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-32 border border-cyan-300 rounded-lg p-2 text-sm"
+                          placeholder="Weight (kg)"
+                          value={dosingWeightKg[idx] || ''}
+                          onChange={(e) => setDosingWeightKg((prev) => ({ ...prev, [idx]: e.target.value }))}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => runDosingRecommendation(idx)}
+                          disabled={dosingLoading[idx] || !patientAgeYears}
+                          className="px-3 py-1.5 bg-cyan-600 text-white text-xs font-semibold rounded-lg hover:bg-cyan-700 disabled:opacity-50"
+                          title={!patientAgeYears ? 'Patient date of birth not on file — cannot compute age-based dosing' : undefined}
+                        >
+                          {dosingLoading[idx] ? 'Calculating…' : 'AI Dosing Suggestion'}
+                        </button>
+                        {!patientAgeYears && (
+                          <span className="text-xs text-cyan-700">Patient age unavailable — cannot calculate.</span>
+                        )}
+                      </div>
+                      {dosingResult[idx] && (
+                        dosingResult[idx].source === 'error' || !dosingResult[idx].recommended_dose ? (
+                          <p className="text-xs text-slate-500 mt-2">AI dosing data isn't available for this medication yet — dose from clinical judgement/reference.</p>
+                        ) : (
+                          <div className="mt-2 text-sm">
+                            <p className="font-semibold text-cyan-900">
+                              Suggested: {dosingResult[idx].recommended_dose} mg {dosingResult[idx].frequency}
+                            </p>
+                            {(dosingResult[idx].adjustments || []).map((a: string, i: number) => (
+                              <p key={i} className="text-xs text-slate-600 mt-0.5">• {a}</p>
+                            ))}
+                            {(dosingResult[idx].warnings || []).map((w: string, i: number) => (
+                              <p key={i} className="text-xs text-amber-700 font-medium mt-0.5">⚠ {w}</p>
+                            ))}
+                            {(dosingResult[idx].monitoring || []).length > 0 && (
+                              <p className="text-xs text-slate-600 mt-1">Monitor: {dosingResult[idx].monitoring.join(', ')}</p>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+
                   <textarea className="w-full border border-slate-300 rounded-xl p-3" placeholder="Instructions" value={rx.instructions} onChange={(e) => setItems(prev => prev.map((it, i) => i===idx ? { ...it, instructions: e.target.value } : it))} />
                   <div className="flex justify-end">
                     {items.length > 1 && (
