@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { Pill, X, Save, Calendar, Clock, User, Plus, AlertTriangle, Search, Loader, CreditCard, Lock, BookOpenCheck, Shield } from 'lucide-react';
+import { Pill, X, Save, Calendar, Clock, User, Plus, AlertTriangle, Search, Loader, CreditCard, Lock, BookOpenCheck, Shield, CheckCircle } from 'lucide-react';
 import ModalPortal from './ModalPortal';
 import { useNotification } from './GlobalNotification';
 import { ehrApi, chartApi } from '../services/api';
@@ -107,6 +107,7 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
   const [medSafetyAssessment, setMedSafetyAssessment] = useState<any | null>(null);
   const [crossReactLoading, setCrossReactLoading] = useState(false);
   const [crossReactWarnings, setCrossReactWarnings] = useState<any[]>([]);
+  const [crossReactChecked, setCrossReactChecked] = useState(false);
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PrescriptionTemplate | null>(null);
@@ -307,6 +308,13 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
 
     return () => clearTimeout(timeoutId);
   }, [items.map(rx => rx.drugId).join(',')]);
+
+  // A prior "all clear" cross-reactivity result becomes stale the moment the
+  // medication list changes — don't let it keep showing as current.
+  useEffect(() => {
+    setCrossReactChecked(false);
+    setCrossReactWarnings([]);
+  }, [items.map(rx => rx.foundDrug?.genericName || rx.name).join(',')]);
 
   const handleSave = async (printAfterSave = false) => {
     try {
@@ -648,8 +656,10 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                     try {
                       const res = await ehrApi.allergyCheckStructured({ patientId: appointment.patient.id, medications: medNames }, token, slug);
                       setCrossReactWarnings(res.data?.warnings || []);
+                      setCrossReactChecked(true);
                     } catch (e) {
                       console.error(e);
+                      setCrossReactChecked(false);
                     } finally {
                       setCrossReactLoading(false);
                     }
@@ -681,7 +691,12 @@ const PrescriptionsModal: React.FC<PrescriptionsModalProps> = ({ open, onClose, 
                   ))}
                 </div>
               )}
-              {crossReactWarnings.length === 0 && !crossReactLoading && (
+              {crossReactWarnings.length === 0 && !crossReactLoading && crossReactChecked && (
+                <p className="text-xs text-emerald-700 font-medium mt-1 flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" /> No allergy conflicts or cross-reactivity detected for the current medication list.
+                </p>
+              )}
+              {crossReactWarnings.length === 0 && !crossReactLoading && !crossReactChecked && (
                 <p className="text-xs text-violet-600 mt-1">Click to analyze medications against structured allergy records and cross-reactivity rules.</p>
               )}
             </div>
