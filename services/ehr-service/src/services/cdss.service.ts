@@ -4722,7 +4722,7 @@ export class CdssService {
   /**
    * Get dosing recommendations from Python CDSS service
    */
-  async getDosingRecommendation(dosingRequest: any) {
+  async getDosingRecommendation(dosingRequest: any, tenantId?: string) {
     try {
       const responseData = await this.postWithPolicy<any>(
         'dosing_recommendation',
@@ -4739,6 +4739,7 @@ export class CdssService {
         standard_dose: dosingRequest.standard_dose,
         },
         10000,
+        tenantId,
       );
 
       return {

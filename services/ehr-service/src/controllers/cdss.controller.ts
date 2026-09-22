@@ -162,7 +162,7 @@ export class CdssController {
   @ApiOperation({ summary: 'Get medication dosing recommendation' })
   @ApiResponse({ status: 200, description: 'Dosing recommendation provided' })
   async getDosingRecommendation(@Body() dosingRequest: any, @Request() req: RequestWithTenant) {
-    return this.cdssService.getDosingRecommendation(dosingRequest);
+    return this.cdssService.getDosingRecommendation(dosingRequest, req.tenantId);
   }
 
   @Post('labs/interpret')

@@ -77,6 +77,55 @@ class DosingCalculator:
             'renal_adjustment': True,
             'weight_based': False,
             'monitoring': ['electrolytes', 'renal function']
+        },
+        'ceftriaxone': {
+            'standard_dose': '1-2 g',
+            'dosing_interval': 'daily',
+            'renal_adjustment': False,
+            'weight_based': False,
+            'monitoring': ['clinical response', 'renal function if prolonged course']
+        },
+        'paracetamol': {
+            'standard_dose': '500-1000 mg',
+            'dosing_interval': 'q4-6h, max 4g/24h',
+            'renal_adjustment': False,
+            'weight_based': False,
+            'monitoring': ['hepatic function if prolonged/high dose']
+        },
+        'amoxicillin': {
+            'standard_dose': '500-875 mg',
+            'dosing_interval': 'BID or TID',
+            'renal_adjustment': True,
+            'weight_based': False,
+            'monitoring': ['clinical response']
+        },
+        'ciprofloxacin': {
+            'standard_dose': '250-750 mg',
+            'dosing_interval': 'BID',
+            'renal_adjustment': True,
+            'weight_based': False,
+            'monitoring': ['renal function', 'tendon symptoms']
+        },
+        'azithromycin': {
+            'standard_dose': '250-500 mg',
+            'dosing_interval': 'daily',
+            'renal_adjustment': False,
+            'weight_based': False,
+            'monitoring': ['QT interval if cardiac risk factors', 'hepatic function']
+        },
+        'metronidazole': {
+            'standard_dose': '400-500 mg',
+            'dosing_interval': 'q8h',
+            'renal_adjustment': False,
+            'weight_based': False,
+            'monitoring': ['hepatic function', 'neurological symptoms if prolonged']
+        },
+        'ampicillin': {
+            'standard_dose': '1-2 g',
+            'dosing_interval': 'q6h',
+            'renal_adjustment': True,
+            'weight_based': False,
+            'monitoring': ['clinical response', 'renal function']
         }
     }
     
@@ -341,11 +390,25 @@ class DosingCalculator:
                             dose_per_kg = (float(dose_min) + float(dose_max)) / 2
                         else:
                             dose_per_kg = float(dose_range)
-                        
+
                         if patient_weight_kg:
                             standard_dose = patient_weight_kg * dose_per_kg
                         else:
                             standard_dose = None
+                    except:
+                        standard_dose = None
+                elif ' mg' in dose_str or dose_str.endswith('mg'):
+                    # Fixed (non-weight-based) range, e.g. "500-1000 mg" —
+                    # take the midpoint so a real number is returned instead
+                    # of silently falling through to 0 (which reads as "give
+                    # a zero dose" rather than "not weight-based").
+                    try:
+                        dose_range = dose_str.replace('mg', '').strip()
+                        if '-' in dose_range:
+                            dose_min, dose_max = dose_range.split('-')
+                            standard_dose = (float(dose_min) + float(dose_max)) / 2
+                        else:
+                            standard_dose = float(dose_range)
                     except:
                         standard_dose = None
         
