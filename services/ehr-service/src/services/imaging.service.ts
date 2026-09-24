@@ -203,11 +203,15 @@ export class ImagingService {
       orderStatus = 'awaiting_payment';
     }
 
+    // Only ever a real coded concept from the SNOMED autocomplete — never
+    // suspected_diagnosis (free text), which used to fall through here and
+    // get stored verbatim in snomed_concept_id whenever a doctor typed a
+    // diagnosis instead of picking a coded suggestion, mislabeling uncoded
+    // text as if it were a genuine SNOMED CT identifier.
     const conceptCandidate =
       orderData.snomedConceptId ??
       orderData.conceptId ??
       orderData?.snomed?.conceptId ??
-      suspected_diagnosis ??
       null;
 
     let snomedConceptId: string | null = null;
