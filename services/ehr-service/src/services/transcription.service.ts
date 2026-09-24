@@ -9,6 +9,7 @@ import FormData from 'form-data';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createHmac, randomUUID } from 'crypto';
 import { config } from '@umoya/config';
 
 export interface TranscriptionOptions {
@@ -249,11 +250,20 @@ export class TranscriptionService {
     if (requestContext.tenantId) {
       headers['X-Tenant-ID'] = requestContext.tenantId;
     }
-    if (requestContext.authorization) {
-      headers['Authorization'] = requestContext.authorization;
+
+    // The target here is cdss-service, which authenticates inter-service
+    // calls with its own signed JWT (or a shared token, depending on
+    // CDSS_SERVICE_AUTH_MODE) — never the doctor's user JWT, which
+    // cdss-service's service_to_service_auth_middleware rejects outright.
+    const authMode = (process.env.CDSS_SERVICE_AUTH_MODE || 'both').trim().toLowerCase();
+    if (authMode === 'jwt' || authMode === 'both') {
+      const serviceJwt = this.createCdssServiceJwt();
+      if (serviceJwt) {
+        headers['Authorization'] = `Bearer ${serviceJwt}`;
+      }
     }
     const cdssServiceToken = String(process.env.CDSS_SERVICE_TOKEN || '').trim();
-    if (cdssServiceToken) {
+    if ((authMode === 'token' || authMode === 'both') && cdssServiceToken) {
       headers['X-Service-Token'] = cdssServiceToken;
     }
 
@@ -364,6 +374,42 @@ export class TranscriptionService {
       '.ogg': 'audio/ogg',
     };
     return byExt[ext] || 'audio/wav';
+  }
+
+  private createCdssServiceJwt(): string | null {
+    const secret = String(process.env.CDSS_SERVICE_JWT_SECRET || '').trim();
+    if (!secret || secret.length < 24) {
+      return null;
+    }
+    const issuer = process.env.CDSS_SERVICE_AUTH_ISSUER || 'umoya.ehr-service';
+    const audience = process.env.CDSS_SERVICE_AUTH_AUDIENCE || 'umoya.cdss';
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'HS256', typ: 'JWT' };
+    const scopes = ['cdss.api.invoke'];
+    const payload = {
+      iss: issuer,
+      aud: audience,
+      sub: 'ehr-service',
+      iat: now,
+      exp: now + 60,
+      jti: randomUUID(),
+      scope: scopes.join(' '),
+      scopes,
+    };
+    const enc = (obj: Record<string, any>) =>
+      Buffer.from(JSON.stringify(obj))
+        .toString('base64')
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+    const body = `${enc(header)}.${enc(payload)}`;
+    const sig = createHmac('sha256', secret)
+      .update(body)
+      .digest('base64')
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+    return `${body}.${sig}`;
   }
 
   private resolveLocalWhisperUrl(): string {
