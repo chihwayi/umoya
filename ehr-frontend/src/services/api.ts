@@ -3255,9 +3255,9 @@ export const ehrApi = {
   },
 
   getConsentTemplates: async (params: any, token: string, tenantSlug: string) => {
-    const response = await ehrAxios.get('/consent-templates', {
+    const response = await ehrAxios.get('/consents/templates', {
       params,
-      headers: { 
+      headers: {
         'X-Tenant-ID': tenantSlug,
         'Authorization': `Bearer ${token}`
       }
