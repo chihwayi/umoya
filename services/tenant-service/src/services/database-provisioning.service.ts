@@ -21960,7 +21960,29 @@ RECOMMENDATIONS:
     return [
       `ALTER TABLE patients ADD COLUMN IF NOT EXISTS ethnicity VARCHAR(100)`,
       `ALTER TABLE patients ADD COLUMN IF NOT EXISTS race VARCHAR(100)`,
-      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS disability_status TEXT`,
+      `ALTER TABLE patients ADD COLUMN IF NOT EXISTS disability_status BOOLEAN DEFAULT false`,
+      // Self-heal: on any tenant provisioned before this fix, the column
+      // above was a no-op (ADD COLUMN IF NOT EXISTS) against an existing
+      // TEXT column — the entity declares disabilityStatus as boolean, so
+      // every falsy value stored as the text "0" read back as JS-truthy,
+      // showing every patient as having a disability regardless of reality.
+      `DO $$
+       BEGIN
+         IF (SELECT data_type FROM information_schema.columns
+             WHERE table_schema = current_schema() AND table_name = 'patients'
+               AND column_name = 'disability_status') = 'text' THEN
+           ALTER TABLE patients
+             ALTER COLUMN disability_status DROP DEFAULT,
+             ALTER COLUMN disability_status TYPE BOOLEAN USING (
+               CASE
+                 WHEN disability_status IS NULL THEN false
+                 WHEN lower(disability_status) IN ('1','true','t','yes') THEN true
+                 ELSE false
+               END
+             ),
+             ALTER COLUMN disability_status SET DEFAULT false;
+         END IF;
+       END $$`,
       `ALTER TABLE patients ADD COLUMN IF NOT EXISTS preferred_language TEXT`,
       `ALTER TABLE patients ADD COLUMN IF NOT EXISTS nationality VARCHAR(100)`,
       `ALTER TABLE patients ADD COLUMN IF NOT EXISTS country_of_birth VARCHAR(100)`,
