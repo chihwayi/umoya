@@ -15,6 +15,7 @@ import ModalPortal from '../components/ModalPortal';
 import CreatePatientModal from '../components/CreatePatientModal';
 import CreateAppointmentModal from '../components/CreateAppointmentModal';
 import { useNotification } from '../components/GlobalNotification';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 import { formatDateToDDMMYYYY, formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 import VitalsPanel from '../components/VitalsPanel';
 import VitalsInsightSummary from '../components/VitalsInsightSummary';
@@ -2870,15 +2871,17 @@ const NurseDashboard: React.FC = () => {
               </button>
               <button
                 type="button"
+                ref={noNativeButtonBackground}
                 onClick={() => setActiveTab('queue')}
-                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20"
+                className="appearance-none inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20"
               >
                 <Users className="h-4 w-4" /> Patient queue
               </button>
               <button
                 type="button"
+                ref={noNativeButtonBackground}
                 onClick={() => setActiveTab('calendar')}
-                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20"
+                className="appearance-none inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20"
               >
                 <Calendar className="h-4 w-4" /> Schedule
               </button>
@@ -3330,10 +3333,11 @@ const NurseDashboard: React.FC = () => {
 
               {/* AI Guideline Toggle */}
               <button
+                ref={noNativeButtonBackground}
                 onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
-                  showGuidelineSearch 
-                    ? 'bg-blue-100 text-blue-700' 
+                className={`appearance-none flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+                  showGuidelineSearch
+                    ? 'bg-blue-100 text-blue-700'
                     : 'bg-white/50 hover:bg-slate-100 text-slate-700'
                 }`}
                 title="AI Clinical Guidelines"
@@ -4925,7 +4929,7 @@ const NurseDashboard: React.FC = () => {
                 </div>
                 <h3 className="text-lg font-bold text-slate-900">Record Vitals</h3>
               </div>
-              <button onClick={() => setShowVitalsModal(false)} className="p-2 rounded-lg hover:bg-white/60">
+              <button ref={noNativeButtonBackground} onClick={() => setShowVitalsModal(false)} className="appearance-none p-2 rounded-lg hover:bg-white/60">
                 <X className="w-5 h-5 text-slate-600" />
               </button>
             </div>
@@ -4956,7 +4960,7 @@ const NurseDashboard: React.FC = () => {
                 </div>
                 <h3 className="text-lg font-bold text-slate-900">Triage Assessment</h3>
               </div>
-              <button onClick={() => setShowAssessmentModal(false)} className="p-2 rounded-lg hover:bg-white/60">
+              <button ref={noNativeButtonBackground} onClick={() => setShowAssessmentModal(false)} className="appearance-none p-2 rounded-lg hover:bg-white/60">
                 <X className="w-5 h-5 text-slate-600" />
               </button>
             </div>
@@ -5125,7 +5129,7 @@ const NurseDashboard: React.FC = () => {
                 </div>
                 <h3 className="text-lg font-bold text-slate-900">Execute Order</h3>
               </div>
-              <button onClick={() => setShowExecuteOrderModal(false)} className="p-2 rounded-lg hover:bg-white/60">
+              <button ref={noNativeButtonBackground} onClick={() => setShowExecuteOrderModal(false)} className="appearance-none p-2 rounded-lg hover:bg-white/60">
                 <X className="w-5 h-5 text-slate-600" />
               </button>
             </div>
