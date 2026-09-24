@@ -14,7 +14,7 @@ export class StoreroomService {
   // ── Locations ──────────────────────────────────────────────────────────────
 
   async listLocations(tenantDb: any): Promise<any[]> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT l.*,
               u.first_name || ' ' || u.last_name AS manager_name
          FROM inventory_locations l
@@ -25,7 +25,7 @@ export class StoreroomService {
   }
 
   async createLocation(tenantDb: any, dto: CreateLocationDto): Promise<any> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `INSERT INTO inventory_locations
          (name, code, location_type, parent_id, manager_id, is_dispensing_point, notes)
        VALUES ($1,$2,$3,$4,$5,$6,$7)
@@ -61,7 +61,7 @@ export class StoreroomService {
   }
 
   async getLocationById(tenantDb: any, id: string): Promise<any> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT * FROM inventory_locations WHERE id = $1`, [id],
     );
     if (!rows[0]) throw new NotFoundException(`Location ${id} not found`);
@@ -84,7 +84,7 @@ export class StoreroomService {
       vals.push(`%${filters.search}%`); i++;
     }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT c.*, d.generic_name AS drug_generic_name
          FROM storeroom_catalog c
          LEFT JOIN drugs d ON d.id = c.drug_id
@@ -96,7 +96,7 @@ export class StoreroomService {
   }
 
   async createCatalogItem(tenantDb: any, dto: CreateCatalogItemDto): Promise<any> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `INSERT INTO storeroom_catalog
          (name, code, category, subcategory, unit_of_measure, drug_id,
           atc_code, inn_name, drug_strength, drug_form, who_eml,
@@ -151,7 +151,7 @@ export class StoreroomService {
   }
 
   async getCatalogItemById(tenantDb: any, id: string): Promise<any> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT * FROM storeroom_catalog WHERE id = $1`, [id],
     );
     if (!rows[0]) throw new NotFoundException(`Catalog item ${id} not found`);
@@ -159,7 +159,7 @@ export class StoreroomService {
   }
 
   async getCatalogByDrugId(tenantDb: any, drugId: string): Promise<any | null> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT * FROM storeroom_catalog WHERE drug_id = $1 AND is_active = true LIMIT 1`,
       [drugId],
     );
@@ -169,7 +169,7 @@ export class StoreroomService {
   async getCatalogByName(tenantDb: any, name: string, category?: string): Promise<any | null> {
     const cond = category ? `AND category = $2` : '';
     const vals = category ? [name, category] : [name];
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT * FROM storeroom_catalog
         WHERE name ILIKE $1 AND is_active = true ${cond}
         LIMIT 1`,
@@ -190,7 +190,7 @@ export class StoreroomService {
     let i = 2;
     if (filters.category) { conds.push(`c.category = $${i++}`); vals.push(filters.category); }
     if (filters.lowStockOnly) { conds.push(`ls.quantity_on_hand <= ls.min_level`); }
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT
           ls.*,
           c.name AS item_name, c.category, c.unit_of_measure,
@@ -214,7 +214,7 @@ export class StoreroomService {
   }
 
   async getStockByItem(tenantDb: any, catalogId: string): Promise<any[]> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT
           ls.*,
           l.name AS location_name, l.code AS location_code, l.location_type,
@@ -240,7 +240,7 @@ export class StoreroomService {
     item_name?: string;
     quantity_check?: { controlled: boolean; requested: number; available: number; exceeds_stock: boolean };
   }> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT
           COALESCE(SUM(ls.quantity_on_hand), 0)                       AS quantity_on_hand,
           COALESCE(SUM(ls.quantity_on_hand - ls.quantity_reserved), 0) AS quantity_available,
@@ -366,7 +366,7 @@ export class StoreroomService {
       [quantity, batches[0].id],
     );
 
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `INSERT INTO stock_reservations
          (location_id, catalog_id, batch_id, prescription_id, patient_id,
           reserved_by, quantity, expires_at)
@@ -398,7 +398,7 @@ export class StoreroomService {
   }
 
   async releaseReservationsByPrescription(tenantDb: any, prescriptionId: string): Promise<void> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `UPDATE stock_reservations
           SET status = 'released', released_at = NOW()
         WHERE prescription_id = $1 AND status = 'active'
@@ -416,7 +416,7 @@ export class StoreroomService {
   }
 
   async expireStaleReservations(tenantDb: any): Promise<number> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `UPDATE stock_reservations
           SET status = 'expired', released_at = NOW()
         WHERE status = 'active' AND expires_at < NOW()
@@ -621,7 +621,7 @@ export class StoreroomService {
     );
     const receiptNumber = `SRR-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
 
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `INSERT INTO storeroom_supplier_receipts
          (receipt_number, location_id, supplier_id, po_reference, received_by, notes)
        VALUES ($1,$2,$3,$4,$5,$6)
@@ -663,7 +663,7 @@ export class StoreroomService {
     );
     const requestNumber = `SR-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
 
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `INSERT INTO stock_requests
          (request_number, requesting_location_id, fulfilling_location_id,
           requested_by, priority, notes)
@@ -700,7 +700,7 @@ export class StoreroomService {
       vals.push(filters.locationId); i++;
     }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT r.*,
               rl.name AS requesting_location_name,
               fl.name AS fulfilling_location_name,
@@ -784,7 +784,7 @@ export class StoreroomService {
     );
     const transferNumber = `ST-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
 
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `INSERT INTO stock_transfers
          (transfer_number, request_id, from_location_id, to_location_id, transferred_by, notes)
        VALUES ($1,$2,$3,$4,$5,$6)
@@ -826,7 +826,7 @@ export class StoreroomService {
     if (filters.from) { conds.push(`t.from_location_id = $${i++}`); vals.push(filters.from); }
     if (filters.to) { conds.push(`t.to_location_id = $${i++}`); vals.push(filters.to); }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT t.*,
               fl.name AS from_location_name, tl.name AS to_location_name,
               u.first_name || ' ' || u.last_name AS transferred_by_name,
@@ -946,7 +946,7 @@ export class StoreroomService {
     if (filters.to)   { conds.push(`performed_at <= $${i++}`); vals.push(filters.to); }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
     const trunc = filters.groupBy ?? 'week';
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT DATE_TRUNC('${trunc}', performed_at) AS period,
               catalog_id, location_id,
               SUM(quantity_used) AS total_used,
@@ -961,7 +961,7 @@ export class StoreroomService {
   }
 
   async getLowStockAlerts(tenantDb: any): Promise<any[]> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT a.*, c.name AS item_name, l.name AS location_name
          FROM storeroom_alerts a
          LEFT JOIN storeroom_catalog c ON c.id = a.catalog_id
@@ -988,7 +988,7 @@ export class StoreroomService {
       params.push(locationId);
       locationClause = `AND ls.location_id = $${params.length}`;
     }
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT
          ls.id            AS batch_id,
          ls.location_id,
@@ -1019,7 +1019,7 @@ export class StoreroomService {
     locationId: string,
     catalogId: string,
   ): Promise<any[]> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT
          ls.id         AS batch_id,
          ls.batch_number,
@@ -1060,7 +1060,7 @@ export class StoreroomService {
   }
 
   async getEmergencyKitStatus(tenantDb: any, maternityLocationId: string): Promise<any[]> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT
          eki.id            AS kit_item_id,
          eki.catalog_id,
@@ -1183,7 +1183,7 @@ export class StoreroomService {
     createdBy: string,
     autoGenerated = false,
   ): Promise<string> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `INSERT INTO storeroom_purchase_orders (supplier_id, created_by, auto_generated, status)
        VALUES ($1, $2, $3, 'draft') RETURNING id`,
       [supplierId, createdBy, autoGenerated],

@@ -178,7 +178,7 @@ export class StoreroomIntelligenceService {
   }
 
   async detectAnomalies(tenantDb: any): Promise<AnomalyItem[]> {
-    const { rows } = await tenantDb.query(
+    const rows = await tenantDb.query(
       `SELECT
           cl.catalog_id, cl.location_id,
           sc.name AS item_name, il.name AS location_name,

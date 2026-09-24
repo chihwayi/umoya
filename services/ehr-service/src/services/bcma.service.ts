@@ -23,7 +23,7 @@ export class BcmaService {
     if (!this.storeroomService) return null;
 
     if (admissionId) {
-      const { rows } = await tenantDb.query(
+      const rows = await tenantDb.query(
         `SELECT ward_location_id FROM admissions WHERE id = $1 LIMIT 1`,
         [admissionId],
       );
@@ -31,7 +31,7 @@ export class BcmaService {
     }
 
     if (wardName) {
-      const { rows } = await tenantDb.query(
+      const rows = await tenantDb.query(
         `SELECT id FROM inventory_locations WHERE name = $1 AND location_type = 'ward' LIMIT 1`,
         [wardName],
       );
@@ -50,7 +50,7 @@ export class BcmaService {
     if (isUuid) {
       locationId = wardIdentifier;
     } else {
-      const { rows } = await tenantDb.query(
+      const rows = await tenantDb.query(
         `SELECT id FROM inventory_locations WHERE name = $1 AND location_type = 'ward' LIMIT 1`,
         [wardIdentifier],
       );
