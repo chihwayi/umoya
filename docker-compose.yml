@@ -227,9 +227,9 @@ services:
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
-      - HF_HOME=/app/data/hf_cache
-      - TRANSFORMERS_CACHE=/app/data/hf_cache
-      - SENTENCE_TRANSFORMERS_HOME=/app/data/hf_cache
+      - HF_HOME=/opt/hf_cache
+      - TRANSFORMERS_CACHE=/opt/hf_cache
+      - SENTENCE_TRANSFORMERS_HOME=/opt/hf_cache
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
       - HF_TOKEN=${HF_TOKEN}
@@ -323,9 +323,9 @@ services:
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
-      - HF_HOME=/app/data/hf_cache
-      - TRANSFORMERS_CACHE=/app/data/hf_cache
-      - SENTENCE_TRANSFORMERS_HOME=/app/data/hf_cache
+      - HF_HOME=/opt/hf_cache
+      - TRANSFORMERS_CACHE=/opt/hf_cache
+      - SENTENCE_TRANSFORMERS_HOME=/opt/hf_cache
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
       - HF_TOKEN=${HF_TOKEN}

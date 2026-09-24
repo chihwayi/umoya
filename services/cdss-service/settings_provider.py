@@ -145,6 +145,31 @@ class SettingsProvider:
                 );
                 """
             )
+            # Self-heal: these 3 tables were, on at least one deployment,
+            # created by an older code path without their PRIMARY KEY.
+            # CREATE TABLE IF NOT EXISTS is a no-op against an existing
+            # table regardless of its constraints, so a drifted table
+            # silently breaks every ON CONFLICT upsert below forever
+            # unless the constraint is backfilled explicitly like this.
+            for table, pk_col in (
+                ("cdss_ai_vendor_registry", "vendor_id"),
+                ("cdss_ai_usecase_policies", "use_case"),
+                ("cdss_tenant_policies", "tenant_id"),
+            ):
+                cur.execute(
+                    """
+                    DO $$
+                    BEGIN
+                      IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conrelid = %(table)s::regclass AND contype = 'p'
+                      ) THEN
+                        EXECUTE format('ALTER TABLE %%I ADD PRIMARY KEY (%%I)', %(table)s, %(pk_col)s);
+                      END IF;
+                    END $$;
+                    """,
+                    {"table": table, "pk_col": pk_col},
+                )
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_cdss_model_registry_status ON cdss_model_registry(status);"
             )
