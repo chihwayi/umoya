@@ -202,8 +202,11 @@ export class PatientConsentService {
       throw new BadRequestException(`Cannot sign consent with status: ${consent.status}`);
     }
 
-    // Create signature
-    const signature = signatureRepo.create({
+    // ConsentSignature maps consent_id via both a plain @Column and a
+    // @ManyToOne/@JoinColumn on the same physical column. create()+save()
+    // lets the (never-populated) relation win and null out consent_id on
+    // insert; insert() operates on raw columns only, bypassing that.
+    await signatureRepo.insert({
       consentId: id,
       signerRole: signatureData.signerRole,
       signerId: userId,
@@ -218,8 +221,6 @@ export class PatientConsentService {
       deviceInfo: signatureData.deviceInfo,
       verificationCode: signatureData.verificationCode,
     });
-
-    await signatureRepo.save(signature);
 
     // Check if all required signatures are collected
     const allSignatures = await signatureRepo.find({ where: { consentId: id } });
