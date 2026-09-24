@@ -4970,9 +4970,11 @@ async def transcribe_audio_basic(
     _scan_upload_or_cleanup(temp_path, "audio")
     
     try:
-        # Transcribe
-        transcription_result = voice_scribe.transcribe_audio(temp_path)
-        
+        # Transcribe — run_in_threadpool so this CPU-bound call doesn't block
+        # the event loop (and every other request cdss-service is serving,
+        # including /health) for the full duration of the transcription.
+        transcription_result = await run_in_threadpool(voice_scribe.transcribe_audio, temp_path)
+
         if "error" in transcription_result:
              raise HTTPException(status_code=500, detail=transcription_result["error"])
         
