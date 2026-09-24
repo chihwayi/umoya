@@ -175,10 +175,11 @@ export class PatientConsentService {
     const repository = tenantDb.getRepository(PatientConsent);
     const consent = await this.getConsentById(id, tenantDb);
 
-    consent.presentedBy = presentedBy;
-    consent.presentedAt = new Date();
-
-    const updated = await repository.save(consent);
+    // getConsentById loads relations: ['signatures', ...]; saving that full
+    // graph back re-persists stale loaded signatures with no consent_id in
+    // scope. A scoped update() only ever touches this entity's own columns.
+    await repository.update(id, { presentedBy, presentedAt: new Date() });
+    const updated = await this.getConsentById(id, tenantDb);
 
     await this.logAudit(id, 'presented', presentedBy, ipAddress, userAgent, {}, tenantDb);
 
@@ -250,7 +251,18 @@ export class PatientConsentService {
       }
     }
 
-    const updated = await consentRepo.save(consent);
+    // consent was loaded with relations: ['signatures', ...] in
+    // getConsentById above, so save()-ing the full graph back re-persists
+    // its (now-stale) loaded signatures too — including the one just
+    // inserted, but without a consent_id in scope, tripping the same
+    // NOT NULL violation the signature insert above was fixed for.
+    // A scoped update() only ever touches this entity's own columns.
+    await consentRepo.update(id, {
+      status: consent.status,
+      signedAt: consent.signedAt,
+      consentDate: consent.consentDate,
+    });
+    const updated = await this.getConsentById(id, tenantDb);
 
     await this.logAudit(
       id,
@@ -281,11 +293,12 @@ export class PatientConsentService {
       throw new BadRequestException(`Cannot decline consent with status: ${consent.status}`);
     }
 
-    consent.status = ConsentStatus.DECLINED;
-    consent.declinedAt = new Date();
-    consent.declineReason = declineData.reason;
-
-    const updated = await repository.save(consent);
+    await repository.update(id, {
+      status: ConsentStatus.DECLINED,
+      declinedAt: new Date(),
+      declineReason: declineData.reason,
+    });
+    const updated = await this.getConsentById(id, tenantDb);
 
     await this.logAudit(
       id,
@@ -316,12 +329,13 @@ export class PatientConsentService {
       throw new BadRequestException('Only signed consents can be revoked');
     }
 
-    consent.status = ConsentStatus.REVOKED;
-    consent.revokedAt = new Date();
-    consent.revocationReason = revokeData.reason;
-    consent.revokedBy = userId;
-
-    const updated = await repository.save(consent);
+    await repository.update(id, {
+      status: ConsentStatus.REVOKED,
+      revokedAt: new Date(),
+      revocationReason: revokeData.reason,
+      revokedBy: userId,
+    });
+    const updated = await this.getConsentById(id, tenantDb);
 
     await this.logAudit(
       id,
@@ -345,10 +359,11 @@ export class PatientConsentService {
     }
 
     if (consent.validUntil && new Date() > consent.validUntil) {
-      // Auto-expire
+      // Auto-expire — scoped update(), not save(consent): consent carries
+      // loaded relations (signatures) from getConsentById that must not be
+      // re-persisted as part of this status change.
       const repository = tenantDb.getRepository(PatientConsent);
-      consent.status = ConsentStatus.EXPIRED;
-      await repository.save(consent);
+      await repository.update(id, { status: ConsentStatus.EXPIRED });
 
       return { isValid: false, reason: 'Consent has expired' };
     }
