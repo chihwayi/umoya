@@ -371,6 +371,66 @@ export class CarePlanService {
     return this.updateGoal(goalId, { status: 'achieved' }, tenantDb);
   }
 
+  // patientId, when passed, scopes the goal lookup to that patient's own
+  // care plan — same rationale as updateCarePlan's patientId param.
+  async reportGoalProgress(
+    carePlanId: string,
+    goalId: string,
+    progressData: { currentValue?: number; notes?: string },
+    tenantDb: DataSource,
+    patientId?: string,
+  ) {
+    this.ensureTenantDb(tenantDb);
+
+    const goalRows = patientId
+      ? await tenantDb.query(
+          `SELECT g.* FROM care_plan_goals g
+           JOIN care_plans p ON p.id = g.care_plan_id
+           WHERE g.id = $1 AND g.care_plan_id = $2 AND p.patient_id = $3`,
+          [goalId, carePlanId, patientId],
+        )
+      : await tenantDb.query(
+          `SELECT * FROM care_plan_goals WHERE id = $1 AND care_plan_id = $2`,
+          [goalId, carePlanId],
+        );
+    if (goalRows.length === 0) {
+      throw new NotFoundException('Goal not found');
+    }
+    const goal = goalRows[0];
+
+    const updates: Record<string, any> = {
+      currentValue: progressData.currentValue,
+      notes: progressData.notes,
+    };
+
+    // Auto-achieve when a numeric target exists and the reported value has
+    // reached it. Assumes a "higher is better" target (e.g. steps walked,
+    // kg lost, doses taken) — the schema has no direction flag, so this is
+    // a best-effort default; explicit achievement stays available via
+    // POST goals/:goalId/achieve for goals this heuristic doesn't fit.
+    let goalAchieved = false;
+    const target = parseFloat(goal.target_value);
+    const current = parseFloat(String(progressData.currentValue));
+    if (!Number.isNaN(target) && !Number.isNaN(current) && current >= target && goal.status !== 'achieved') {
+      updates.status = 'achieved';
+      goalAchieved = true;
+    }
+
+    const updatedGoal = await this.updateGoal(goalId, updates, tenantDb, patientId);
+
+    let carePlanCompleted = false;
+    if (goalAchieved) {
+      const allGoals = await this.getGoals(carePlanId, tenantDb);
+      const allAchieved = allGoals.length > 0 && allGoals.every((g: any) => g.status === 'achieved');
+      if (allAchieved) {
+        await this.completeCarePlan(carePlanId, tenantDb);
+        carePlanCompleted = true;
+      }
+    }
+
+    return { goal: updatedGoal, goalAchieved, carePlanCompleted };
+  }
+
   // ==================== INTERVENTIONS MANAGEMENT ====================
 
   async addIntervention(planId: string, interventionData: any, tenantDb: DataSource) {

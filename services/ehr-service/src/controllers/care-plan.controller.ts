@@ -171,6 +171,20 @@ export class CarePlanController {
     return this.carePlanService.addGoal(id, goalData, req.tenantDb);
   }
 
+  @Post(':id/goals/:goalId/progress')
+  @ApiOperation({ summary: 'Report progress toward a goal' })
+  @ApiParam({ name: 'id', description: 'Care Plan ID' })
+  @ApiParam({ name: 'goalId', description: 'Goal ID' })
+  @ApiResponse({ status: 201, description: 'Progress recorded successfully' })
+  async reportGoalProgress(
+    @Param('id') id: string,
+    @Param('goalId') goalId: string,
+    @Body() progressData: { currentValue?: number; notes?: string },
+    @Request() req: RequestWithTenant,
+  ) {
+    return this.carePlanService.reportGoalProgress(id, goalId, progressData, req.tenantDb);
+  }
+
   @Put('goals/:goalId')
   @ApiOperation({ summary: 'Update goal' })
   @ApiParam({ name: 'goalId', description: 'Goal ID' })
