@@ -2186,6 +2186,7 @@ def _run_transcribe_job(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError("Voice service unavailable")
     temp_path = str(payload.get("temp_path") or "")
     language = payload.get("language")
+    prompt = payload.get("prompt")
     generate_soap = bool(payload.get("generate_soap", True))
     filename = str(payload.get("filename") or "audio.wav")
     tenant_key = str(payload.get("tenant_id") or "public")
@@ -2194,7 +2195,7 @@ def _run_transcribe_job(payload: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError("Missing transcription temp file path")
 
     try:
-        transcription_result = voice_scribe.transcribe_audio(temp_path, language=language)
+        transcription_result = voice_scribe.transcribe_audio(temp_path, language=language, initial_prompt=prompt)
         if "error" in transcription_result:
             raise RuntimeError(transcription_result["error"])
         result: Dict[str, Any] = {
@@ -3468,6 +3469,7 @@ async def transcribe_audio(
     file: UploadFile = File(...),
     generate_soap: bool = True,
     language: Optional[str] = Form(None),
+    prompt: Optional[str] = Form(None),
     async_job: bool = Form(False),
 ):
     """
@@ -3514,6 +3516,7 @@ async def transcribe_audio(
                 "content_type": upload_meta["content_type"],
                 "size_bytes": upload_meta["size_bytes"],
                 "language": language,
+                "prompt": prompt,
                 "generate_soap": generate_soap,
             },
         )
@@ -3530,6 +3533,7 @@ async def transcribe_audio(
                 "content_type": upload_meta["content_type"],
                 "size_bytes": upload_meta["size_bytes"],
                 "language": language,
+                "prompt": prompt,
                 "generate_soap": generate_soap,
             },
         )

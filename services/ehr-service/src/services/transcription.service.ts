@@ -240,6 +240,10 @@ export class TranscriptionService {
       if (options.temperature !== undefined) {
         formData.append('temperature', options.temperature.toString());
       }
+
+      if (options.prompt) {
+        formData.append('prompt', options.prompt);
+      }
     }
 
     this.logger.log(`Sending transcription request to ${targetUrl}`);

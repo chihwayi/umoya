@@ -123,20 +123,41 @@ class VoiceScribe:
             ),
         }
 
-    def transcribe_audio(self, audio_path: str, language: Optional[str] = None) -> Dict[str, Any]:
+    # Biases Whisper's decoding toward clinical vocabulary it otherwise
+    # resolves to a homophone (e.g. a drug name -> "MRI", "pupils" -> "pulse").
+    # faster-whisper feeds this as prior context, not a literal transcript
+    # prefix, so it nudges spelling/word choice without appearing in the output.
+    DEFAULT_CLINICAL_PROMPT = (
+        "Medical consultation between a doctor and patient. Clinical terms: "
+        "blood pressure, pulse, temperature, oxygen saturation, pupils equal "
+        "and reactive to light, blurred vision, headache, nausea, vomiting, "
+        "dizziness, hypertension, diabetes, paracetamol, amlodipine, "
+        "ibuprofen, metformin, milligrams, tablets, follow-up, diagnosis, "
+        "symptoms, examination, prescription, referral."
+    )
+
+    def transcribe_audio(
+        self,
+        audio_path: str,
+        language: Optional[str] = None,
+        initial_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Transcribe audio file to text.
         """
         if not self.model:
             return {"error": "Whisper model not initialized"}
-        
+
         try:
             # Transcribe
             # language=None enables auto-detection
             # Map 'auto' to None for Whisper
             whisper_lang = None if language == 'auto' else language
-            
-            segments, info = self.model.transcribe(audio_path, beam_size=5, language=whisper_lang)
+            prompt = initial_prompt if initial_prompt else self.DEFAULT_CLINICAL_PROMPT
+
+            segments, info = self.model.transcribe(
+                audio_path, beam_size=5, language=whisper_lang, initial_prompt=prompt,
+            )
             
             transcript_text = ""
             for segment in segments:
