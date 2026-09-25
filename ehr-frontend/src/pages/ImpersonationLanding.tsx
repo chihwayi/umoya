@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
+import { roleToRoute } from '../utils/roleRouting';
 
 /**
  * Consumes a super-admin impersonation token and establishes a tenant staff
@@ -11,17 +12,6 @@ import { v4 as uuidv4 } from 'uuid';
  * (15 min) and carries an `impersonation` claim; an on-screen banner flag is
  * stored so the EHR shows the session is an admin impersonation.
  */
-const roleRoute = (slug: string, role: string): string => {
-  switch (role) {
-    case 'doctor': return `/ehr/${slug}/doctor`;
-    case 'radiologist': return `/ehr/${slug}/radiologist`;
-    case 'lab_tech':
-    case 'lab_technician': return `/ehr/${slug}/lab`;
-    case 'nurse':
-    case 'nurse_accounts': return `/ehr/${slug}/nurse`;
-    default: return `/ehr/${slug}/dashboard`;
-  }
-};
 
 const ImpersonationLanding: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -68,7 +58,7 @@ const ImpersonationLanding: React.FC = () => {
 
       // Strip the token from the URL before navigating away.
       window.history.replaceState({}, '', window.location.pathname);
-      navigate(roleRoute(tenantSlug, user.role), { replace: true });
+      navigate(roleToRoute(tenantSlug, user.role), { replace: true });
     } catch (e) {
       setError('Invalid impersonation token');
     }

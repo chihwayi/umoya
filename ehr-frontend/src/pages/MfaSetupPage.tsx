@@ -19,7 +19,7 @@ const MfaSetupPage: React.FC = () => {
     if (!tenantSlug) return;
     if (!token && tempToken) return;
     if (!token) {
-      navigate(`/ehr/${tenantSlug}`);
+      navigate(`/ehr/${tenantSlug}`, { replace: true });
       return;
     }
 
@@ -52,7 +52,7 @@ const MfaSetupPage: React.FC = () => {
       if (response?.data?.user) localStorage.setItem('ehr_user', JSON.stringify(response.data.user));
       localStorage.removeItem('ehr_temp_token');
       showSuccess('MFA verified', 'Your session is protected.');
-      navigate(`/ehr/${tenantSlug}/dashboard`);
+      navigate(`/ehr/${tenantSlug}/dashboard`, { replace: true });
     } catch (err: any) {
       showError('Invalid code', err?.response?.data?.message || 'Check your authenticator code and try again.');
     } finally {
