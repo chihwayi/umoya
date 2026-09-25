@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   TestTube,
   Clock,
@@ -265,7 +266,8 @@ const LabDashboard: React.FC = () => {
   const { showSuccess, showError } = useNotification();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'pending' | 'in-progress' | 'completed' | 'quality'>('pending');
+  const LAB_TABS = ['pending', 'in-progress', 'completed', 'quality'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', LAB_TABS, 'pending');
   const [pendingOrders, setPendingOrders] = useState<LabOrder[]>([]);
   const [inProgressOrders, setInProgressOrders] = useState<LabOrder[]>([]);
   const [completedOrders, setCompletedOrders] = useState<LabOrder[]>([]);
