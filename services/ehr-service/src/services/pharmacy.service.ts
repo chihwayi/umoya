@@ -633,16 +633,18 @@ export class PharmacyService {
 
           await queryRunner.query(
             `INSERT INTO pharmacy_receipt_items (
-              receipt_id, inventory_id, quantity_received, quantity_accepted,
-              quantity_rejected, unit_cost, condition, notes, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
+              receipt_id, purchase_order_item_id, drug_id, batch_number, expiry_date,
+              manufacturing_date, quantity_received, unit_cost, condition, notes, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
             [
               receipt.id,
-              inventoryId,
+              item.purchaseOrderItemId ?? null,
+              item.drugId,
+              item.batchNumber ?? null,
+              item.expiryDate,
+              item.manufacturingDate ?? null,
               item.quantityReceived,
-              item.quantityReceived, // quantityAccepted = quantityReceived (all accepted by default)
-              0, // quantityRejected = 0 (all accepted by default)
-              item.unitCost ?? null,
+              item.unitCost,
               item.condition ?? 'good',
               item.notes ?? null,
             ],
@@ -749,9 +751,9 @@ export class PharmacyService {
       throw new NotFoundException(`Receipt ${id} not found`);
     }
     const items = await tenantDb.query(
-      `SELECT ri.*, pi.name as inventory_name, pi.sku
+      `SELECT ri.*, d.generic_name as drug_generic_name, d.brand_names as drug_brand_names
        FROM pharmacy_receipt_items ri
-       LEFT JOIN pharmacy_inventory pi ON pi.id = ri.inventory_id
+       LEFT JOIN drugs d ON d.id = ri.drug_id
        WHERE ri.receipt_id = $1
        ORDER BY ri.created_at ASC`,
       [id],
