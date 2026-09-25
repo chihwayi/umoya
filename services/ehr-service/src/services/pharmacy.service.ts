@@ -53,6 +53,12 @@ export class PharmacyService {
     }
   }
 
+  private generateDocumentNumber(prefix: string): string {
+    const ts = Date.now().toString(36).toUpperCase();
+    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `${prefix}-${ts}-${rand}`;
+  }
+
   private camelToSnake(value: string): string {
     return value.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
   }
@@ -192,13 +198,13 @@ export class PharmacyService {
         COUNT(DISTINCT po.id)::int as total_orders,
         COUNT(DISTINCT CASE WHEN po.status = 'ordered' THEN po.id END)::int as pending_orders,
         COUNT(DISTINCT CASE WHEN po.status = 'received' THEN po.id END)::int as completed_orders,
-        COALESCE(SUM(poi.expected_total_cost), 0)::numeric as total_spent,
+        COALESCE(SUM(poi.total_cost), 0)::numeric as total_spent,
         COALESCE(AVG(order_totals.total), 0)::numeric as avg_order_value,
         MAX(po.order_date) as last_order_date
        FROM pharmacy_purchase_orders po
        LEFT JOIN pharmacy_purchase_order_items poi ON poi.purchase_order_id = po.id
        LEFT JOIN (
-         SELECT purchase_order_id, SUM(expected_total_cost) as total
+         SELECT purchase_order_id, SUM(total_cost) as total
          FROM pharmacy_purchase_order_items
          GROUP BY purchase_order_id
        ) order_totals ON order_totals.purchase_order_id = po.id
@@ -213,7 +219,7 @@ export class PharmacyService {
         po.order_number, 
         po.order_date, 
         po.status,
-        COALESCE(SUM(poi.expected_total_cost), 0)::numeric as total_amount
+        COALESCE(SUM(poi.total_cost), 0)::numeric as total_amount
        FROM pharmacy_purchase_orders po
        LEFT JOIN pharmacy_purchase_order_items poi ON poi.purchase_order_id = po.id
        WHERE po.supplier_id = $1
@@ -454,11 +460,12 @@ export class PharmacyService {
     try {
       const [order] = await queryRunner.query(
         `INSERT INTO pharmacy_purchase_orders (
-          supplier_id, order_date, expected_delivery_date, status, notes,
+          order_number, supplier_id, order_date, expected_delivery_date, status, notes,
           created_by, created_at, updated_at
-        ) VALUES ($1, $2, $3, COALESCE($4, 'draft'), $5, $6, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, COALESCE($5, 'draft'), $6, $7, NOW(), NOW())
         RETURNING *`,
         [
+          this.generateDocumentNumber('PO'),
           dto.supplierId,
           dto.orderDate ?? new Date().toISOString(),
           dto.expectedDeliveryDate ?? null,
@@ -470,17 +477,27 @@ export class PharmacyService {
 
       if (dto.items && dto.items.length > 0) {
         for (const item of dto.items) {
+          let resolvedDrugId = item.drugId || null;
+          if (!resolvedDrugId && item.inventoryId) {
+            const [inv] = await queryRunner.query(
+              `SELECT drug_id FROM pharmacy_inventory WHERE id = $1`,
+              [item.inventoryId],
+            );
+            resolvedDrugId = inv?.drug_id ?? null;
+          }
+          if (!resolvedDrugId) {
+            throw new BadRequestException('Each purchase order item requires a drugId or an inventoryId that resolves to a drug');
+          }
           await queryRunner.query(
             `INSERT INTO pharmacy_purchase_order_items (
-              purchase_order_id, inventory_id, quantity_ordered, unit_cost,
-              expected_total_cost, notes, created_at, updated_at
+              purchase_order_id, drug_id, rxnorm_code, quantity_ordered, unit_cost, notes, created_at, updated_at
             ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
             [
               order.id,
-              item.inventoryId || null,
+              resolvedDrugId,
+              item.rxnormCode ?? null,
               item.quantityOrdered,
-              item.unitCost ?? null,
-              item.unitCost ? item.quantityOrdered * item.unitCost : null,
+              item.unitCost,
               item.notes ?? null,
             ],
           );
@@ -510,9 +527,9 @@ export class PharmacyService {
       throw new NotFoundException(`Purchase order ${id} not found`);
     }
     const items = await tenantDb.query(
-      `SELECT poi.*, pi.name as inventory_name, pi.sku
+      `SELECT poi.*, d.generic_name as drug_generic_name, d.brand_names as drug_brand_names
        FROM pharmacy_purchase_order_items poi
-       LEFT JOIN pharmacy_inventory pi ON pi.id = poi.inventory_id
+       LEFT JOIN drugs d ON d.id = poi.drug_id
        WHERE poi.purchase_order_id = $1
        ORDER BY poi.created_at ASC`,
       [id],
@@ -561,12 +578,14 @@ export class PharmacyService {
     try {
       const [receipt] = await queryRunner.query(
         `INSERT INTO pharmacy_receipts (
-          purchase_order_id, receipt_date, received_by, status, notes,
+          receipt_number, purchase_order_id, supplier_id, receipt_date, received_by, status, notes,
           created_by, created_at, updated_at
-        ) VALUES ($1, $2, $3, COALESCE($4, 'pending'), $5, $6, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'pending'), $7, $8, NOW(), NOW())
         RETURNING *`,
         [
+          this.generateDocumentNumber('RCT'),
           dto.purchaseOrderId,
+          dto.supplierId,
           dto.receiptDate ?? new Date().toISOString(),
           userId ?? null, // receivedBy comes from userId parameter, not DTO
           dto.status ?? 'pending',
@@ -577,37 +596,10 @@ export class PharmacyService {
 
       if (dto.items && dto.items.length > 0) {
         for (const item of dto.items) {
-          // Get inventory_id from purchase order item if available, or find/create from drugId
+          // Find or create the pharmacy_inventory row for this drug
           let inventoryId: string | null = null;
-          
-          // First, try to get inventory_id from purchase order item
-          if (item.purchaseOrderItemId) {
-            const [poItem] = await queryRunner.query(
-              `SELECT inventory_id FROM pharmacy_purchase_order_items WHERE id = $1`,
-              [item.purchaseOrderItemId],
-            );
-            if (poItem?.inventory_id) {
-              inventoryId = poItem.inventory_id;
-            }
-          }
-          
-          // If not found, try to get from purchase order by drugId
-          if (!inventoryId && item.drugId && dto.purchaseOrderId) {
-            const [poItem] = await queryRunner.query(
-              `SELECT poi.inventory_id 
-               FROM pharmacy_purchase_order_items poi
-               JOIN pharmacy_inventory pi ON pi.id = poi.inventory_id
-               WHERE poi.purchase_order_id = $1 AND pi.drug_id = $2
-               LIMIT 1`,
-              [dto.purchaseOrderId, item.drugId],
-            );
-            if (poItem?.inventory_id) {
-              inventoryId = poItem.inventory_id;
-            }
-          }
-          
-          // If still not found, find existing inventory item by drug_id
-          if (!inventoryId && item.drugId) {
+
+          if (item.drugId) {
             const [existingInv] = await queryRunner.query(
               `SELECT id FROM pharmacy_inventory WHERE drug_id = $1 AND status = 'active' LIMIT 1`,
               [item.drugId],
@@ -780,13 +772,14 @@ export class PharmacyService {
     try {
       const [dispensing] = await queryRunner.query(
         `INSERT INTO pharmacy_dispensings (
-          prescription_id, patient_id, dispensing_date, dispensed_by, status,
+          prescription_id, patient_id, dispensing_number, dispensing_date, dispensed_by, status,
           payment_status, payment_method, notes, created_by, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, COALESCE($5, 'pending'), $6, $7, $8, $9, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'pending'), $7, $8, $9, $10, NOW(), NOW())
         RETURNING *`,
         [
           dto.prescriptionId ?? null,
           dto.patientId,
+          this.generateDocumentNumber('DISP'),
           dto.dispensingDate ?? new Date().toISOString(),
           userId ?? null, // dispensedBy comes from userId parameter, not DTO
           'pending', // status default
@@ -800,7 +793,7 @@ export class PharmacyService {
       if (dto.items && dto.items.length > 0) {
         for (const item of dto.items) {
           const [inventory] = await queryRunner.query(
-            'SELECT quantity_on_hand, selling_price FROM pharmacy_inventory WHERE id = $1',
+            'SELECT quantity_on_hand, selling_price, drug_id FROM pharmacy_inventory WHERE id = $1',
             [item.inventoryId],
           );
           if (!inventory) {
@@ -812,15 +805,15 @@ export class PharmacyService {
 
           await queryRunner.query(
             `INSERT INTO pharmacy_dispensing_items (
-              dispensing_id, inventory_id, quantity_dispensed, unit_price,
-              total_price, notes, created_at, updated_at
+              dispensing_id, inventory_id, drug_id, quantity_dispensed, unit_price,
+              notes, created_at, updated_at
             ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
             [
               dispensing.id,
               item.inventoryId,
+              item.drugId ?? inventory.drug_id,
               item.quantityDispensed,
               item.unitPrice ?? inventory.selling_price,
-              (item.unitPrice ?? inventory.selling_price) * item.quantityDispensed,
               item.notes ?? null,
             ],
           );
@@ -1076,7 +1069,7 @@ export class PharmacyService {
 
       for (const item of dto.items) {
         const [inventory] = await queryRunner.query(
-          `SELECT quantity_on_hand, selling_price, name, expiry_date, batch_number 
+          `SELECT quantity_on_hand, selling_price, name, expiry_date, batch_number, drug_id
            FROM pharmacy_inventory WHERE id = $1`,
           [item.inventoryId],
         );
@@ -1093,6 +1086,7 @@ export class PharmacyService {
 
         dispensingItems.push({
           inventoryId: item.inventoryId,
+          drugId: inventory.drug_id,
           quantityDispensed: item.quantityDispensed,
           unitPrice,
           totalPrice,
@@ -1146,9 +1140,9 @@ export class PharmacyService {
       for (const item of dispensingItems) {
         await queryRunner.query(
           `INSERT INTO pharmacy_dispensing_items (
-            dispensing_id, inventory_id, quantity_dispensed, unit_price, total_price, created_at, updated_at
+            dispensing_id, inventory_id, drug_id, quantity_dispensed, unit_price, created_at, updated_at
           ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-          [dispensing.id, item.inventoryId, item.quantityDispensed, item.unitPrice, item.totalPrice],
+          [dispensing.id, item.inventoryId, item.drugId, item.quantityDispensed, item.unitPrice],
         );
 
         await queryRunner.query(
@@ -1521,11 +1515,12 @@ export class PharmacyService {
     try {
       const [adjustment] = await queryRunner.query(
         `INSERT INTO pharmacy_stock_adjustments (
-          adjustment_date, adjustment_type, reason, status, notes,
+          adjustment_number, adjustment_date, adjustment_type, reason, status, notes,
           created_by, created_at, updated_at
-        ) VALUES ($1, $2, $3, 'pending', $4, $5, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, 'pending', $5, $6, NOW(), NOW())
         RETURNING *`,
         [
+          this.generateDocumentNumber('ADJ'),
           dto.adjustmentDate ?? new Date().toISOString(),
           dto.adjustmentType,
           dto.reason ?? null,
@@ -1536,17 +1531,28 @@ export class PharmacyService {
 
       if (dto.items && dto.items.length > 0) {
         for (const item of dto.items) {
+          const [inventory] = await queryRunner.query(
+            'SELECT quantity_on_hand FROM pharmacy_inventory WHERE id = $1',
+            [item.inventoryId],
+          );
+          if (!inventory) {
+            throw new NotFoundException(`Inventory item ${item.inventoryId} not found`);
+          }
+          const quantityBefore = inventory.quantity_on_hand;
+          const quantityAfter = quantityBefore + item.quantityAdjustment;
+
           await queryRunner.query(
             `INSERT INTO pharmacy_stock_adjustment_items (
-              adjustment_id, inventory_id, quantity_adjusted, previous_quantity,
-              new_quantity, notes, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+              adjustment_id, inventory_id, quantity_before, quantity_adjustment,
+              quantity_after, unit_cost, notes, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
             [
               adjustment.id,
               item.inventoryId,
+              quantityBefore,
               item.quantityAdjustment,
-              null, // previousQuantity - not provided in DTO
-              null, // newQuantity - not provided in DTO
+              quantityAfter,
+              item.unitCost ?? null,
               item.notes ?? null,
             ],
           );
