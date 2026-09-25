@@ -311,6 +311,7 @@ export class DatabaseProvisioningService {
           (db) => this.ensureUpdatedAtTriggerFunction(db),
           (db) => this.enforceUserRoleConstraint(db),
           (db) => this.seedLabCatalog(db),
+          (db) => this.seedDrugCatalog(db),
           (db) => this.seedImagingCatalog(db),
           (db) => this.seedLookupTables(db),
           (db) => this.seedClinicalNoteTemplates(db),
@@ -17846,6 +17847,92 @@ export class DatabaseProvisioningService {
         ON CONFLICT DO NOTHING;
       `);
     }
+  }
+
+  private async seedDrugCatalog(tenantDataSource: DataSource): Promise<void> {
+    // Mirrors DrugService.seedDefaultDrugs (ehr-service) — that endpoint is admin-only
+    // and was never wired into provisioning, so every tenant's drug catalog was empty
+    // by default with no in-app way to populate it, silently breaking prescribing,
+    // pharmacy inventory (which requires a drugId FK), and CDSS interaction checks.
+    const [{ count }] = await tenantDataSource.query(`SELECT COUNT(*)::int as count FROM drugs`);
+    if (count > 0) {
+      return;
+    }
+
+    this.logger.log('Seeding baseline drug catalog...');
+
+    const drugs = await tenantDataSource.query(`
+      INSERT INTO drugs (generic_name, brand_names, drug_class, active_ingredients, dosage_forms, description, is_active)
+      VALUES
+        ('warfarin', ARRAY['Coumadin','Jantoven'], 'Anticoagulant', ARRAY['warfarin'], ARRAY['tablet'], 'Oral anticoagulant used to prevent blood clots', true),
+        ('aspirin', ARRAY['Bayer','Ecotrin'], 'NSAID/Antiplatelet', ARRAY['acetylsalicylic acid'], ARRAY['tablet','enteric coated'], 'Pain reliever and antiplatelet agent', true),
+        ('metformin', ARRAY['Glucophage','Fortamet'], 'Biguanide', ARRAY['metformin'], ARRAY['tablet','extended release'], 'First-line medication for type 2 diabetes', true),
+        ('lisinopril', ARRAY['Prinivil','Zestril'], 'ACE Inhibitor', ARRAY['lisinopril'], ARRAY['tablet'], 'ACE inhibitor for hypertension and heart failure', true),
+        ('amoxicillin', ARRAY['Amoxil'], 'Penicillin Antibiotic', ARRAY['amoxicillin'], ARRAY['capsule','tablet','suspension'], 'Broad-spectrum penicillin antibiotic', true),
+        ('atorvastatin', ARRAY['Lipitor'], 'Statin', ARRAY['atorvastatin'], ARRAY['tablet'], 'HMG-CoA reductase inhibitor for cholesterol', true),
+        ('levothyroxine', ARRAY['Synthroid','Levoxyl'], 'Thyroid Hormone', ARRAY['levothyroxine'], ARRAY['tablet'], 'Synthetic thyroid hormone', true),
+        ('albuterol', ARRAY['Ventolin','ProAir'], 'Bronchodilator', ARRAY['albuterol'], ARRAY['inhaler','solution'], 'Short-acting beta-2 adrenergic agonist', true),
+        ('omeprazole', ARRAY['Prilosec'], 'PPI', ARRAY['omeprazole'], ARRAY['capsule','tablet'], 'Proton pump inhibitor for acid reflux', true),
+        ('metoprolol', ARRAY['Lopressor','Toprol XL'], 'Beta Blocker', ARRAY['metoprolol'], ARRAY['tablet','extended release'], 'Beta-adrenergic blocking agent', true),
+        ('acetaminophen', ARRAY['Tylenol','Paracetamol'], 'Analgesic', ARRAY['acetaminophen'], ARRAY['tablet','liquid'], 'Pain reliever and fever reducer', true),
+        ('ibuprofen', ARRAY['Advil','Motrin'], 'NSAID', ARRAY['ibuprofen'], ARRAY['tablet','liquid'], 'Nonsteroidal anti-inflammatory drug', true),
+        ('digoxin', ARRAY['Lanoxin'], 'Cardiac Glycoside', ARRAY['digoxin'], ARRAY['tablet','injection'], 'Medication for heart failure and arrhythmias', true),
+        ('furosemide', ARRAY['Lasix'], 'Loop Diuretic', ARRAY['furosemide'], ARRAY['tablet','injection'], 'Diuretic used to treat fluid retention', true),
+        ('prednisone', ARRAY['Deltasone'], 'Corticosteroid', ARRAY['prednisone'], ARRAY['tablet'], 'Corticosteroid anti-inflammatory', true)
+      RETURNING id, generic_name;
+    `);
+
+    const idByName: Record<string, string> = {};
+    for (const row of drugs) {
+      idByName[row.generic_name] = row.id;
+    }
+
+    const interactionPairs: Array<{
+      a: string; b: string; severity: string; description: string; mechanism: string; management: string; evidenceLevel: string;
+    }> = [
+      {
+        a: 'warfarin', b: 'aspirin', severity: 'major',
+        description: 'Increased risk of bleeding when warfarin is combined with aspirin',
+        mechanism: 'Both drugs affect hemostasis - warfarin inhibits clotting factors, aspirin inhibits platelet aggregation',
+        management: 'Monitor INR closely. Consider proton pump inhibitor for GI protection.',
+        evidenceLevel: 'established',
+      },
+      {
+        a: 'warfarin', b: 'digoxin', severity: 'moderate',
+        description: 'Digoxin may enhance warfarin anticoagulant effect',
+        mechanism: 'Potential displacement from protein binding sites',
+        management: 'Monitor INR when starting or stopping digoxin',
+        evidenceLevel: 'probable',
+      },
+      {
+        a: 'digoxin', b: 'furosemide', severity: 'moderate',
+        description: 'Diuretics may cause hypokalemia which increases digoxin toxicity risk',
+        mechanism: 'Hypokalemia enhances digoxin binding to Na+/K+ ATPase',
+        management: 'Monitor potassium levels. Maintain K+ > 3.5 mEq/L',
+        evidenceLevel: 'established',
+      },
+      {
+        a: 'furosemide', b: 'metformin', severity: 'minor',
+        description: 'Furosemide may reduce metformin efficacy',
+        mechanism: 'Possible interference with metformin renal clearance',
+        management: 'Monitor blood glucose levels',
+        evidenceLevel: 'possible',
+      },
+    ];
+
+    for (const pair of interactionPairs) {
+      const drug1Id = idByName[pair.a];
+      const drug2Id = idByName[pair.b];
+      if (!drug1Id || !drug2Id) continue;
+      await tenantDataSource.query(
+        `INSERT INTO drug_interactions (drug1_id, drug2_id, severity, description, mechanism, management, evidence_level)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT DO NOTHING`,
+        [drug1Id, drug2Id, pair.severity, pair.description, pair.mechanism, pair.management, pair.evidenceLevel],
+      );
+    }
+
+    this.logger.log(`Seeded ${drugs.length} drugs and up to ${interactionPairs.length} interactions`);
   }
 
   private async seedImagingCatalog(tenantDataSource: DataSource): Promise<void> {
