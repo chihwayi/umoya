@@ -1610,7 +1610,7 @@ const NurseDashboard: React.FC = () => {
   useEffect(() => {
     const loadMentalHealthQuickTools = async () => {
       try {
-        const response = await cdssApi.listMhScreeningTools();
+        const response = await cdssApi.listMhScreeningTools(tenantSlug || '');
         const tools = Array.isArray(response?.tools) ? response.tools : [];
         setMhQuickTools(tools);
         if (tools.length > 0) {
@@ -2769,7 +2769,7 @@ const NurseDashboard: React.FC = () => {
     }
 
     try {
-      const result = await cdssApi.interpretMhScreening({
+      const result = await cdssApi.interpretMhScreening(tenantSlug || '', {
         tool: mhQuickTool,
         score: numericScore,
         language_code: mhQuickLanguage,

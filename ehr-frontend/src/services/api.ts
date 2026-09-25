@@ -11363,10 +11363,10 @@ export const cdssApi = {
     return res.data;
   },
 
-  scoreMhScreening: async (data: { tool: string; responses: Record<string, number> }) => {
+  scoreMhScreening: async (tenantSubdomain: string, data: { tool: string; responses: Record<string, number> }) => {
     const token = getStoredAuthToken();
     const res = await ehrAxios.post('/mental-health/cdss/screen', data, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -11438,18 +11438,18 @@ export const cdssApi = {
     return res.data;
   },
 
-  monitorMhMedication: async (data: Record<string, any>) => {
+  monitorMhMedication: async (tenantSubdomain: string, data: Record<string, any>) => {
     const token = getStoredAuthToken();
     const res = await ehrAxios.post('/mental-health/cdss/medication/monitor', data, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
-  assessMhSuicideRisk: async (data: Record<string, any>) => {
+  assessMhSuicideRisk: async (tenantSubdomain: string, data: Record<string, any>) => {
     const token = getStoredAuthToken();
     const res = await ehrAxios.post('/mental-health/cdss/risk', data, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
@@ -11457,27 +11457,27 @@ export const cdssApi = {
   // Routed through ehr-service (not cdss-service directly) — cdss-service
   // requires a service-to-service token the browser can never have.
   // ehr-service holds that credential and proxies these calls server-side.
-  listMhScreeningTools: async () => {
+  listMhScreeningTools: async (tenantSubdomain: string) => {
     const token = getStoredAuthToken();
     const res = await ehrAxios.get('/mental-health/cdss/screening-tools', {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
-  getMhScreeningToolDefinition: async (tool: string, languageCode: string) => {
+  getMhScreeningToolDefinition: async (tenantSubdomain: string, tool: string, languageCode: string) => {
     const token = getStoredAuthToken();
     const res = await ehrAxios.get('/mental-health/cdss/screening-tools', {
       params: { tool, language_code: languageCode },
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },
 
-  interpretMhScreening: async (data: { tool: string; score: number; language_code: string; age_years?: number; pregnancy?: boolean }) => {
+  interpretMhScreening: async (tenantSubdomain: string, data: { tool: string; score: number; language_code: string; age_years?: number; pregnancy?: boolean }) => {
     const token = getStoredAuthToken();
     const res = await ehrAxios.post('/mental-health/cdss/screening-interpret', data, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 'X-Tenant-ID': tenantSubdomain, Authorization: `Bearer ${token}` },
     });
     return res.data;
   },

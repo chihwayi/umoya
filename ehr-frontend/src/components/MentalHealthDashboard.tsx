@@ -193,7 +193,7 @@ export default function MentalHealthDashboard({
         cdssApi.getMhCarePlans(patientId, tenantSubdomain),
         cdssApi.getMhFollowups(patientId, tenantSubdomain),
         cdssApi.getMhReferralPathway(tenantSubdomain),
-        cdssApi.listMhScreeningTools(),
+        cdssApi.listMhScreeningTools(tenantSubdomain),
       ]);
 
       setScreenings(Array.isArray(screeningHistory) ? screeningHistory : []);
@@ -209,7 +209,7 @@ export default function MentalHealthDashboard({
       await Promise.all(
         (Array.isArray(currentMeds) ? currentMeds : []).map(async (medication: any) => {
           try {
-            nextAlerts[medication.id] = await cdssApi.monitorMhMedication({
+            nextAlerts[medication.id] = await cdssApi.monitorMhMedication(tenantSubdomain, {
               drug_name: medication.drugName,
               drug_class: medication.drugClass,
               dose_mg: medication.doseMg,
@@ -241,7 +241,7 @@ export default function MentalHealthDashboard({
     if (!screenTool) return;
     const loadDefinition = async () => {
       try {
-        const definition = await cdssApi.getMhScreeningToolDefinition(screenTool, screenLanguage);
+        const definition = await cdssApi.getMhScreeningToolDefinition(tenantSubdomain, screenTool, screenLanguage);
         setScreenToolDefinition(definition);
         setScreenResponses({});
       } catch {
@@ -269,7 +269,7 @@ export default function MentalHealthDashboard({
   const submitScreening = async () => {
     if (!screenToolDefinition) return;
     try {
-      const result = await cdssApi.interpretMhScreening({
+      const result = await cdssApi.interpretMhScreening(tenantSubdomain, {
         tool: screenTool,
         score: screeningTotal,
         language_code: screenLanguage,
