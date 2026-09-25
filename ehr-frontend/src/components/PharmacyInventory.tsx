@@ -226,12 +226,35 @@ const PharmacyInventory: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.drugId) {
+      showError('Failed to save inventory', 'Select a drug from the search results first');
+      return;
+    }
+    if (!formData.expiryDate) {
+      showError('Failed to save inventory', 'Expiry date is required');
+      return;
+    }
+    // Backend DTO only accepts these fields (whitelist-validated) — name/genericName/sku/
+    // barcode/category/unitOfMeasure/notes are derived server-side from drugId or unsupported.
+    const payload = {
+      drugId: formData.drugId,
+      batchNumber: formData.batchNumber || undefined,
+      expiryDate: formData.expiryDate,
+      quantityOnHand: formData.quantityOnHand,
+      unitCost: formData.costPerUnit,
+      unitPrice: formData.sellingPrice,
+      reorderLevel: formData.reorderLevel,
+      maximumStockLevel: formData.maxStockLevel,
+      location: formData.location || undefined,
+      supplierId: formData.supplierId || undefined,
+      status: formData.status,
+    };
     try {
       if (editingItem) {
-        await pharmacyApi.updateInventory(editingItem.id, formData, token!, tenantSlug!);
+        await pharmacyApi.updateInventory(editingItem.id, payload, token!, tenantSlug!);
         showSuccess('Success', 'Inventory item updated successfully');
       } else {
-        await pharmacyApi.createInventory(formData, token!, tenantSlug!);
+        await pharmacyApi.createInventory(payload, token!, tenantSlug!);
         showSuccess('Success', 'Inventory item created successfully');
       }
       handleCloseModal();
@@ -558,7 +581,7 @@ const PharmacyInventory: React.FC = () => {
               {/* Drug Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Drug (Optional)
+                  Drug *
                 </label>
                 <div className="relative">
                   <input
@@ -599,63 +622,7 @@ const PharmacyInventory: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Item Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Generic Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.genericName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, genericName: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
               <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">SKU</label>
-                  <input
-                    type="text"
-                    value={formData.sku}
-                    onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Barcode</label>
-                  <input
-                    type="text"
-                    value={formData.barcode}
-                    onChange={(e) => setFormData(prev => ({ ...prev, barcode: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                  <input
-                    type="text"
-                    value={formData.category}
-                    onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Quantity *</label>
                   <input
@@ -666,20 +633,6 @@ const PharmacyInventory: React.FC = () => {
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Unit</label>
-                  <select
-                    value={formData.unitOfMeasure}
-                    onChange={(e) => setFormData(prev => ({ ...prev, unitOfMeasure: e.target.value }))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="unit">Unit</option>
-                    <option value="box">Box</option>
-                    <option value="bottle">Bottle</option>
-                    <option value="pack">Pack</option>
-                    <option value="vial">Vial</option>
-                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Reorder Level</label>
@@ -732,11 +685,12 @@ const PharmacyInventory: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Expiry Date</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Expiry Date *</label>
                   <input
                     type="date"
                     value={formData.expiryDate}
                     onChange={(e) => setFormData(prev => ({ ...prev, expiryDate: e.target.value }))}
+                    required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
@@ -787,16 +741,6 @@ const PharmacyInventory: React.FC = () => {
                     <option value="recalled">Recalled</option>
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">

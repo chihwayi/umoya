@@ -314,7 +314,7 @@ export class PharmacyService {
         dto.maximumStockLevel ?? null,
         dto.unitCost ?? null,
         dto.unitPrice ?? null,
-        null, // location
+        dto.location ?? null,
         dto.supplierId ?? null,
         dto.status ?? 'active',
         null, // notes
