@@ -148,7 +148,7 @@ export class LabOrder {
   @Column({ type: 'jsonb', name: 'attachments', nullable: true })
   attachments: Array<{
     filename: string;
-    url: string;
+    documentId: string;
     type: string;
     uploadedAt: Date;
   }>;

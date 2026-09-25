@@ -122,7 +122,7 @@ export class DiagnosticReportMapper {
     // Build presentedForm (attachments)
     const presentedForm: fhir.Attachment[] | undefined = labOrder.attachments?.map(att => ({
       contentType: att.type,
-      url: att.url,
+      url: `/documents/${att.documentId}/view`,
       title: att.filename,
       creation: att.uploadedAt?.toISOString(),
     })) || undefined;
@@ -207,7 +207,7 @@ export class DiagnosticReportMapper {
     // Extract attachments
     const attachments = fhirDiagnosticReport.presentedForm?.map(att => ({
       filename: att.title || 'attachment',
-      url: att.url || '',
+      documentId: att.url?.split('/').filter(Boolean)[1] || '',
       type: att.contentType || 'application/pdf',
       uploadedAt: att.creation ? new Date(att.creation) : new Date(),
     }));
