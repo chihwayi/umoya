@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   ArrowLeft,
   FileText,
@@ -12,6 +13,7 @@ import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 
 type TabKey = 'send' | 'templates' | 'ussd';
+const TAB_KEYS: readonly TabKey[] = ['send', 'templates', 'ussd'];
 
 interface MessagingDashboardProps {
   tenantSlug?: string;
@@ -56,7 +58,7 @@ interface UssdSession {
 export default function MessagingDashboard({ tenantSlug, token }: MessagingDashboardProps) {
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
-  const [activeTab, setActiveTab] = useState<TabKey>('send');
+  const [activeTab, setActiveTab] = useUrlTab('tab', TAB_KEYS, 'send');
 
   // Send SMS form
   const [smsTo, setSmsTo] = useState('');

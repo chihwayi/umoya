@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ehrApi, tenantApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { cacheTenantBranding, formatTenantDisplayName, applyTenantTheme, getBrandInitials } from '../utils/tenantBranding';
+import { roleToRoute } from '../utils/roleRouting';
 
 const EHRLogin: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -68,6 +69,19 @@ const EHRLogin: React.FC = () => {
   }, [tenantSlug, location.state]);
 
   useEffect(() => {
+    const token = localStorage.getItem('ehr_token');
+    const storedUser = localStorage.getItem('ehr_user');
+    if (!token || !storedUser || !tenantSlug) return;
+    try {
+      const user = JSON.parse(storedUser);
+      const target = roleToRoute(tenantSlug, user.role);
+      navigate(target, { replace: true });
+    } catch {
+      // malformed stored user — let the login form render normally
+    }
+  }, [tenantSlug, navigate]);
+
+  useEffect(() => {
     setImgError(false);
 
     if (!tenantInfo?.logoUrl) {
@@ -98,19 +112,19 @@ const EHRLogin: React.FC = () => {
         localStorage.setItem('ehr_tenant', tenantSlug);
         localStorage.setItem('ehr_tenant_slug', tenantSlug);
         showInfo('Password Change Required', 'Please set a new password to continue');
-        navigate(`/ehr/${tenantSlug}/change-password`);
+        navigate(`/ehr/${tenantSlug}/change-password`, { replace: true });
       } else if (response.data.requiresTwoFactor) {
         localStorage.setItem('ehr_temp_token', response.data.tempToken);
         localStorage.setItem('ehr_tenant', tenantSlug);
         localStorage.setItem('ehr_tenant_slug', tenantSlug);
-        navigate(`/ehr/${tenantSlug}/mfa`);
+        navigate(`/ehr/${tenantSlug}/mfa`, { replace: true });
       } else if (response.data.mfaRequired && !response.data.mfaVerified) {
         localStorage.setItem('ehr_token', response.data.token);
         localStorage.setItem('ehr_user', JSON.stringify(response.data.user));
         localStorage.setItem('ehr_tenant', tenantSlug);
         localStorage.setItem('ehr_tenant_slug', tenantSlug);
         localStorage.setItem('ehr_session_timeout_minutes', String(response.data.user?.sessionTimeoutMinutes || response.data.sessionTimeoutMinutes || 60));
-        navigate(`/ehr/${tenantSlug}/mfa`);
+        navigate(`/ehr/${tenantSlug}/mfa`, { replace: true });
       } else {
         localStorage.setItem('ehr_token', response.data.token);
         localStorage.setItem('ehr_user', JSON.stringify(response.data.user));
@@ -126,28 +140,7 @@ const EHRLogin: React.FC = () => {
         sessionStorage.removeItem('ehr_welcome_shown');
 
         // Redirect based on user role
-        const role = response.data.user.role;
-        switch (role) {
-          case 'doctor':
-            navigate(`/ehr/${tenantSlug}/doctor`);
-            break;
-          case 'radiologist':
-            navigate(`/ehr/${tenantSlug}/radiologist`);
-            break;
-          case 'lab_tech':
-          case 'lab_technician':
-            navigate(`/ehr/${tenantSlug}/lab`);
-            break;
-          case 'nurse':
-          case 'nurse_accounts':
-            navigate(`/ehr/${tenantSlug}/nurse`);
-            break;
-          case 'accounts':
-            navigate(`/ehr/${tenantSlug}/dashboard`);
-            break;
-          default:
-            navigate(`/ehr/${tenantSlug}/dashboard`);
-        }
+        navigate(roleToRoute(tenantSlug, response.data.user.role), { replace: true });
       }
     } catch (error: any) {
       showError('Login Failed', error.response?.data?.message || 'Invalid credentials');

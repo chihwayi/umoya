@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   ArrowLeft,
   Building2,
@@ -15,6 +16,7 @@ import { ehrAxios } from '../services/api';
 
 import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 type TabKey = 'feeSchedules' | 'superbills' | 'verifications';
+const TAB_KEYS: readonly TabKey[] = ['feeSchedules', 'superbills', 'verifications'];
 
 const PracticeManagementDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -23,7 +25,7 @@ const PracticeManagementDashboard: React.FC = () => {
   const token = localStorage.getItem('ehr_token') || '';
   const currentUser = JSON.parse(localStorage.getItem('ehr_user') || '{}');
 
-  const [activeTab, setActiveTab] = useState<TabKey>('feeSchedules');
+  const [activeTab, setActiveTab] = useUrlTab('tab', TAB_KEYS, 'feeSchedules');
   const [loading, setLoading] = useState(true);
 
   const [feeSchedules, setFeeSchedules] = useState<any[]>([]);

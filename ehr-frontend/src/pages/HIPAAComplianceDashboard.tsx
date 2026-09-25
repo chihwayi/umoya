@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   Shield, Eye, AlertTriangle, FileText, Download, Filter, Search,
   TrendingUp, Users, Activity, Clock, CheckCircle, XCircle, AlertCircle,
@@ -17,7 +18,8 @@ const HIPAAComplianceDashboard: React.FC = () => {
   const token = localStorage.getItem('ehr_token') || '';
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'logs' | 'breaches' | 'reports' | 'users' | 'sessions'>('overview');
+  const HIPAA_TABS = ['overview', 'logs', 'breaches', 'reports', 'users', 'sessions'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', HIPAA_TABS, 'overview');
 
   // Overview Stats
   const [stats, setStats] = useState({

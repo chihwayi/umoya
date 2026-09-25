@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   FileText,
   TrendingUp,
@@ -85,7 +86,8 @@ const ClaimsDashboard: React.FC = () => {
   const [claimReadinessById, setClaimReadinessById] = useState<Record<string, any>>({});
   const [bills, setBills] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'claims' | 'readiness' | 'create' | 'analytics' | 'preauth' | 'bulk' | 'api-config' | 'aged'>('overview');
+  const CLAIMS_TABS = ['overview', 'claims', 'readiness', 'create', 'analytics', 'preauth', 'bulk', 'api-config', 'aged'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', CLAIMS_TABS, 'overview');
   const [filters, setFilters] = useState({
     status: '',
     provider: '',

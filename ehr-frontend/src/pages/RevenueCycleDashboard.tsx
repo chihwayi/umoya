@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 // PromptDialog replaces window.prompt for charge action notes
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   DollarSign,
   TrendingUp,
@@ -49,7 +50,8 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [showAddChargeModal, setShowAddChargeModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'master' | 'pending'>('pending');
+  const REVENUE_CYCLE_TABS = ['master', 'pending'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', REVENUE_CYCLE_TABS, 'pending');
   const [includeResolved, setIncludeResolved] = useState(false);
   const [actionChargeId, setActionChargeId] = useState<string | null>(null);
   const [chargeActionPrompt, setChargeActionPrompt] = useState<{ charge: any; action: 'approve' | 'reject' | 'review'; value: string } | null>(null);

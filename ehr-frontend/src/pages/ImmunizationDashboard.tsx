@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   Syringe,
   AlertTriangle,
@@ -63,7 +64,8 @@ const ImmunizationDashboard: React.FC = () => {
   const { showError, showSuccess } = useNotification();
   const token = localStorage.getItem('ehr_token') || '';
 
-  const [activeTab, setActiveTab] = useState<'schedule' | 'defaulters' | 'coldchain' | 'aefi' | 'coverage' | 'lots'>('schedule');
+  const IMMUNIZATION_TABS = ['schedule', 'defaulters', 'coldchain', 'aefi', 'coverage', 'lots'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', IMMUNIZATION_TABS, 'schedule');
   const [loading, setLoading] = useState(false);
 
   // Patient schedule

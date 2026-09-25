@@ -49,7 +49,7 @@ const ChangePassword: React.FC = () => {
     
     if (!token || !tenant) {
       showError('Session Error', 'Please login again');
-      navigate('/');
+      navigate('/', { replace: true });
       return;
     }
 
@@ -64,7 +64,7 @@ const ChangePassword: React.FC = () => {
 
       localStorage.removeItem('ehr_temp_token');
       showSuccess('Password Updated', 'Please login with your new password');
-      navigate(`/ehr/${tenant}`);
+      navigate(`/ehr/${tenant}`, { replace: true });
     } catch (error: any) {
       showError('Update Failed', error.response?.data?.message || 'Failed to update password');
     } finally {

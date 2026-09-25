@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   BarChart3,
   FileText,
@@ -76,7 +77,8 @@ const AnalyticsDashboard: React.FC = () => {
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'templates' | 'schedules' | 'outcomes' | 'metrics'>('overview');
+  const ANALYTICS_TABS = ['overview', 'templates', 'schedules', 'outcomes', 'metrics'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', ANALYTICS_TABS, 'overview');
   
   // Stats
   const [stats, setStats] = useState({

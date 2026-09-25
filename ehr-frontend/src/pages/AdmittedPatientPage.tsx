@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   ArrowLeft, Activity, FileText, Heart, ArrowRightLeft, LogOut,
   User, Bed, Calendar, Clock, Pill, TestTube, Brain
@@ -47,7 +48,8 @@ const AdmittedPatientPage: React.FC = () => {
     notes: '',
   } : null;
   
-  const [activeTab, setActiveTab] = useState('overview');
+  const ADMITTED_PATIENT_TABS = ['overview', 'vitals', 'nursing', 'ai-insights'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', ADMITTED_PATIENT_TABS, 'overview');
   const [vitals, setVitals] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [showDischargeModal, setShowDischargeModal] = useState(false);

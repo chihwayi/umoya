@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   Package,
   ShoppingCart,
@@ -79,7 +80,8 @@ const PharmacyDashboard: React.FC = () => {
   const [inventoryForecasts, setInventoryForecasts] = useState<any[]>([]);
   const [dispensingAnomalies, setDispensingAnomalies] = useState<any[]>([]);
   const [stewardshipReviews, setStewardshipReviews] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'inventory' | 'orders' | 'receipts' | 'suppliers' | 'alerts' | 'dispensing' | 'shared-documents' | 'mcaz-register'>('overview');
+  const PHARMACY_TABS = ['overview', 'inventory', 'orders', 'receipts', 'suppliers', 'alerts', 'dispensing', 'shared-documents', 'mcaz-register'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', PHARMACY_TABS, 'overview');
   const [sharedDocumentsCount, setSharedDocumentsCount] = useState(0);
   const [showCopilot, setShowCopilot] = useState(false);
   const [copilotQuery, setCopilotQuery] = useState('');

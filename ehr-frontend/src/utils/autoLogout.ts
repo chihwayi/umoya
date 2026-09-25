@@ -149,7 +149,10 @@ export const handleAutoLogout = (reason: 'expired' | 'idle_timeout' = 'expired')
 // Check if user is currently on a protected route
 export const isOnProtectedRoute = (): boolean => {
   const currentPath = window.location.pathname;
-  return currentPath.includes('/ehr/') && !currentPath.endsWith('/ehr/');
+  // A bare tenant-slug path (the login screen) is public, not protected —
+  // it must not arm the inactivity/auto-logout timers.
+  const isLoginPath = /^\/ehr\/[^/]+\/?$/.test(currentPath);
+  return currentPath.includes('/ehr/') && !isLoginPath;
 };
 
 // Get current tenant slug from URL
