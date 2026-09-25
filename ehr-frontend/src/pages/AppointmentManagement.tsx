@@ -12,6 +12,7 @@ import DatePicker from '../components/DatePicker';
 import AppointmentTemplatesPanel from '../components/AppointmentTemplatesPanel';
 import { runtimeUrls } from '../config/runtime';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface Appointment {
   id: string;
   patient: {
@@ -463,7 +464,7 @@ const AppointmentManagement: React.FC = () => {
                 Calendar
               </button>
             </div>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setShowWaitlist(!showWaitlist)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                 showWaitlist 
@@ -474,7 +475,7 @@ const AppointmentManagement: React.FC = () => {
               <Users className="w-4 h-4" />
               Waitlist
             </button>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setShowTemplates(!showTemplates)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                 showTemplates 
@@ -485,7 +486,7 @@ const AppointmentManagement: React.FC = () => {
               <FileText className="w-4 h-4" />
               Templates
             </button>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setShowHighRiskOnly(!showHighRiskOnly)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                 showHighRiskOnly

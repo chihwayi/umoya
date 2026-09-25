@@ -5,6 +5,7 @@ import ICD10Picker from './ICD10Picker';
 import { cdssApi, ehrAxios } from '../services/api';
 import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface PreAnesthesiaAssessmentModalProps {
   surgicalCase: any;
   tenantSlug: string;
@@ -116,7 +117,7 @@ const PreAnesthesiaAssessmentModal: React.FC<PreAnesthesiaAssessmentModalProps> 
                 {surgicalCase.patient_first_name} {surgicalCase.patient_last_name} - {surgicalCase.procedure_name}
               </p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-6 h-6" />
             </button>
           </div>

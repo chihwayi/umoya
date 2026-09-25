@@ -30,6 +30,7 @@ import PrescriptionsModal from './PrescriptionsModal';
 import LabOrdersModal from './LabOrdersModal';
 import CarePlanList from './CarePlanList';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface Appointment {
   id: string;
   patient: {
@@ -492,9 +493,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
                     </p>
                   </div>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => setShowRescheduleModal(false)}
-                  className="p-2 hover:bg-white/50 rounded-xl transition-colors"
+                  className="appearance-none p-2 hover:bg-white/50 rounded-xl transition-colors"
                 >
                   <X className="w-5 h-5 text-slate-500" />
                 </button>
@@ -599,9 +600,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
                     </p>
                   </div>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => setShowCancelModal(false)}
-                  className="p-2 hover:bg-white/50 rounded-xl transition-colors"
+                  className="appearance-none p-2 hover:bg-white/50 rounded-xl transition-colors"
                 >
                   <X className="w-5 h-5 text-slate-500" />
                 </button>
@@ -664,9 +665,9 @@ const AppointmentActions: React.FC<AppointmentActionsProps> = ({
                     </p>
                   </div>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => setShowNotesModal(false)}
-                  className="p-2 hover:bg-white/50 rounded-xl transition-colors"
+                  className="appearance-none p-2 hover:bg-white/50 rounded-xl transition-colors"
                 >
                   <X className="w-5 h-5 text-slate-500" />
                 </button>

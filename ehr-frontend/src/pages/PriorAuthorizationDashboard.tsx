@@ -4,6 +4,7 @@ import { ArrowLeft, FileText, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 type Status = 'draft' | 'submitted' | 'pending' | 'approved' | 'denied' | 'expired' | 'appeal';
 
 const STATUSES: Status[] = ['draft', 'submitted', 'pending', 'approved', 'denied', 'appeal', 'expired'];
@@ -95,13 +96,13 @@ const PriorAuthorizationDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() =>
                   navigate(
                     `/ehr/${tenantSlug}/${currentUser?.role === 'doctor' ? 'doctor' : currentUser?.role === 'nurse' ? 'nurse' : 'dashboard'}`,
                   )
                 }
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="appearance-none p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -114,16 +115,16 @@ const PriorAuthorizationDashboard: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={load}
-                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
+                className="appearance-none flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
               >
                 <RefreshCw className="w-4 h-4" />
                 Refresh
               </button>
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => setShowCreate((s) => !s)}
-                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
+                className="appearance-none flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
               >
                 <Plus className="w-4 h-4" />
                 New

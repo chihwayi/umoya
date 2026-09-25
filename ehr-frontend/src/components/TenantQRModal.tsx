@@ -3,6 +3,7 @@ import { X, Download, Printer, Copy, Check } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { tenantApi } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface TenantQRModalProps {
   tenant: {
     id: string;
@@ -329,9 +330,9 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
             <p className="text-[10px] uppercase tracking-[0.22em] text-[#7A92B8]">Clinic Access</p>
             <h2 className="text-base font-semibold text-white">{tenant.clinicName}</h2>
           </div>
-          <button
+          <button ref={noNativeButtonBackground}
             onClick={onClose}
-            className="rounded-full border border-white/10 bg-white/5 p-2 text-[#8EA7CD] transition hover:bg-white/10 hover:text-white"
+            className="appearance-none rounded-full border border-white/10 bg-white/5 p-2 text-[#8EA7CD] transition hover:bg-white/10 hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
@@ -375,9 +376,9 @@ export const TenantQRModal: React.FC<TenantQRModalProps> = ({ tenant, onClose })
 
         {/* Actions */}
         <div className="grid grid-cols-3 gap-2 border-t border-white/10 px-4 py-4">
-          <button
+          <button ref={noNativeButtonBackground}
             onClick={handleCopy}
-            className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-2 py-3 text-[11px] font-medium text-[#A8BEDD] transition hover:bg-white/10 hover:text-white"
+            className="appearance-none flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-2 py-3 text-[11px] font-medium text-[#A8BEDD] transition hover:bg-white/10 hover:text-white"
           >
             {copied ? <Check className="h-4 w-4 text-[#0AA98A]" /> : <Copy className="h-4 w-4" />}
             {copied ? 'Copied!' : 'Copy URL'}

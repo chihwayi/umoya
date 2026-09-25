@@ -7,6 +7,7 @@ import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { ehrApi } from '../services/api';
 import ModalPortal from '../components/ModalPortal';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface MaternityDoctorDashboardProps {
   embedded?: boolean;
 }
@@ -44,9 +45,9 @@ const MaternityDoctorDashboard: React.FC<MaternityDoctorDashboardProps> = ({ emb
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={handleBack}
-                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                className="appearance-none p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -60,9 +61,9 @@ const MaternityDoctorDashboard: React.FC<MaternityDoctorDashboardProps> = ({ emb
             </div>
 
             {/* AI Guideline Toggle */}
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setShowGuidelineSearch(true)}
-              className="p-2 mr-4 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2"
+              className="appearance-none p-2 mr-4 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2"
               title="AI Clinical Guidelines"
             >
               <BookOpen className="w-5 h-5" />
@@ -76,9 +77,9 @@ const MaternityDoctorDashboard: React.FC<MaternityDoctorDashboardProps> = ({ emb
                   <p className="font-semibold">{currentUser.firstName} {currentUser.lastName}</p>
                   <p className="text-sm text-pink-200">{currentUser.role}</p>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={handleLogout}
-                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                  className="appearance-none p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
                 >
                   <LogOut className="w-5 h-5" />
                 </button>
@@ -104,9 +105,9 @@ const MaternityDoctorDashboard: React.FC<MaternityDoctorDashboardProps> = ({ emb
                     <p className="text-sm text-pink-100">AI-powered obstetric protocols & WHO guidelines</p>
                   </div>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => setShowGuidelineSearch(false)}
-                  className="p-2 rounded-lg hover:bg-white/20 text-white transition-colors"
+                  className="appearance-none p-2 rounded-lg hover:bg-white/20 text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>

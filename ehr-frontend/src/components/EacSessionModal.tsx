@@ -5,6 +5,7 @@ import { useNotification } from './GlobalNotification';
 import ModalPortal from './ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface EacSessionModalProps {
   open: boolean;
   onClose: () => void;
@@ -447,7 +448,7 @@ const EacSessionModal: React.FC<EacSessionModalProps> = ({
                   </div>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors">
+              <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-xl transition-colors">
                 <X className="w-5 h-5 text-white" />
               </button>
             </div>

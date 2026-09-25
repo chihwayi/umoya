@@ -3,6 +3,7 @@ import { X, Save, TrendingUp } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface Goal {
   id: string;
   goal_number: number;
@@ -106,7 +107,7 @@ const CarePlanProgress: React.FC<CarePlanProgressProps> = ({
             </h2>
             <p className="text-teal-100 text-sm mt-1">Update care plan progress and outcomes</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+          <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

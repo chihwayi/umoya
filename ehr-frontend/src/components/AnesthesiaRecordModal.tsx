@@ -3,6 +3,7 @@ import { X, Activity, Clock, Syringe, AlertCircle, TrendingUp, Plus } from 'luci
 import { useNotification } from './GlobalNotification';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface AnesthesiaRecordModalProps {
   surgicalCase: any;
   tenantSlug: string;
@@ -202,7 +203,7 @@ const AnesthesiaRecordModal: React.FC<AnesthesiaRecordModalProps> = ({
                 {surgicalCase.patient_first_name} {surgicalCase.patient_last_name} - Real-time monitoring
               </p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-6 h-6" />
             </button>
           </div>
@@ -219,9 +220,9 @@ const AnesthesiaRecordModal: React.FC<AnesthesiaRecordModalProps> = ({
                     <TrendingUp className="w-5 h-5" />
                     Vital Signs (Every 5 Minutes)
                   </h3>
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => setShowVitalsForm(!showVitalsForm)}
-                    className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-semibold transition"
+                    className="appearance-none px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-semibold transition"
                   >
                     {showVitalsForm ? 'Hide Form' : '+ Record Vitals'}
                   </button>

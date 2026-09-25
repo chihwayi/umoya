@@ -5,6 +5,7 @@ import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import * as cornerstoneMath from 'cornerstone-math';
 import dicomParser from 'dicom-parser';
 import Hammer from 'hammerjs';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 import {
   AlertTriangle,
   ChevronLeft,
@@ -589,7 +590,7 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
     <div className="relative h-full bg-black rounded-xl overflow-hidden">
       <div className="absolute top-3 left-3 flex items-center gap-2 z-20">
         {activeTools.map(({ id, label, icon: Icon }) => (
-          <button
+          <button ref={noNativeButtonBackground}
             key={id}
             type="button"
             onClick={() => applyTool(id)}
@@ -604,10 +605,10 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
             {label}
           </button>
         ))}
-        <button
+        <button ref={noNativeButtonBackground}
           type="button"
           onClick={handleReset}
-          className="flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium transition-colors border bg-black/40 text-slate-200 border-white/10 hover:bg-white/10"
+          className="appearance-none flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium transition-colors border bg-black/40 text-slate-200 border-white/10 hover:bg-white/10"
           title="Reset View"
         >
           <RefreshCcw className="w-3.5 h-3.5" /> Reset
@@ -615,31 +616,31 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
       </div>
 
       <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-        <button
+        <button ref={noNativeButtonBackground}
           type="button"
           onClick={() => handleWindowing('default')}
-          className="px-3 py-1.5 rounded-full text-[10px] font-medium bg-black/40 text-slate-200 border border-white/10 hover:bg-white/10"
+          className="appearance-none px-3 py-1.5 rounded-full text-[10px] font-medium bg-black/40 text-slate-200 border border-white/10 hover:bg-white/10"
         >
           Default
         </button>
-        <button
+        <button ref={noNativeButtonBackground}
           type="button"
           onClick={() => handleWindowing('lung')}
-          className="px-3 py-1.5 rounded-full text-[10px] font-medium bg-black/40 text-slate-200 border border-white/10 hover:bg-white/10"
+          className="appearance-none px-3 py-1.5 rounded-full text-[10px] font-medium bg-black/40 text-slate-200 border border-white/10 hover:bg-white/10"
         >
           Lung
         </button>
-        <button
+        <button ref={noNativeButtonBackground}
           type="button"
           onClick={() => handleWindowing('mediastinum')}
-          className="px-3 py-1.5 rounded-full text-[10px] font-medium bg-black/40 text-slate-200 border border-white/10 hover:bg-white/10"
+          className="appearance-none px-3 py-1.5 rounded-full text-[10px] font-medium bg-black/40 text-slate-200 border border-white/10 hover:bg-white/10"
         >
           Mediastinum
         </button>
-        <button
+        <button ref={noNativeButtonBackground}
           type="button"
           onClick={() => handleWindowing('bone')}
-          className="px-3 py-1.5 rounded-full text-[10px] font-medium bg-black/40 text-slate-200 border border-white/10 hover:bg-white/10"
+          className="appearance-none px-3 py-1.5 rounded-full text-[10px] font-medium bg-black/40 text-slate-200 border border-white/10 hover:bg-white/10"
         >
           Bone
         </button>
@@ -660,24 +661,24 @@ const ImagingDicomViewport: React.FC<ImagingDicomViewportProps> = ({
 
       {hasStack && (
         <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-black/50 text-white text-xs px-3 py-2 rounded-full z-20">
-          <button
+          <button ref={noNativeButtonBackground}
             type="button"
             onClick={() => stepImage(-1)}
-            className="p-1 rounded-full hover:bg-white/10"
+            className="appearance-none p-1 rounded-full hover:bg-white/10"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <span className="font-medium">
             {activeIndex + 1} / {stackLength}
           </span>
-          <button
+          <button ref={noNativeButtonBackground}
             type="button"
             onClick={() => stepImage(1)}
-            className="p-1 rounded-full hover:bg-white/10"
+            className="appearance-none p-1 rounded-full hover:bg-white/10"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
-          <button
+          <button ref={noNativeButtonBackground}
             type="button"
             onClick={toggleCine}
             className={`ml-2 flex items-center gap-1 px-3 py-1 rounded-full border ${

@@ -9,6 +9,7 @@ import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { exportReportToPDF } from '../utils/reportExport';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 const HIPAAComplianceDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
@@ -444,9 +445,9 @@ const HIPAAComplianceDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => navigate(`/ehr/${tenantSlug}/dashboard`)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="appearance-none p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -458,9 +459,9 @@ const HIPAAComplianceDashboard: React.FC = () => {
                 <p className="text-indigo-100 mt-1">Audit logs, breach detection & compliance reporting</p>
               </div>
             </div>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={exportLogs}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold text-sm"
+              className="appearance-none flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold text-sm"
             >
               <Download className="w-4 h-4" />
               Export Logs

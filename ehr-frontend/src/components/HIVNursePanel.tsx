@@ -5,6 +5,7 @@ import { useNotification } from './GlobalNotification';
 import { getHivCdssConfig } from './HIV/hivCdssConfig';
 import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 type HIVNursePanelProps = {
   appointmentId: string;
   patientId: string;
@@ -177,7 +178,7 @@ const HIVNursePanel: React.FC<HIVNursePanelProps> = ({ appointmentId, patientId,
           <Activity className="w-5 h-5" />
           <h3 className="font-semibold">HIV Nurse Intake</h3>
         </div>
-        <button onClick={onClose} className="p-2 rounded hover:bg-white/10"><X className="w-5 h-5" /></button>
+        <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 rounded hover:bg-white/10"><X className="w-5 h-5" /></button>
       </div>
 
       <div className="p-5 space-y-5">

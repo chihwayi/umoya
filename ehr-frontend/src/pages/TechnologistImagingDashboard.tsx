@@ -6,6 +6,7 @@ import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import TechnologistImagingWorklist from '../components/TechnologistImagingWorklist';
 import AdminNavigationShell from '../components/AdminNavigationShell';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 const TechnologistImagingDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [currentUser, setCurrentUser] = React.useState<any | null>(null);
@@ -158,7 +159,7 @@ const TechnologistImagingDashboard: React.FC = () => {
                   <p className="text-sm text-indigo-300">ACR Guidelines & Contrast Protocols</p>
                 </div>
               </div>
-              <button onClick={() => setShowGuidelineSearch(false)} className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+              <button ref={noNativeButtonBackground} onClick={() => setShowGuidelineSearch(false)} className="appearance-none p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>

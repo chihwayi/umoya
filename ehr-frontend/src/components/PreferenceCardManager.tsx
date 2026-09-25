@@ -3,6 +3,7 @@ import { X, Plus, Edit2, Loader2 } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface PreferenceCardManagerProps {
   tenantSlug: string;
   token: string;
@@ -102,7 +103,7 @@ const PreferenceCardManager: React.FC<PreferenceCardManagerProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="bg-indigo-600 text-white p-4 flex items-center justify-between">
           <h2 className="text-xl font-bold">Preference Cards</h2>
-          <button type="button" onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg">
+          <button ref={noNativeButtonBackground} type="button" onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>

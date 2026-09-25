@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 type NotificationType = 'success' | 'error' | 'warning' | 'info';
 
 interface Notification {
@@ -114,9 +115,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 <h4 className="font-bold text-base text-slate-900">{notification.title}</h4>
                 <p className="text-sm text-slate-700 mt-1.5 leading-relaxed">{notification.message}</p>
               </div>
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => removeNotification(notification.id)}
-                className="flex-shrink-0 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-lg transition-all duration-200"
+                className="appearance-none flex-shrink-0 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white/50 rounded-lg transition-all duration-200"
                 aria-label="Dismiss notification"
               >
                 <X className="w-4 h-4" />

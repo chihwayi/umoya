@@ -4,6 +4,7 @@ import { tenantApi, cdssApi } from '../services/api';
 import { Search, ChevronLeft, ChevronRight, Building2, ArrowRight, QrCode, Database, Upload, X, FileText } from 'lucide-react';
 import { TenantQRModal } from '../components/TenantQRModal';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface Tenant {
   id: string;
   clinicName: string;
@@ -423,9 +424,9 @@ const TenantDirectory: React.FC = () => {
               </div>
               <h3 className="text-lg font-semibold text-white">Connection error</h3>
               <p className="mt-2 text-sm text-[#E9B4C0]">{error}</p>
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => window.location.reload()}
-                className="mt-6 rounded-full border border-white/10 bg-white/8 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-white/12"
+                className="appearance-none mt-6 rounded-full border border-white/10 bg-white/8 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-white/12"
               >
                 Try again
               </button>
@@ -510,17 +511,17 @@ const TenantDirectory: React.FC = () => {
 
               {totalPages > 1 && (
                 <div className="mt-10 flex items-center justify-center gap-3">
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="rounded-full border border-white/10 bg-white/5 p-3 text-[#A8BEDD] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="appearance-none rounded-full border border-white/10 bg-white/5 p-3 text-[#A8BEDD] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
 
                   <div className="flex items-center gap-2">
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <button
+                      <button ref={noNativeButtonBackground}
                         key={page}
                         onClick={() => setCurrentPage(page)}
                         className={`h-10 w-10 rounded-full text-sm font-medium transition ${
@@ -534,10 +535,10 @@ const TenantDirectory: React.FC = () => {
                     ))}
                   </div>
 
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    className="rounded-full border border-white/10 bg-white/5 p-3 text-[#A8BEDD] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="appearance-none rounded-full border border-white/10 bg-white/5 p-3 text-[#A8BEDD] transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>

@@ -5,6 +5,7 @@ import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import ICD10Picker from './ICD10Picker';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface EDDispositionModalProps {
   visit: any;
   tenantSlug: string;
@@ -129,9 +130,9 @@ const EDDispositionModal: React.FC<EDDispositionModalProps> = ({
                 {visit.patient?.firstName} {visit.patient?.lastName} • {visit.edVisitNumber}
               </p>
             </div>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-lg transition"
+              className="appearance-none p-2 hover:bg-white/20 rounded-lg transition"
             >
               <X className="w-5 h-5" />
             </button>

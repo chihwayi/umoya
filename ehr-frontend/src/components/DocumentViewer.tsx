@@ -5,6 +5,7 @@ import { useNotification } from './GlobalNotification';
 import DocumentVersionHistory from './DocumentVersionHistory';
 import DocumentSharing from './DocumentSharing';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface DocumentViewerProps {
   documentId: string;
   tenantSlug: string;
@@ -114,7 +115,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 {document.patient_first_name} {document.patient_last_name}
               </p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>

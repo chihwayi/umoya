@@ -10,6 +10,7 @@ import ICD10Picker from './ICD10Picker';
 import { ehrAxios, storeroomApi } from '../services/api';
 import StockRequestModal from './StockRequestModal';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface AdmittedPatientWorkflowProps {
   admission: any;
   tenantSlug: string;
@@ -276,7 +277,7 @@ const AdmittedPatientWorkflow: React.FC<AdmittedPatientWorkflowProps> = ({
               {admission.patient_first_name} {admission.patient_last_name} - {admission.admission_number}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+          <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
             <X className="w-6 h-6" />
           </button>
         </div>

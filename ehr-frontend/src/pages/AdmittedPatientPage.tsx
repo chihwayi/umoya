@@ -16,6 +16,7 @@ import LabOrdersModal from '../components/LabOrdersModal';
 import ICD10Picker from '../components/ICD10Picker';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 const AdmittedPatientPage: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
@@ -219,9 +220,9 @@ const AdmittedPatientPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => navigate(`/ehr/${tenantSlug}/bed-management`)}
-                className="p-2 hover:bg-white/20 rounded-lg transition flex items-center gap-2"
+                className="appearance-none p-2 hover:bg-white/20 rounded-lg transition flex items-center gap-2"
               >
                 <ArrowLeft className="w-5 h-5" />
                 <span className="hidden sm:inline">Back to Bed Management</span>
@@ -358,7 +359,7 @@ const AdmittedPatientPage: React.FC = () => {
       <div className="bg-gradient-to-r from-slate-50 to-indigo-50 border-b border-indigo-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex gap-3 overflow-x-auto">
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setActiveTab('overview')}
               className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap font-medium ${
                 activeTab === 'overview'
@@ -370,7 +371,7 @@ const AdmittedPatientPage: React.FC = () => {
               <span>Overview</span>
             </button>
             
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setActiveTab('vitals')}
               className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap font-medium ${
                 activeTab === 'vitals'
@@ -389,7 +390,7 @@ const AdmittedPatientPage: React.FC = () => {
               )}
             </button>
             
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setActiveTab('nursing')}
               className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap font-medium ${
                 activeTab === 'nursing'
@@ -408,7 +409,7 @@ const AdmittedPatientPage: React.FC = () => {
               )}
             </button>
 
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setActiveTab('ai-insights')}
               className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all duration-300 whitespace-nowrap font-medium ${
                 activeTab === 'ai-insights'

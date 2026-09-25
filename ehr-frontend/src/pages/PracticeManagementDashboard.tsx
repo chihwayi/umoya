@@ -13,6 +13,7 @@ import {
 import { useNotification } from '../components/GlobalNotification';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 type TabKey = 'feeSchedules' | 'superbills' | 'verifications';
 
 const PracticeManagementDashboard: React.FC = () => {
@@ -139,13 +140,13 @@ const PracticeManagementDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() =>
                   navigate(
                     `/ehr/${tenantSlug}/${currentUser?.role === 'doctor' ? 'doctor' : currentUser?.role === 'nurse' ? 'nurse' : 'dashboard'}`,
                   )
                 }
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="appearance-none p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -157,9 +158,9 @@ const PracticeManagementDashboard: React.FC = () => {
                 <p className="text-emerald-100 mt-1">Fee schedules, superbills, insurance verification</p>
               </div>
             </div>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={loadAll}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
+              className="appearance-none flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh

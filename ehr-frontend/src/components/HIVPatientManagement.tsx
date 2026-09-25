@@ -7,6 +7,7 @@ import HIVPatientDetailModal from './HIVPatientDetailModal';
 import HIVClinicalVisitModal from './HIVClinicalVisitModal';
 import { getHivCdssConfig } from './HIV/hivCdssConfig';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface HIVPatientManagementProps {
   tenantSlug: string;
 }
@@ -131,7 +132,7 @@ const HIVPatientManagement: React.FC<HIVPatientManagementProps> = ({ tenantSlug 
                 </span>
               </div>
             )}
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => {
                 setBulkActionMode(!bulkActionMode);
                 setSelectedEnrollments(new Set());

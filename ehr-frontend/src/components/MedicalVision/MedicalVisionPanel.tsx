@@ -3,6 +3,7 @@ import { Upload, X, AlertCircle, CheckCircle, Activity, FileText, Loader2 } from
 import { cdssApi } from '../../services/api';
 import { useNotification } from '../GlobalNotification';
 
+import { noNativeButtonBackground } from '../../hooks/useNoNativeButtonBackground';
 interface MedicalVisionPanelProps {
   tenantSlug: string;
   token: string;
@@ -84,9 +85,9 @@ const MedicalVisionPanel: React.FC<MedicalVisionPanelProps> = ({ tenantSlug, tok
               <p className="text-blue-100 text-sm">Automated Imaging Analysis & Screening</p>
             </div>
           </div>
-          <button 
+          <button ref={noNativeButtonBackground} 
             onClick={onClose}
-            className="p-2 hover:bg-white/20 rounded-full transition-colors"
+            className="appearance-none p-2 hover:bg-white/20 rounded-full transition-colors"
           >
             <X className="w-6 h-6" />
           </button>

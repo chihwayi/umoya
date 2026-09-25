@@ -16,6 +16,7 @@ import { ehrApi, tenantApi, cdssApi } from '../services/api';
 import LiteModeToggle from '../components/LiteModeToggle';
 import TenantSubscriptionBanner from '../components/TenantSubscriptionBanner';
 import DashboardHero from '../components/DashboardHero';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -623,18 +624,18 @@ const EHRDashboard: React.FC = () => {
 
           {/* Navigation */}
           <nav className="space-y-2">
-            <button 
+            <button ref={noNativeButtonBackground} 
               onClick={() => navigate(`/ehr/${tenantSlug}/dashboard`)}
-              className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+              className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
             >
               <Heart className="w-5 h-5" />
               <span>Dashboard</span>
             </button>
             
             {user?.role !== 'admin' && user?.role !== 'accounts' && (
-              <button 
+              <button ref={noNativeButtonBackground} 
                 onClick={() => navigate(`/ehr/${tenantSlug}/patients`)}
-                className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <Users className="w-5 h-5" />
                 <span>Patients</span>
@@ -642,9 +643,9 @@ const EHRDashboard: React.FC = () => {
             )}
             
             {['doctor', 'nurse', 'receptionist'].includes(user?.role ?? '') && (
-              <button 
+              <button ref={noNativeButtonBackground} 
                 onClick={() => navigate(`/ehr/${tenantSlug}/appointments`)}
-                className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <Calendar className="w-5 h-5" />
                 <span>Appointments</span>
@@ -654,30 +655,30 @@ const EHRDashboard: React.FC = () => {
             {/* Finance/Accounts Navigation */}
             {user?.role === 'accounts' && (
               <>
-                <button 
+                <button ref={noNativeButtonBackground} 
                   onClick={() => navigate(`/ehr/${tenantSlug}/accounts`)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <CreditCard className="w-5 h-5" />
                   <span>Accounts</span>
                 </button>
-                <button 
+                <button ref={noNativeButtonBackground} 
                   onClick={() => navigate(`/ehr/${tenantSlug}/billing`)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <CreditCard className="w-5 h-5" />
                   <span>Billing</span>
                 </button>
-                <button 
+                <button ref={noNativeButtonBackground} 
                   onClick={() => navigate(`/ehr/${tenantSlug}/claims`)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <FileText className="w-5 h-5" />
                   <span>Medical Aid Claims</span>
                 </button>
-                <button 
+                <button ref={noNativeButtonBackground} 
                   onClick={() => navigate(`/ehr/${tenantSlug}/accounts/analytics`)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <BarChart3 className="w-5 h-5" />
                   <span>Revenue Analytics</span>
@@ -686,18 +687,18 @@ const EHRDashboard: React.FC = () => {
             )}
             
             {user?.role === 'admin' && (
-              <button 
+              <button ref={noNativeButtonBackground} 
                 onClick={() => navigate(`/ehr/${tenantSlug}/users`)}
-                className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+                className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <Users className="w-5 h-5" />
                 <span>User Management</span>
               </button>
             )}
             
-            <button 
+            <button ref={noNativeButtonBackground} 
               onClick={() => navigate(`/ehr/${tenantSlug}/settings`)}
-              className="w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
+              className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-300 hover:bg-white/10 rounded-lg transition-colors"
             >
               <Settings className="w-5 h-5" />
               <span>Profile Settings</span>
@@ -750,15 +751,15 @@ const EHRDashboard: React.FC = () => {
                 </div>
               )}
               {user.role === 'admin' && (
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => navigate(`/ehr/${tenantSlug}/hipaa-compliance`)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all font-semibold text-sm"
+                  className="appearance-none flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all font-semibold text-sm"
                 >
                   <Shield className="w-4 h-4" />
                   HIPAA Compliance
                 </button>
               )}
-              <button className="p-2 hover:bg-white/20 rounded-lg relative transition-colors">
+              <button ref={noNativeButtonBackground} className="appearance-none p-2 hover:bg-white/20 rounded-lg relative transition-colors">
                 <Bell className="w-5 h-5 text-white" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
               </button>
@@ -830,10 +831,10 @@ const EHRDashboard: React.FC = () => {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {visibleRoleActions.map((action, index) => (
-                <button
+                <button ref={noNativeButtonBackground}
                   key={index}
                   onClick={() => (action as any).route && navigate(`/ehr/${tenantSlug}/${(action as any).route}`)}
-                  className="group bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300 text-left hover:-translate-y-1"
+                  className="appearance-none group bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300 text-left hover:-translate-y-1"
                 >
                   <div className={`inline-flex p-3 bg-gradient-to-r ${action.color} rounded-xl mb-4 group-hover:scale-110 transition-transform`}>
                     <action.icon className="w-6 h-6 text-white" />

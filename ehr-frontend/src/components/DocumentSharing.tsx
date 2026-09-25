@@ -3,6 +3,7 @@ import { X, Share2, Users, Shield } from 'lucide-react';
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface DocumentSharingProps {
   documentId: string;
   tenantSlug: string;
@@ -78,7 +79,7 @@ const DocumentSharing: React.FC<DocumentSharingProps> = ({
               </h3>
               <p className="text-green-100 text-sm mt-1">Grant access to other users</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>

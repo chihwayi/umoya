@@ -3,6 +3,7 @@ import { X, Scan, CheckCircle, AlertTriangle, Shield, Clock } from 'lucide-react
 import { useNotification } from './GlobalNotification';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface MedicationScannerModalProps {
   prescription: any;
   patient: any;
@@ -160,7 +161,7 @@ const MedicationScannerModal: React.FC<MedicationScannerModalProps> = ({
               </h2>
               <p className="text-blue-100 mt-1">5 Rights Verification</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-6 h-6" />
             </button>
           </div>

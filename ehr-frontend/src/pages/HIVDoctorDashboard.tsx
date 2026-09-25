@@ -18,6 +18,7 @@ import HIVCohortAnalysis from '../components/HIVCohortAnalysis';
 import HIVComparisonReports from '../components/HIVComparisonReports';
 import HivReportsPanel from '../components/HivReportsPanel';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface HIVEnrollment {
   id: string;
   enrollment_number: string;
@@ -732,9 +733,9 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-                className="p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
+                className="appearance-none p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
               >
                 <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -746,13 +747,13 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
                 <p className="text-emerald-100 mt-1 text-xs sm:text-sm hidden sm:block">Comprehensive HIV care oversight and ARV regimen management</p>
               </div>
             </div>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={loadData}
-              className="p-1.5 sm:p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0"
+              className="appearance-none p-1.5 sm:p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0"
             >
               <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setShowGuidelineSearch(!showGuidelineSearch)}
               className={`p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0 flex items-center gap-2 ${
                 showGuidelineSearch ? 'bg-white text-emerald-700 shadow-sm' : 'bg-white/10 hover:bg-white/20 text-white'
@@ -2296,13 +2297,13 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-6 rounded-t-xl flex items-center justify-between">
                 <h2 className="text-xl font-bold">Approve Regimen Change</h2>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => {
                     setShowApprovalModal(false);
                     setSelectedChangeRequest(null);
                     setApprovalNotes('');
                   }}
-                  className="p-2 hover:bg-white/10 rounded-lg"
+                  className="appearance-none p-2 hover:bg-white/10 rounded-lg"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -2363,13 +2364,13 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
               <div className="bg-gradient-to-r from-red-600 to-orange-700 text-white p-6 rounded-t-xl flex items-center justify-between">
                 <h2 className="text-xl font-bold">Reject Regimen Change</h2>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => {
                     setShowRejectionModal(false);
                     setSelectedChangeRequest(null);
                     setRejectionReason('');
                   }}
-                  className="p-2 hover:bg-white/10 rounded-lg"
+                  className="appearance-none p-2 hover:bg-white/10 rounded-lg"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -2422,7 +2423,7 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
             <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-gradient-to-r from-orange-600 to-red-600 text-white p-6 rounded-t-xl flex items-center justify-between">
                 <h2 className="text-xl font-bold">Change ARV Regimen</h2>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => {
                     setShowRegimenChangeModal(false);
                     setSelectedEnrollmentForChange(null);
@@ -2431,7 +2432,7 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
                     setRegimenSafetyPrecheck(null);
                     setLoadingRegimenSafetyPrecheck(false);
                   }}
-                  className="p-2 hover:bg-white/10 rounded-lg"
+                  className="appearance-none p-2 hover:bg-white/10 rounded-lg"
                 >
                   <X className="w-5 h-5" />
                 </button>

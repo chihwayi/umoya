@@ -12,6 +12,7 @@ import { ehrApi } from '../services/api';
 import { useNotification } from '../components/GlobalNotification';
 import { exportReportToCSV, exportReportToPDF, ReportColumn } from '../utils/reportExport';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 type ReportKind = 'lab' | 'referral' | 'immunization' | 'mortality' | 'tax';
 
 const REPORT_LABELS: Record<ReportKind, string> = {
@@ -396,17 +397,17 @@ const ReportsPage: React.FC = () => {
           {data && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-3">
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={handleExportCSV}
                   disabled={!hasExportRows}
-                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center gap-2 disabled:opacity-50"
+                  className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center gap-2 disabled:opacity-50"
                 >
                   <Download className="w-4 h-4" />
                   Download CSV
                 </button>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={handleExportPDF}
-                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center gap-2"
+                  className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center gap-2"
                 >
                   <Download className="w-4 h-4" />
                   Download PDF

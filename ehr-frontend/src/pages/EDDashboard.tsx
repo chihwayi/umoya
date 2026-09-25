@@ -11,6 +11,7 @@ import EDTrackingBoard from '../components/EDTrackingBoard';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 import { useConfirmation } from '../hooks/useConfirmation';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 import {
   buildSharedContextTags,
   getEdRegistrationDuplicateGuard,
@@ -223,9 +224,9 @@ const EDDashboard: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => navigate(`/ehr/${tenantSlug}/${user.role === 'doctor' ? 'doctor' : user.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -238,16 +239,16 @@ const EDDashboard: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => setShowRegisterModal(true)}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                  className="appearance-none px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
                 >
                   <User className="w-4 h-4" />
                   Register Patient
                 </button>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={handleRefresh}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                  className="appearance-none p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
                 >
                   <RefreshCw className="w-5 h-5" />
                 </button>
@@ -374,9 +375,9 @@ const EDDashboard: React.FC = () => {
                   </h3>
                   <p className="text-red-100 mt-1">Emergency Department Arrival</p>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => setShowRegisterModal(false)}
-                  className="p-2 hover:bg-white/20 rounded-lg transition"
+                  className="appearance-none p-2 hover:bg-white/20 rounded-lg transition"
                 >
                   <X className="w-5 h-5" />
                 </button>

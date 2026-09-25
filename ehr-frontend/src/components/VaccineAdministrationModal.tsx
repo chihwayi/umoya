@@ -5,6 +5,7 @@ import SnomedConceptPicker from './SnomedConceptPicker';
 import { ehrAxios, storeroomApi } from '../services/api';
 import StockRequestModal from './StockRequestModal';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface VaccineAdministrationModalProps {
   patientId: string;
   tenantSlug: string;
@@ -105,7 +106,7 @@ const VaccineAdministrationModal: React.FC<VaccineAdministrationModalProps> = ({
               </h3>
               <p className="text-green-100 mt-1">Record vaccine administration with SNOMED coding</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-5 h-5" />
             </button>
           </div>

@@ -6,6 +6,7 @@ import { ehrAxios } from '../services/api';
 import AldreteScoreModal from '../components/AldreteScoreModal';
 import { useConfirmation } from '../hooks/useConfirmation';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 const PACUDashboard: React.FC = () => {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const navigate = useNavigate();
@@ -111,9 +112,9 @@ const PACUDashboard: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>

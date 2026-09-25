@@ -3,6 +3,7 @@ import { X, Activity, Wind, Heart, Brain, Droplets } from 'lucide-react';
 import { useNotification } from './GlobalNotification';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface AldreteScoreModalProps {
   pacuRecordId: string;
   currentScore: number;
@@ -63,7 +64,7 @@ const AldreteScoreModal: React.FC<AldreteScoreModalProps> = ({
               </h2>
               <p className="text-purple-100 mt-1">Post-Anesthesia Recovery Score (0-10)</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-6 h-6" />
             </button>
           </div>

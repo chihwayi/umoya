@@ -6,6 +6,7 @@ import { cdssApi, ehrAxios } from '../services/api';
 import { usePrompt } from '../hooks/usePrompt';
 import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface SurgicalCaseDetailModalProps {
   caseId: string;
   tenantSlug: string;
@@ -334,7 +335,7 @@ const SurgicalCaseDetailModal: React.FC<SurgicalCaseDetailModalProps> = ({
               <span className={`px-3 py-1 rounded-full text-sm font-bold border-2 ${getStatusBadge(surgicalCase.status)}`}>
                 {surgicalCase.status?.replace('_', ' ').toUpperCase()}
               </span>
-              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+              <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
                 <X className="w-6 h-6" />
               </button>
             </div>

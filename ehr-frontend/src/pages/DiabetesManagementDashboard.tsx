@@ -21,6 +21,7 @@ import { useNotification } from '../components/GlobalNotification';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 const formatDate = (value?: string | Date | null, includeTime = false) => {
   if (!value) return '—';
   try {
@@ -282,9 +283,9 @@ const DiabetesManagementDashboard: React.FC = () => {
                   </p>
                   <p className="text-xs uppercase tracking-wide text-white/60">{currentUser.role}</p>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={handleLogout}
-                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+                  className="appearance-none p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
                   aria-label="Logout"
                 >
                   <LogOut className="w-5 h-5" />

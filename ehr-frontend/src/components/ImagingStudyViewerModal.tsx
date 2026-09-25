@@ -25,6 +25,7 @@ import { DicomViewer } from './DicomViewer';
 import ModalPortal from './ModalPortal';
 import ConfirmationDialog from './ConfirmationDialog';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface ImagingStudyViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -453,9 +454,9 @@ const ImagingStudyViewerModal: React.FC<ImagingStudyViewerModalProps> = ({
       <div className="min-h-full flex items-start justify-center p-4 sm:py-10">
         <div className="w-full lg:max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col mt-6 sm:mt-0 sm:max-h-[95vh]">
           <div className="bg-gradient-to-br from-slate-900 via-indigo-800 to-sky-600 px-6 py-5 text-white relative">
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={handleClose}
-              className="absolute right-4 top-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition text-white"
+              className="appearance-none absolute right-4 top-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition text-white"
               aria-label="Close viewer"
             >
               <X className="w-4 h-4" />

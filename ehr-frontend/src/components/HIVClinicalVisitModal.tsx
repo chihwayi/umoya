@@ -8,6 +8,7 @@ import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { getHivCdssConfig } from './HIV/hivCdssConfig';
 import { validateHivVisitAgainstGuidelines } from './HIV/hivVisitGuidelineValidation';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface HIVClinicalVisitModalProps {
   enrollment: any;
   onClose: () => void;
@@ -1258,9 +1259,9 @@ const HIVClinicalVisitModal: React.FC<HIVClinicalVisitModalProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setShowQuickReference(true)}
-              className="bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg flex items-center gap-2 font-semibold transition-colors text-sm"
+              className="appearance-none bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg flex items-center gap-2 font-semibold transition-colors text-sm"
               title="Quick Reference Guide"
             >
               <Book className="w-4 h-4" />

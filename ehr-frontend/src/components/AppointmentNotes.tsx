@@ -13,6 +13,7 @@ import Icd10Suggestions from './Icd10Suggestions';
 import VoiceConsultationButton from './VoiceConsultation/VoiceConsultationButton';
 import medicalEntityExtractor, { ExtractedEntities } from '../services/medical-entity-extractor.service';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface Appointment {
   id: string;
   patient: {
@@ -431,9 +432,9 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
                 </div>
               </div>
             </div>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={onClose}
-              className="p-2 hover:bg-white/50 rounded-xl transition-colors"
+              className="appearance-none p-2 hover:bg-white/50 rounded-xl transition-colors"
             >
               <X className="w-6 h-6 text-slate-500" />
             </button>
@@ -443,7 +444,7 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
         {/* Tab Navigation */}
         <div className="bg-slate-50/50 border-b border-slate-200/50">
           <nav className="flex space-x-1 px-6">
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setActiveTab('notes')}
               className={`py-4 px-4 border-b-2 font-medium text-sm rounded-t-lg transition-all ${
                 activeTab === 'notes'
@@ -454,7 +455,7 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
               <FileText className="w-4 h-4 inline mr-2" />
               Clinical Documentation
             </button>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setActiveTab('treatment')}
               className={`py-4 px-4 border-b-2 font-medium text-sm rounded-t-lg transition-all ${
                 activeTab === 'treatment'
@@ -465,7 +466,7 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
               <Stethoscope className="w-4 h-4 inline mr-2" />
               Treatment & Follow-up
             </button>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setActiveTab('prescriptions')}
               className={`py-4 px-4 border-b-2 font-medium text-sm rounded-t-lg transition-all ${
                 activeTab === 'prescriptions'
@@ -476,7 +477,7 @@ const AppointmentNotes: React.FC<AppointmentNotesProps> = ({
               <Pill className="w-4 h-4 inline mr-2" />
               Prescriptions
             </button>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setActiveTab('lab')}
               className={`py-4 px-4 border-b-2 font-medium text-sm rounded-t-lg transition-all ${
                 activeTab === 'lab'

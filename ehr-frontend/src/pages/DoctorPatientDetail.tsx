@@ -31,6 +31,7 @@ import PalliativeDashboard from '../components/PalliativeDashboard';
 import NutritionDashboard from '../components/NutritionDashboard';
 import IcuDashboard from '../components/IcuDashboard';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface Patient {
   id: string;
   patientNumber: string;
@@ -1206,9 +1207,9 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
                     <p className="text-sm text-blue-100">AI-powered medical protocols & research</p>
                   </div>
                 </div>
-                <button 
+                <button ref={noNativeButtonBackground} 
                   onClick={() => setShowGuidelineSearch(false)} 
-                  className="p-2 rounded-lg hover:bg-white/20 text-white transition-colors"
+                  className="appearance-none p-2 rounded-lg hover:bg-white/20 text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>

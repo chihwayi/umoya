@@ -13,6 +13,7 @@ import {
 } from '../services/doctorContextAdapter';
 import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 type CardiologyEncounterModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -336,7 +337,7 @@ const CardiologyEncounterModal: React.FC<CardiologyEncounterModalProps> = ({
                 <p className="text-sm text-slate-600">Capture cardiac assessment details and trigger finance gating</p>
               </div>
             </div>
-            <button onClick={onClose} className="rounded-full p-2 hover:bg-white/70 transition" aria-label="Close">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none rounded-full p-2 hover:bg-white/70 transition" aria-label="Close">
               <X className="h-5 w-5 text-slate-600" />
             </button>
           </div>

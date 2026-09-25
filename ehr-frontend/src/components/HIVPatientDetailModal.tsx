@@ -13,6 +13,7 @@ import { getHivCdssConfig } from './HIV/hivCdssConfig';
 import { GuidelineSearchPanel } from './GuidelineSearchPanel';
 import HIVReferralManagement from './HIVReferralManagement';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface HIVPatientDetailModalProps {
   enrollment: any;
   onClose: () => void;
@@ -510,9 +511,9 @@ const HIVPatientDetailModal: React.FC<HIVPatientDetailModalProps> = ({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => setShowSummaryCard(true)}
-              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-semibold transition-colors"
+              className="appearance-none bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-semibold transition-colors"
               title="Print Patient Summary Card"
             >
               <Printer className="w-4 h-4" />

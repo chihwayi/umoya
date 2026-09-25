@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { maternalMortalityApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 type DashboardTab = 'audit' | 'emonc' | 'summary';
 
 type RecommendationRow = {
@@ -379,7 +380,7 @@ export default function MaternalMortalityDashboard({
           const Icon = tab.icon;
           const selected = activeTab === tab.id;
           return (
-            <button
+            <button ref={noNativeButtonBackground}
               key={tab.id}
               onClick={() => setActiveTab(tab.id as DashboardTab)}
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${

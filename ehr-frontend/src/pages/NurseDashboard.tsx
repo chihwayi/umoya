@@ -2652,13 +2652,13 @@ const NurseDashboard: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => {
                   fetchTodayAppointments();
                   fetchCalendarAppointments();
                 }}
                 disabled={loading || calendarLoading}
-                className="p-2 hover:bg-white/50 rounded-lg transition-all duration-200 disabled:opacity-50"
+                className="appearance-none p-2 hover:bg-white/50 rounded-lg transition-all duration-200 disabled:opacity-50"
               >
                 <RefreshCw className={`w-5 h-5 text-slate-600 ${loading || calendarLoading ? 'animate-spin' : ''}`} />
               </button>
@@ -4154,13 +4154,13 @@ const NurseDashboard: React.FC = () => {
                   </div>
 
                   <div className="flex gap-3 pt-2">
-                    <button
+                    <button ref={noNativeButtonBackground}
                       type="button"
                       onClick={() => {
                         setShowPaymentModal(false);
                         setPaymentAppointment(null);
                       }}
-                      className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl bg-white/80 hover:bg-slate-50 transition text-sm font-medium"
+                      className="appearance-none flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl bg-white/80 hover:bg-slate-50 transition text-sm font-medium"
                     >
                       Cancel
                     </button>
@@ -5354,14 +5354,14 @@ const NurseDashboard: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => {
                     setShowVitalsHistoryModal(false);
                     setVitalsHistoryPatientId(null);
                     setVitalsHistoryPatientName(null);
                     setVitalsHistory([]);
                   }}
-                  className="p-2 rounded-xl hover:bg-white/15 text-white transition-colors"
+                  className="appearance-none p-2 rounded-xl hover:bg-white/15 text-white transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>

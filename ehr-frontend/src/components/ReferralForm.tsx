@@ -3,6 +3,7 @@ import { X, Save, Send, FileText, Building2, User, AlertCircle } from 'lucide-re
 import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface ReferralFormProps {
   patientId: string;
   patientName: string;
@@ -178,7 +179,7 @@ const ReferralForm: React.FC<ReferralFormProps> = ({
               </h2>
               <p className="text-blue-100 text-sm mt-1">Patient: {patientName}</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>

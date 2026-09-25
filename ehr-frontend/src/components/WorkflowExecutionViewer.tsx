@@ -4,6 +4,7 @@ import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import ConfirmDialog from './ConfirmDialog';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface WorkflowExecution {
   id: string;
   workflow_id: string;
@@ -156,14 +157,14 @@ const WorkflowExecutionViewer: React.FC<WorkflowExecutionViewerProps> = ({
             <p className="text-blue-100 text-sm mt-1">View workflow execution details and step status</p>
           </div>
           <div className="flex gap-3">
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={loadExecutions}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors"
               title="Refresh"
             >
               <RefreshCw className="w-5 h-5" />
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>

@@ -36,6 +36,7 @@ import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import { formatDateTimeToDDMMYYYYHHMM } from '../utils/dateFormatting';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface LabOrder {
   id: string;
   orderNumber: string;
@@ -2461,16 +2462,16 @@ const LabDashboard: React.FC = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => refreshActiveTab()}
-                    className="px-3 py-2 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-2"
+                    className="appearance-none px-3 py-2 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-2"
                   >
                     <RefreshCw className="w-4 h-4" />
                     Refresh
                   </button>
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={handleCloseWorkspace}
-                    className="px-3 py-2 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-2"
+                    className="appearance-none px-3 py-2 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center gap-2"
                   >
                     <X className="w-4 h-4" />
                     Close
@@ -3069,9 +3070,9 @@ const LabDashboard: React.FC = () => {
             <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden bg-white rounded-2xl shadow-2xl">
               <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-cyan-600 px-6 py-4 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-white">Submit Lab Results - {selectedOrder.orderNumber}</h2>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => setShowResultsModal(false)}
-                  className="p-2 rounded-lg hover:bg-white/20 text-white"
+                  className="appearance-none p-2 rounded-lg hover:bg-white/20 text-white"
                 >
                   <X className="w-5 h-5" />
                 </button>

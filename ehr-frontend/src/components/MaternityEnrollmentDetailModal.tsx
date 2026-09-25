@@ -18,6 +18,7 @@ import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { useConfirmation } from '../hooks/useConfirmation';
 import PartographChart from './PartographChart';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface MaternityEnrollmentDetailModalProps {
   enrollmentId: string;
   tenantSlug: string;
@@ -2806,9 +2807,9 @@ const MaternityEnrollmentDetailModal: React.FC<MaternityEnrollmentDetailModalPro
                 </p>
               )}
             </div>
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={onClose}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+              className="appearance-none p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>

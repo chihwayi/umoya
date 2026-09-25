@@ -4,6 +4,7 @@ import { ehrApi } from '../services/api';
 import { useNotification } from './GlobalNotification';
 import PatientProgressReporting from './PatientProgressReporting';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface CarePlan {
   id: string;
   name: string;
@@ -110,7 +111,7 @@ const PatientCarePlansView: React.FC<PatientCarePlansViewProps> = ({
             <p className="text-teal-100 text-sm mt-1">View your active care plans and track your progress</p>
           </div>
           {onClose && (
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           )}

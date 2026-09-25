@@ -26,6 +26,7 @@ import ModalPortal from '../components/ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 import {
   buildSharedContextTags,
   getOphthalmologyCreateEncounterPrefill,
@@ -1034,9 +1035,9 @@ const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedde
       <header className="bg-gradient-to-r from-sky-600 via-indigo-600 to-blue-600 border-b border-sky-400 shadow">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4 text-white">
           <div className="flex items-start gap-3">
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+              className="appearance-none p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
               aria-label="Back to doctor dashboard"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -1060,9 +1061,9 @@ const OphthalmologyDashboard: React.FC<OphthalmologyDashboardProps> = ({ embedde
                 <p className="text-xs text-white/70 capitalize">{currentUser.role}</p>
               </div>
             )}
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={handleLogout}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
+              className="appearance-none inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
             >
               <LogOut className="w-4 h-4" />
               Logout

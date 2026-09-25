@@ -9,6 +9,7 @@ import { useNotification } from '../components/GlobalNotification';
 import BedManagementBoard from '../components/BedManagementBoard';
 import AdmissionWorkflow from '../components/AdmissionWorkflow';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface BedOccupancyStats {
   total_beds: number;
   occupied: number;
@@ -78,9 +79,9 @@ const BedManagementDashboard: React.FC<BedManagementDashboardProps> = ({ embedde
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => navigate(`/ehr/${tenantSlug}/${user.role === 'doctor' ? 'doctor' : user.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -93,15 +94,15 @@ const BedManagementDashboard: React.FC<BedManagementDashboardProps> = ({ embedde
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => setShowAdmissionWorkflow(true)}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium"
+                  className="appearance-none px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-sm font-medium"
                 >
                   New Admission
                 </button>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={handleRefresh}
-                  className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                  className="appearance-none p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
                 >
                   <RefreshCw className="w-5 h-5" />
                 </button>

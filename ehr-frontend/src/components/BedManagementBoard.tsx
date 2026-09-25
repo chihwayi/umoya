@@ -7,6 +7,7 @@ import {
 import { useNotification } from './GlobalNotification';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface BedManagementBoardProps {
   tenantSlug: string;
   token: string;
@@ -138,7 +139,7 @@ const BedManagementBoard: React.FC<BedManagementBoardProps> = ({
             const available = wardBeds.filter(b => b.status === 'available').length;
             
             return (
-              <button
+              <button ref={noNativeButtonBackground}
                 key={ward}
                 onClick={() => setActiveWardTab(ward)}
                 className={`flex-shrink-0 px-6 py-4 rounded-xl transition-all duration-300 ${

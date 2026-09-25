@@ -40,6 +40,7 @@ import { useNotification } from '../components/GlobalNotification';
 import ModalPortal from '../components/ModalPortal';
 import { GuidelineResult } from '../types/guidelines';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 const formatCurrency = (amount: number | string): string => {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   return new Intl.NumberFormat('en-ZA', {
@@ -386,9 +387,9 @@ const ClaimsDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => navigate(`/ehr/${tenantSlug}/dashboard`)}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                className="appearance-none p-2 rounded-lg hover:bg-white/10 transition-colors"
               >
                 <ArrowLeft className="w-5 h-5 text-white" />
               </button>
@@ -407,24 +408,24 @@ const ClaimsDashboard: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={loadDashboardData}
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+                className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
                 Refresh
               </button>
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={handleExportCsv}
                 disabled={exporting}
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
                 {exporting ? 'Exporting…' : 'Export CSV'}
               </button>
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => setShowImportModal(true)}
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+                className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
               >
                 <Upload className="w-4 h-4" />
                 Import Remittance
@@ -766,9 +767,9 @@ const ClaimsDashboard: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-center gap-4">
-                        <button
+                        <button ref={noNativeButtonBackground}
                           onClick={() => toggleClaimSelection(claim.id)}
-                          className="p-1 hover:bg-white/10 rounded transition-colors"
+                          className="appearance-none p-1 hover:bg-white/10 rounded transition-colors"
                         >
                           {selectedClaims.has(claim.id) ? (
                             <CheckSquare className="w-5 h-5 text-purple-400" />
@@ -801,12 +802,12 @@ const ClaimsDashboard: React.FC = () => {
                         {getReadinessBadge(readiness)}
                         {getStatusBadge(claim.status)}
                         <div className="flex gap-2">
-                          <button
+                          <button ref={noNativeButtonBackground}
                             onClick={() => {
                               setSelectedClaim(claim);
                               setShowClaimDetailModal(true);
                             }}
-                            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                            className="appearance-none p-2 rounded-lg hover:bg-white/10 transition-colors"
                           >
                             <Eye className="w-4 h-4 text-white/60" />
                           </button>
@@ -942,9 +943,9 @@ const ClaimsDashboard: React.FC = () => {
                   <h3 className="text-xl font-bold text-white">Denial-Prevention Worklist</h3>
                   <p className="text-white/60 text-sm mt-1">Prioritize blocked and at-risk claims before submission or resubmission.</p>
                 </div>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={loadDashboardData}
-                  className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+                  className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
                 >
                   <RefreshCw className="w-4 h-4" />
                   Refresh
@@ -1192,9 +1193,9 @@ const AgedClaimsTab: React.FC<{ data: any; loading: boolean; onRefresh: () => vo
             <h3 className="text-xl font-bold text-white">Aged Claims</h3>
             <p className="text-white/60 text-sm mt-1">Outstanding (submitted / processing / approved-unpaid) claims by age.</p>
           </div>
-          <button
+          <button ref={noNativeButtonBackground}
             onClick={onRefresh}
-            className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+            className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
           >
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
@@ -1332,7 +1333,7 @@ const ImportRemittanceModal: React.FC<{
         )}
 
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white">Close</button>
+          <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white">Close</button>
           <button
             onClick={result ? onSuccess : handleImport}
             disabled={loading}
@@ -1567,7 +1568,7 @@ const CreateClaimTab: React.FC<{
           <label className="block text-white/60 text-sm mb-2">Claim Source</label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {(['bill', 'appointment', 'procedure', 'itemised'] as const).map((source) => (
-              <button
+              <button ref={noNativeButtonBackground}
                 key={source}
                 onClick={() => setClaimSource(source)}
                 className={`px-4 py-3 rounded-lg transition-colors capitalize ${
@@ -1736,10 +1737,10 @@ const CreateClaimTab: React.FC<{
                   {patientResults.length > 0 && (
                     <div className="absolute z-10 mt-1 w-full rounded-lg bg-slate-800 border border-white/10 max-h-56 overflow-y-auto">
                       {patientResults.map((patient) => (
-                        <button
+                        <button ref={noNativeButtonBackground}
                           key={patient.id}
                           onClick={() => { setSelectedPatient(patient); setPatientResults([]); }}
-                          className="w-full text-left px-4 py-2 text-white hover:bg-white/10"
+                          className="appearance-none w-full text-left px-4 py-2 text-white hover:bg-white/10"
                         >
                           {patient.firstName} {patient.lastName}
                           {patient.patientNumber ? <span className="text-white/40"> · {patient.patientNumber}</span> : null}
@@ -1776,10 +1777,10 @@ const CreateClaimTab: React.FC<{
               {tariffResults.length > 0 && (
                 <div className="absolute z-10 mt-1 w-full rounded-lg bg-slate-800 border border-white/10 max-h-56 overflow-y-auto">
                   {tariffResults.map((tariff) => (
-                    <button
+                    <button ref={noNativeButtonBackground}
                       key={tariff.id}
                       onClick={() => addTariffLine(tariff)}
-                      className="w-full text-left px-4 py-2 hover:bg-white/10 flex justify-between"
+                      className="appearance-none w-full text-left px-4 py-2 hover:bg-white/10 flex justify-between"
                     >
                       <span className="text-white">
                         <span className="font-mono text-purple-300">{tariff.code}</span> {tariff.description}
@@ -2133,9 +2134,9 @@ const BulkOperationsTab: React.FC<{
           Select multiple claims and submit/check status in one action.
         </p>
         <div className="flex flex-wrap gap-3 items-center">
-          <button
+          <button ref={noNativeButtonBackground}
             onClick={toggleSelectAll}
-            className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+            className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
           >
             {selectedCount === claims.length && claims.length > 0 ? 'Clear All' : 'Select All'}
           </button>
@@ -2378,10 +2379,10 @@ const ApiConfigurationTab: React.FC<{
       <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
         <div className="flex flex-wrap gap-2 mb-4">
           {['cimas', 'premier', 'econet_health', 'psmas', 'first_mutual', 'demo_aid'].map((provider) => (
-            <button
+            <button ref={noNativeButtonBackground}
               key={provider}
               onClick={() => applyDemoTemplate(provider)}
-              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm"
+              className="appearance-none px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm"
             >
               Use {provider}
             </button>
@@ -2699,7 +2700,7 @@ const ClaimDetailModal: React.FC<{
     <div className="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-white">Claim Details</h2>
-        <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+        <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 rounded-lg hover:bg-white/10 transition-colors">
           <XCircle className="w-5 h-5 text-white/60" />
         </button>
       </div>
@@ -3084,9 +3085,9 @@ const ClaimDetailModal: React.FC<{
               Resubmit
             </button>
           )}
-          <button
+          <button ref={noNativeButtonBackground}
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+            className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white"
           >
             Close
           </button>

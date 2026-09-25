@@ -4,6 +4,7 @@ import { useNotification } from './GlobalNotification';
 import ICD10Picker from './ICD10Picker';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface ScheduleSurgeryModalProps {
   tenantSlug: string;
   token: string;
@@ -139,7 +140,7 @@ const ScheduleSurgeryModal: React.FC<ScheduleSurgeryModalProps> = ({
               </h2>
               <p className="text-indigo-100 mt-1">Plan a surgical procedure</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-6 h-6" />
             </button>
           </div>

@@ -42,6 +42,7 @@ import OncologySurvivorshipDashboard from '../components/OncologySurvivorshipDas
 import SnomedConceptPicker, { SnomedConcept } from '../components/SnomedConceptPicker';
 import { SmartFormsFloatingButton } from '../components/WHOSmartForms';
 import { GuidelineResult } from '../types/guidelines';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 import {
   buildSharedContextTags,
   getOncologyCreateCaseDuplicateGuard,
@@ -1250,9 +1251,9 @@ const OncologyDashboard: React.FC<OncologyDashboardProps> = ({ embedded = false 
       <header className="bg-gradient-to-r from-purple-700 via-fuchsia-600 to-rose-500 border-b border-fuchsia-400 shadow">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between text-white">
           <div className="flex items-start gap-3">
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={() => navigate(`/ehr/${tenantSlug}/doctor`)}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+              className="appearance-none p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
               aria-label="Back to doctor dashboard"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -1276,9 +1277,9 @@ const OncologyDashboard: React.FC<OncologyDashboardProps> = ({ embedded = false 
                 <p className="text-xs text-white/70 capitalize">{currentUser.role}</p>
               </div>
             )}
-            <button
+            <button ref={noNativeButtonBackground}
               onClick={handleLogout}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
+              className="appearance-none inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
             >
               <LogOut className="w-4 h-4" />
               Logout

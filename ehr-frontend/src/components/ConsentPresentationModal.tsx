@@ -7,6 +7,7 @@ import ICD10Picker from './ICD10Picker';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import { ehrAxios, ehrApi } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface ConsentPresentationModalProps {
   template: any;
   patientId: string;
@@ -151,7 +152,7 @@ const ConsentPresentationModal: React.FC<ConsentPresentationModalProps> = ({
                 {step === 'review' ? 'Review Consent Form' : 'Obtain Signature'}
               </p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-5 h-5" />
             </button>
           </div>

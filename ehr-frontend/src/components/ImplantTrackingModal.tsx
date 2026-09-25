@@ -3,6 +3,7 @@ import { X, Package, Barcode, DollarSign, MapPin, AlertTriangle } from 'lucide-r
 import { useNotification } from './GlobalNotification';
 import { ehrAxios } from '../services/api';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface ImplantTrackingModalProps {
   surgicalCaseId: string;
   tenantSlug: string;
@@ -100,7 +101,7 @@ const ImplantTrackingModal: React.FC<ImplantTrackingModalProps> = ({
               </h2>
               <p className="text-purple-100 mt-1">FDA-compliant implant tracking</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition">
+            <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition">
               <X className="w-6 h-6" />
             </button>
           </div>

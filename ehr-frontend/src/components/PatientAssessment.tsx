@@ -11,6 +11,7 @@ import ModalPortal from './ModalPortal';
 import SnomedConceptPicker, { SnomedConcept } from './SnomedConceptPicker';
 import Icd10Suggestions from './Icd10Suggestions';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 // Appointment "reason" is a scheduling category (Consultation, Follow-up,
 // Check-up...), not a clinical complaint — prefilling Chief Complaint with
 // it let a nurse save a triage assessment where "Consultation" reads as
@@ -659,10 +660,10 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
         <div className="lg:col-span-2 space-y-4">
 
           {/* Clinical Assessment */}
-          <button
+          <button ref={noNativeButtonBackground}
             type="button"
             onClick={() => setAssessmentOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
+            className="appearance-none w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
           >
             <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <Stethoscope className="w-4 h-4 text-pink-500" />
@@ -790,10 +791,10 @@ const PatientAssessment: React.FC<PatientAssessmentProps> = ({
           </>}
 
           {/* Patient Background */}
-          <button
+          <button ref={noNativeButtonBackground}
             type="button"
             onClick={() => setBackgroundOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
+            className="appearance-none w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-left hover:bg-slate-50 transition-colors shadow-sm"
           >
             <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <ClipboardList className="w-4 h-4 text-slate-500" />

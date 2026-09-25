@@ -7,6 +7,7 @@ import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 import PromptDialog from '../components/PromptDialog';
 import ModalPortal from '../components/ModalPortal';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface BloodBankDashboardProps {
   embedded?: boolean;
 }
@@ -559,9 +560,9 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -1065,7 +1066,7 @@ const BloodBankDashboard: React.FC<BloodBankDashboardProps> = ({ embedded = fals
         {/* Component Filter */}
         <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
           {components.map((comp) => (
-            <button
+            <button ref={noNativeButtonBackground}
               key={comp.value}
               onClick={() => setSelectedComponent(comp.value)}
               className={`px-4 py-2 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${

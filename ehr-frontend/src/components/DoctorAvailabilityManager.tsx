@@ -6,6 +6,7 @@ import DatePicker from './DatePicker';
 import { formatDateForAPI, formatDateToDDMMYYYY } from '../utils/dateUtils';
 import { useConfirmation } from '../hooks/useConfirmation';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface DoctorAvailability {
   id: string;
   doctorId: string;
@@ -211,9 +212,9 @@ const DoctorAvailabilityManager: React.FC<DoctorAvailabilityManagerProps> = ({
             <h2 className="text-2xl font-bold">Manage Availability</h2>
             <p className="mt-1 text-sm text-cyan-100">Mark days or times when you're unavailable</p>
           </div>
-          <button
+          <button ref={noNativeButtonBackground}
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/40 bg-white/15 text-white shadow-sm transition-colors hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/70"
+            className="appearance-none inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/40 bg-white/15 text-white shadow-sm transition-colors hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/70"
             aria-label="Close availability manager"
           >
             <X className="h-5 w-5" />

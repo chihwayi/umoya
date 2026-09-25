@@ -31,6 +31,7 @@ import ModalPortal from '../components/ModalPortal';
 import { formatDateForAPI } from '../utils/dateUtils';
 import { exportReportToCSV, exportReportToPDF } from '../utils/reportExport';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 const formatCurrency = (amount: number | string): string => {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   return new Intl.NumberFormat('en-ZA', {
@@ -234,9 +235,9 @@ const BillingDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => navigate(`/ehr/${tenantSlug}/dashboard`)}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                className="appearance-none p-2 rounded-lg hover:bg-white/10 transition-colors"
               >
                 <ArrowLeft className="w-5 h-5 text-white" />
               </button>
@@ -246,16 +247,16 @@ const BillingDashboard: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={loadDashboardData}
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+                className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
                 Refresh
               </button>
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={() => navigate(`/ehr/${tenantSlug}/claims`)}
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
+                className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center gap-2"
               >
                 <FileText className="w-4 h-4" />
                 Claims
@@ -381,9 +382,9 @@ const BillingDashboard: React.FC = () => {
                         </p>
                       </div>
                       {getStatusBadge(transaction.payment_status)}
-                      <button
+                      <button ref={noNativeButtonBackground}
                         onClick={() => handleDownloadInvoice(transaction.id)}
-                        className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                        className="appearance-none p-2 rounded-lg hover:bg-white/10 transition-colors"
                       >
                         <Download className="w-4 h-4 text-white/60" />
                       </button>
@@ -489,9 +490,9 @@ const BillingDashboard: React.FC = () => {
                             Pay
                           </button>
                         )}
-                        <button
+                        <button ref={noNativeButtonBackground}
                           onClick={() => handleDownloadInvoice(transaction.id)}
-                          className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                          className="appearance-none p-2 rounded-lg hover:bg-white/10 transition-colors"
                         >
                           <Download className="w-4 h-4 text-white/60" />
                         </button>
@@ -810,10 +811,10 @@ const PaymentModal: React.FC<{
         )}
 
         <div className="flex gap-3">
-          <button
+          <button ref={noNativeButtonBackground}
             type="button"
             onClick={onClose}
-            className="flex-1 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="appearance-none flex-1 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
             disabled={mmState === 'pending'}
           >
             {mmState === 'success' ? 'Close' : 'Cancel'}
@@ -992,17 +993,17 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
               </button>
               {reportData && (
                 <>
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => {
                       // Export as PDF
                       window.print();
                     }}
-                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                    className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Export PDF
                   </button>
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => {
                       // Export as CSV
                       if (reportData) {
@@ -1022,7 +1023,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
                         window.URL.revokeObjectURL(url);
                       }
                     }}
-                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                    className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Export CSV
@@ -1322,7 +1323,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
               <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <h3 className="text-xl font-bold text-white">Tax Summary</h3>
                 <div className="flex gap-2">
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => {
                       const rows = [
                         { metric: 'Total Revenue', value: formatCurrency(taxSummary.totalRevenue) },
@@ -1334,12 +1335,12 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
                       ];
                       exportReportToCSV('Tax Summary', rows, [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Value' }], `tax-summary-${dateFrom || ''}-${dateTo || ''}.csv`);
                     }}
-                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                    className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Export CSV
                   </button>
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => {
                       const rows = [
                         { metric: 'Total Revenue', value: formatCurrency(taxSummary.totalRevenue) },
@@ -1351,7 +1352,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
                       ];
                       exportReportToPDF('Tax Summary', dateFrom && dateTo ? `Period: ${dateFrom} – ${dateTo}` : undefined, rows, [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Value' }], `tax-summary-${dateFrom || ''}-${dateTo || ''}.pdf`);
                     }}
-                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                    className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Export PDF
@@ -1438,7 +1439,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
               <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <h3 className="text-xl font-bold text-white">Reconciliation Report</h3>
                 <div className="flex gap-2">
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => {
                       const rows = (reconciliationReport.reconciled || []).map((item: any) => ({
                         transaction_number: item.transaction_number,
@@ -1458,12 +1459,12 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
                         { key: 'bank_reference', label: 'Bank Ref' },
                       ], `reconciliation-${dateFrom || ''}-${dateTo || ''}.csv`);
                     }}
-                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                    className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Export CSV
                   </button>
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => {
                       const rows = (reconciliationReport.reconciled || []).map((item: any) => ({
                         transaction_number: item.transaction_number,
@@ -1489,7 +1490,7 @@ const ReportsTab: React.FC<{ tenantSlug: string; token: string }> = ({ tenantSlu
                         `reconciliation-${dateFrom || ''}-${dateTo || ''}.pdf`,
                       );
                     }}
-                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
+                    className="appearance-none px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Export PDF
@@ -1644,10 +1645,10 @@ const ReconcilePaymentModal: React.FC<{
           />
         </div>
         <div className="flex gap-3">
-          <button
+          <button ref={noNativeButtonBackground}
             type="button"
             onClick={onClose}
-            className="flex-1 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="appearance-none flex-1 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
           >
             Cancel
           </button>

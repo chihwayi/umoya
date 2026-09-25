@@ -5,6 +5,7 @@ import { tenantApi, cdssApi } from '../services/api';
 import LanguageSwitcher from './LanguageSwitcher';
 import { OnboardingChecklist } from './OnboardingChecklist';
 import { useOnboarding } from '../hooks/useOnboarding';
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 import {
   cacheTenantBranding,
   formatTenantDisplayName,
@@ -411,9 +412,9 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
               );
             })}
             {!onboardingVisible && (
-              <button
+              <button ref={noNativeButtonBackground}
                 onClick={reopenOnboarding}
-                className="w-full flex items-center gap-3 px-3 py-2 text-slate-400 hover:bg-white/10 rounded-lg transition-colors text-sm"
+                className="appearance-none w-full flex items-center gap-3 px-3 py-2 text-slate-400 hover:bg-white/10 rounded-lg transition-colors text-sm"
               >
                 <CheckCheck className="w-5 h-5" />
                 <span>Getting started</span>
@@ -434,7 +435,7 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
         <header className={`bg-gradient-to-r ${headerToneClass} shadow-lg border-b border-blue-500/20 p-4`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 hover:bg-white/20 rounded-lg">
+              <button ref={noNativeButtonBackground} onClick={() => setSidebarOpen(true)} className="appearance-none lg:hidden p-2 hover:bg-white/20 rounded-lg">
                 <Menu className="w-5 h-5 text-white" />
               </button>
               <div>
@@ -448,9 +449,9 @@ const AdminNavigationShell: React.FC<AdminNavigationShellProps> = ({
               <LanguageSwitcher />
               {/* ── Notification Bell ── */}
               <div className="relative" ref={notifPanelRef}>
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={openNotifPanel}
-                  className="p-2 hover:bg-white/20 rounded-lg relative transition-colors"
+                  className="appearance-none p-2 hover:bg-white/20 rounded-lg relative transition-colors"
                   aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
                 >
                   <Bell className="w-5 h-5 text-white" />

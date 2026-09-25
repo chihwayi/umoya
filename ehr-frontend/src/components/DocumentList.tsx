@@ -6,6 +6,7 @@ import DocumentUpload from './DocumentUpload';
 import DocumentViewer from './DocumentViewer';
 import ConfirmDialog from './ConfirmDialog';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface DocumentListProps {
   patientId: string;
   patientName: string;
@@ -117,7 +118,7 @@ const DocumentList: React.FC<DocumentListProps> = ({
               Upload
             </button>
             {onClose && (
-              <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+              <button ref={noNativeButtonBackground} onClick={onClose} className="appearance-none p-2 hover:bg-white/20 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             )}

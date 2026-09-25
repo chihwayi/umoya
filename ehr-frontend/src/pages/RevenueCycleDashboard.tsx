@@ -22,6 +22,7 @@ import ModuleGeneralReportCard from '../components/ModuleGeneralReportCard';
 import PromptDialog from '../components/PromptDialog';
 import { GuidelineSearchPanel } from '../components/GuidelineSearchPanel';
 
+import { noNativeButtonBackground } from '../hooks/useNoNativeButtonBackground';
 interface RevenueCycleDashboardProps {
   embedded?: boolean;
 }
@@ -225,9 +226,9 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <button
+                <button ref={noNativeButtonBackground}
                   onClick={() => navigate(`/ehr/${tenantSlug}/${user?.role === 'doctor' ? 'doctor' : user?.role === 'nurse' ? 'nurse' : 'dashboard'}`)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                  className="appearance-none p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -241,9 +242,9 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
               </div>
               {user?.role === 'doctor' && (
                 <div className="flex items-center gap-3">
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => setShowReviewModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
+                    className="appearance-none flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-semibold"
                   >
                     <FileText className="w-5 h-5" />
                     Review Charges
@@ -253,9 +254,9 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
                       </span>
                     )}
                   </button>
-                  <button
+                  <button ref={noNativeButtonBackground}
                     onClick={() => setShowAddChargeModal(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold"
+                    className="appearance-none flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold"
                   >
                     <Plus className="w-5 h-5" />
                     Add Charge
@@ -571,7 +572,7 @@ const RevenueCycleDashboard: React.FC<RevenueCycleDashboardProps> = ({ embedded 
             {/* Department Filter */}
             <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
               {departments.map((dept) => (
-                <button
+                <button ref={noNativeButtonBackground}
                   key={dept.value}
                   onClick={() => setSelectedDepartment(dept.value)}
                   className={`px-4 py-2 rounded-xl font-semibold text-sm whitespace-nowrap transition-all ${
