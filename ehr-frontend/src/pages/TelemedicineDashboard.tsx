@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   Video,
   Calendar,
@@ -91,7 +92,8 @@ const TelemedicineDashboard: React.FC = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'overview' | 'consultations' | 'monitoring' | 'consents'>('overview');
+  const TELEMEDICINE_TABS = ['overview', 'consultations', 'monitoring', 'consents'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', TELEMEDICINE_TABS, 'overview');
   const [monitoringAlerts, setMonitoringAlerts] = useState<MonitoringAlertItem[]>([]);
 
   const token = React.useMemo(() => (typeof window === 'undefined' ? '' : localStorage.getItem('ehr_token') || ''), []);

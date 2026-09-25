@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   AlertTriangle,
   Activity,
@@ -137,7 +138,8 @@ const OutbreakDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
 
-  const [tab, setTab] = useState<'dashboard' | 'cases' | 'contacts' | 'diseases' | 'protocols'>('dashboard');
+  const OUTBREAK_TABS = ['dashboard', 'cases', 'contacts', 'diseases', 'protocols'] as const;
+  const [tab, setTab] = useUrlTab('tab', OUTBREAK_TABS, 'dashboard');
   const [loading, setLoading] = useState(false);
 
   // Dashboard

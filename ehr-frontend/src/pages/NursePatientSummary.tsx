@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   ArrowLeft, User, Calendar, Clock, FileText, Heart, Activity, 
   Stethoscope, Pill, AlertTriangle, ChevronRight, Calendar as CalendarIcon,
@@ -109,7 +110,8 @@ const NursePatientSummary: React.FC = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [visitSummaries, setVisitSummaries] = useState<VisitSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'notes' | 'vitals'>('overview');
+  const NURSE_PATIENT_TABS = ['overview', 'visits', 'notes', 'vitals'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', NURSE_PATIENT_TABS, 'overview');
   const [problems, setProblems] = useState<any[]>([]);
   const [allergies, setAllergies] = useState<any[]>([]);
   

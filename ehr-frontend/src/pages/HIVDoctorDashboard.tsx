@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   Activity, AlertTriangle, CheckCircle, XCircle, TrendingUp, TrendingDown,
   Users, Search, Filter, Eye, FileText, Pill, TestTube, Calendar, Clock,
@@ -122,7 +123,8 @@ const HIVDoctorDashboard: React.FC<HIVDoctorDashboardProps> = ({ embedded = fals
   const { showSuccess, showError } = useNotification();
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'operations' | 'patients' | 'regimen-changes' | 'eac-programs' | 'alerts' | 'quality' | 'cohort' | 'comparison' | 'ltfu' | 'reports'>('operations');
+  const HIV_DOCTOR_TABS = ['operations', 'patients', 'regimen-changes', 'eac-programs', 'alerts', 'quality', 'cohort', 'comparison', 'ltfu', 'reports'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', HIV_DOCTOR_TABS, 'operations');
   const [enrollments, setEnrollments] = useState<HIVEnrollment[]>([]);
   const [filteredEnrollments, setFilteredEnrollments] = useState<HIVEnrollment[]>([]);
   const [searchTerm, setSearchTerm] = useState('');

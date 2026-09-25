@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import { CascadeFunnel, FunnelStep } from '../components/analytics/CascadeFunnel';
 import { ehrAxios } from '../services/api';
 
 type CascadeTab = 'hiv' | 'pmtct' | 'tb-hiv' | 'ncd-htn' | 'ncd-dm' | 'ncd-ckd';
+const CASCADE_TABS: readonly CascadeTab[] = ['hiv', 'pmtct', 'tb-hiv', 'ncd-htn', 'ncd-dm', 'ncd-ckd'];
 
 const TAB_LABELS: Record<CascadeTab, string> = {
   'hiv':     'HIV 95-95-95',
@@ -71,7 +73,7 @@ export const CascadeDashboardPage: React.FC = () => {
   const token = localStorage.getItem('token') ?? '';
   const slug = tenantSlug ?? '';
 
-  const [activeTab, setActiveTab] = useState<CascadeTab>('hiv');
+  const [activeTab, setActiveTab] = useUrlTab('tab', CASCADE_TABS, 'hiv');
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 3);

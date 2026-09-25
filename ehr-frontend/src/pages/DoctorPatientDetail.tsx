@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   ArrowLeft, User, Calendar,
   Heart, Activity, AlertCircle, FileText, Clock,
@@ -88,7 +89,8 @@ const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({ embedded = fa
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'appointments' | 'medical-history' | 'sdoh' | 'tb' | 'pediatrics' | 'mental-health' | 'malaria' | 'geriatrics' | 'neurology' | 'pulmonology' | 'nephrology' | 'dermatology' | 'palliative' | 'nutrition' | 'icu'>('overview');
+  const DOCTOR_PATIENT_TABS = ['overview', 'appointments', 'medical-history', 'sdoh', 'tb', 'pediatrics', 'mental-health', 'malaria', 'geriatrics', 'neurology', 'pulmonology', 'nephrology', 'dermatology', 'palliative', 'nutrition', 'icu'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', DOCTOR_PATIENT_TABS, 'overview');
 
   // AI/RAG State
   const [showGuidelineSearch, setShowGuidelineSearch] = useState(false);

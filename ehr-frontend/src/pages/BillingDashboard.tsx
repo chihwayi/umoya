@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   DollarSign,
   CreditCard,
@@ -86,7 +87,8 @@ const BillingDashboard: React.FC = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'bills' | 'reports'>('overview');
+  const BILLING_TABS = ['overview', 'transactions', 'bills', 'reports'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', BILLING_TABS, 'overview');
   const [filters, setFilters] = useState({
     status: searchParams.get('status') || '',
     dateFrom: '',
@@ -114,17 +116,15 @@ const BillingDashboard: React.FC = () => {
   useEffect(() => {
     const statusParam = searchParams.get('status');
     const tabParam = searchParams.get('tab');
-    
+
+    // useUrlTab already keeps activeTab in sync with ?tab=; this effect only
+    // needs to mirror ?status= into filters and default the tab when a
+    // status is provided without an explicit tab.
     if (statusParam) {
       setFilters(prev => ({ ...prev, status: statusParam }));
-      // If status is provided, switch to transactions tab if not already on a relevant tab
-      if (tabParam) {
-        setActiveTab(tabParam as any);
-      } else if (activeTab === 'overview') {
+      if (!tabParam && activeTab === 'overview') {
         setActiveTab('transactions');
       }
-    } else if (tabParam) {
-      setActiveTab(tabParam as any);
     }
   }, [searchParams]);
 

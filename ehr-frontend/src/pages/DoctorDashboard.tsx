@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useUrlTab } from '../hooks/useUrlTab';
 import {
   Calendar, Clock, User, Stethoscope, CheckCircle, AlertCircle, AlertTriangle,
   Play, FileText, Pill, TestTube,
@@ -793,7 +794,8 @@ const DoctorDashboard: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isUpdating, setIsUpdating] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'queue' | 'schedule' | 'current-appointment' | 'critical-alerts' | 'imaging' | 'my-patients'>('queue');
+  const DOCTOR_TABS = ['queue', 'schedule', 'current-appointment', 'critical-alerts', 'imaging', 'my-patients'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', DOCTOR_TABS, 'queue');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [criticalAlertCount, setCriticalAlertCount] = useState(0);
   const [criticalImagingCount, setCriticalImagingCount] = useState(0);
