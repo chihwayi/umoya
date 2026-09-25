@@ -26,6 +26,7 @@ import { NursingIntelligencePanel } from '../components/NursingIntelligencePanel
 import TaskManagement from '../components/TaskManagement';
 import PatientSafetyAlerts from '../components/PatientSafetyAlerts';
 import { useSafetyAlerts } from '../hooks/useSafetyAlerts';
+import { useUrlTab } from '../hooks/useUrlTab';
 import HIVNursePanel from '../components/HIVNursePanel';
 import HIVTestingComponent from '../components/HIVTestingComponent';
 import { HIVTestingWithSmartForms } from '../components/HIV';
@@ -247,8 +248,10 @@ const NurseDashboard: React.FC = () => {
   const [showMhQuickModal, setShowMhQuickModal] = useState(false);
   const [showMentalHealthModal, setShowMentalHealthModal] = useState(false);
   const [mentalHealthInitialTab, setMentalHealthInitialTab] = useState<'overview' | 'screening' | 'mhgap' | 'careplans' | 'followups' | 'crisis' | 'safeplan' | 'meds'>('careplans');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'cross-module' | 'alerts' | 'copilot-metrics' | 'calendar' | 'patients' | 'queue' | 'orders' | 'notes' | 'testing' | 'hiv-patients' | 'tb-screening' | 'cervical-cancer' | 'quality-metrics' | 'stock-management' | 'ltfu' | 'hiv-reports' | 'who-workflow' | 'maternity' | 'triage' | 'vitals' | 'cervical-screening' | 'family-planning' | 'hypertension' | 'ncd-complications' | 'traditional-medicine' | 'scd' | 'epilepsy' | 'one-health' | 'nhif'>('dashboard');
-  const [activeSection, setActiveSection] = useState<'main' | 'hiv' | 'maternity' | 'women-health' | 'ncd' | 'finance'>('main');
+  const NURSE_TABS = ['dashboard', 'tasks', 'cross-module', 'alerts', 'copilot-metrics', 'calendar', 'patients', 'queue', 'orders', 'notes', 'testing', 'hiv-patients', 'tb-screening', 'cervical-cancer', 'quality-metrics', 'stock-management', 'ltfu', 'hiv-reports', 'who-workflow', 'maternity', 'triage', 'vitals', 'cervical-screening', 'family-planning', 'hypertension', 'ncd-complications', 'traditional-medicine', 'scd', 'epilepsy', 'one-health', 'nhif'] as const;
+  const [activeTab, setActiveTab] = useUrlTab('tab', NURSE_TABS, 'dashboard');
+  const NURSE_SECTIONS = ['main', 'hiv', 'maternity', 'women-health', 'ncd', 'finance'] as const;
+  const [activeSection, setActiveSection] = useUrlTab('section', NURSE_SECTIONS, 'main');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
