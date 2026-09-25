@@ -86,7 +86,7 @@ interface LabOrder {
   interpretation?: string;
   attachments?: Array<{
     filename: string;
-    url: string;
+    documentId: string;
     type: string;
     uploadedAt: string;
   }>;
@@ -1527,13 +1527,24 @@ const LabDashboard: React.FC = () => {
       const token = localStorage.getItem('ehr_token');
       if (!token || !tenantSlug) return;
 
-      // Convert uploaded files to attachments format
-      const attachments = uploadedFiles.map(file => ({
-        filename: file.name,
-        url: URL.createObjectURL(file), // In production, upload to server first
-        type: file.type,
-        uploadedAt: new Date().toISOString()
-      }));
+      // Upload each file to the document service and collect the persisted document ids
+      const attachments = [];
+      for (const file of uploadedFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('patientId', selectedOrder.patient.id);
+        formData.append('documentType', 'lab_result_attachment');
+        formData.append('documentName', file.name);
+
+        const uploadResponse = await ehrApi.uploadDocument(formData, token, tenantSlug);
+
+        attachments.push({
+          filename: file.name,
+          documentId: uploadResponse.data.id,
+          type: file.type,
+          uploadedAt: new Date().toISOString()
+        });
+      }
 
       // Convert results to the format expected by backend
       const resultsData = results.map(result => ({
