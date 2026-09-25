@@ -771,6 +771,9 @@ export class PharmacyService {
 
   async createDispensing(tenantDb: DataSource, dto: CreateDispensingDto, userId?: string) {
     this.ensureTenantDb(tenantDb);
+    if (!dto.patientId) {
+      throw new BadRequestException('patientId is required');
+    }
     const queryRunner = tenantDb.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

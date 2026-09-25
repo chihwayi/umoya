@@ -366,10 +366,10 @@ export class CreateDispensingItemDto {
   @IsNotEmpty()
   inventoryId: string;
 
-  @ApiProperty({ description: 'Drug ID' })
+  @ApiPropertyOptional({ description: 'Drug ID (derived from the inventory item when omitted)' })
   @IsUUID()
-  @IsNotEmpty()
-  drugId: string;
+  @IsOptional()
+  drugId?: string;
 
   @ApiProperty({ description: 'Quantity to dispense' })
   @IsInt()
@@ -400,10 +400,10 @@ export class CreateDispensingDto {
   @IsOptional()
   prescriptionId?: string;
 
-  @ApiProperty({ description: 'Patient ID' })
+  @ApiPropertyOptional({ description: 'Patient ID (required unless prescriptionId is given, in which case it is derived from the prescription)' })
   @IsUUID()
-  @IsNotEmpty()
-  patientId: string;
+  @IsOptional()
+  patientId?: string;
 
   @ApiPropertyOptional({ description: 'Dispensing date', default: 'Current date' })
   @IsDateString()
