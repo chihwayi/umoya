@@ -662,10 +662,14 @@ export class PharmacyService {
 
             await queryRunner.query(
               `INSERT INTO pharmacy_stock_movements (
-                inventory_id, movement_type, quantity, reference_type, reference_id,
-                notes, created_at
-              ) VALUES ($1, 'receipt', $2, 'receipt', $3, $4, NOW())`,
-              [inventoryId, item.quantityReceived, receipt.id, item.notes ?? null],
+                inventory_id, movement_type, quantity_before, quantity_change, quantity_after,
+                unit_cost, reference_type, reference_id, notes, created_at
+              )
+              SELECT
+                $1, 'purchase', quantity_on_hand - $2, $2, quantity_on_hand,
+                $3, 'receipt', $4, $5, NOW()
+              FROM pharmacy_inventory WHERE id = $1`,
+              [inventoryId, item.quantityReceived, item.unitCost ?? null, receipt.id, item.notes ?? null],
             );
 
             // ── Storeroom replenishment ────────────────────────────────────────
@@ -829,10 +833,14 @@ export class PharmacyService {
 
           await queryRunner.query(
             `INSERT INTO pharmacy_stock_movements (
-              inventory_id, movement_type, quantity, reference_type, reference_id,
-              notes, created_at
-            ) VALUES ($1, 'dispensing', $2, 'dispensing', $3, $4, NOW())`,
-            [item.inventoryId, -item.quantityDispensed, dispensing.id, item.notes ?? null],
+              inventory_id, movement_type, quantity_before, quantity_change, quantity_after,
+              reference_type, reference_id, notes, created_at
+            )
+            SELECT
+              $1, 'sale', quantity_on_hand + $2, -$2, quantity_on_hand,
+              'dispensing', $3, $4, NOW()
+            FROM pharmacy_inventory WHERE id = $1`,
+            [item.inventoryId, item.quantityDispensed, dispensing.id, item.notes ?? null],
           );
         }
       }
@@ -1159,8 +1167,8 @@ export class PharmacyService {
             inventory_id, movement_type, quantity_before, quantity_change, quantity_after,
             reference_type, reference_id, performed_by, created_at
           ) 
-          SELECT 
-            $1, 'dispensing', quantity_on_hand + $2, -$2, quantity_on_hand,
+          SELECT
+            $1, 'sale', quantity_on_hand + $2, -$2, quantity_on_hand,
             'dispensing', $3, $4, NOW()
           FROM pharmacy_inventory WHERE id = $1`,
           [item.inventoryId, item.quantityDispensed, dispensing.id, userId],
@@ -1462,9 +1470,13 @@ export class PharmacyService {
 
             await queryRunner.query(
               `INSERT INTO pharmacy_stock_movements (
-                inventory_id, movement_type, quantity, reference_type, reference_id,
-                notes, created_at
-              ) VALUES ($1, 'return', $2, 'return', $3, $4, NOW())`,
+                inventory_id, movement_type, quantity_before, quantity_change, quantity_after,
+                reference_type, reference_id, notes, created_at
+              )
+              SELECT
+                $1, 'return', quantity_on_hand - $2, $2, quantity_on_hand,
+                'return', $3, $4, NOW()
+              FROM pharmacy_inventory WHERE id = $1`,
               [item.inventoryId, item.quantityReturned, returnRecord.id, item.notes ?? null],
             );
           }
@@ -1569,10 +1581,10 @@ export class PharmacyService {
 
           await queryRunner.query(
             `INSERT INTO pharmacy_stock_movements (
-              inventory_id, movement_type, quantity, reference_type, reference_id,
-              notes, created_at
-            ) VALUES ($1, 'adjustment', $2, 'adjustment', $3, $4, NOW())`,
-            [item.inventoryId, quantityChange, adjustment.id, item.notes ?? null],
+              inventory_id, movement_type, quantity_before, quantity_change, quantity_after,
+              unit_cost, reference_type, reference_id, notes, created_at
+            ) VALUES ($1, 'adjustment', $2, $3, $4, $5, 'adjustment', $6, $7, NOW())`,
+            [item.inventoryId, quantityBefore, quantityChange, quantityAfter, item.unitCost ?? null, adjustment.id, item.notes ?? null],
           );
         }
       }
