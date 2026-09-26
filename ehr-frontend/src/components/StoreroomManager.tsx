@@ -3,6 +3,9 @@ import { useParams } from 'react-router-dom';
 import { storeroomApi, ehrAxios } from '../services/api';
 import StockRequestModal from './StockRequestModal';
 import StockTransferModal from './StockTransferModal';
+import ReceiveStockModal from './ReceiveStockModal';
+import ApproveRequestModal from './ApproveRequestModal';
+import ReceiveTransferModal from './ReceiveTransferModal';
 
 const TABS = ['Overview', 'Inventory', 'Requests', 'Transfers', 'Catalog', 'Intelligence'] as const;
 type Tab = typeof TABS[number];
@@ -26,9 +29,12 @@ export default function StoreroomManager() {
   const [requests, setRequests] = useState<any[]>([]);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [transferTarget, setTransferTarget] = useState<any>(null);
+  const [approveTarget, setApproveTarget] = useState<any>(null);
+  const [showReceiveStockModal, setShowReceiveStockModal] = useState(false);
 
   // Transfers
   const [transfers, setTransfers] = useState<any[]>([]);
+  const [receiveTransferTarget, setReceiveTransferTarget] = useState<any>(null);
 
   // Catalog
   const [catalog, setCatalog] = useState<any[]>([]);
@@ -98,6 +104,13 @@ export default function StoreroomManager() {
   }, [tab, token, tenantSlug]);
 
   const alertMap = new Set(alerts.map((a: any) => a.catalog_id + ':' + a.location_id));
+
+  async function handleReject(request: any) {
+    const reason = window.prompt(`Reason for rejecting ${request.reference_number}?`);
+    if (!reason) return;
+    await storeroomApi.rejectRequest(request.id, reason, token!, tenantSlug!);
+    storeroomApi.listRequests({}, token!, tenantSlug!).then(setRequests);
+  }
 
   function statusBadge(status: string) {
     const map: Record<string, { bg: string; color: string }> = {
@@ -214,6 +227,16 @@ export default function StoreroomManager() {
               <span style={{ fontSize: 12, color: '#6b7280' }}>
                 {stock.length} items
               </span>
+              <div style={{ flex: 1 }} />
+              <button
+                onClick={() => setShowReceiveStockModal(true)}
+                style={{
+                  padding: '8px 18px', background: '#1d4ed8', color: '#fff', border: 'none',
+                  borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                + Receive Stock
+              </button>
             </div>
             {stockLoading ? (
               <div style={{ color: '#6b7280', fontSize: 13 }}>Loading stock…</div>
@@ -295,7 +318,29 @@ export default function StoreroomManager() {
                       <td style={{ padding: '9px 12px', color: '#6b7280', fontSize: 12 }}>
                         {new Date(r.created_at).toLocaleDateString()}
                       </td>
-                      <td style={{ padding: '9px 12px' }}>
+                      <td style={{ padding: '9px 12px', display: 'flex', gap: 6 }}>
+                        {r.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => setApproveTarget(r)}
+                              style={{
+                                padding: '4px 12px', background: '#16a34a', color: '#fff', border: 'none',
+                                borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                              }}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleReject(r)}
+                              style={{
+                                padding: '4px 12px', background: '#fff', color: '#dc2626', border: '1px solid #fca5a5',
+                                borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                              }}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
                         {r.status === 'approved' && (
                           <button
                             onClick={() => setTransferTarget(r)}
@@ -325,7 +370,7 @@ export default function StoreroomManager() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
-                  {['Ref', 'From', 'To', 'Items', 'Status', 'Dispatched', 'Received'].map(h => (
+                  {['Ref', 'From', 'To', 'Items', 'Status', 'Dispatched', 'Received', ''].map(h => (
                     <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#374151' }}>{h}</th>
                   ))}
                 </tr>
@@ -344,10 +389,23 @@ export default function StoreroomManager() {
                     <td style={{ padding: '9px 12px', color: '#6b7280', fontSize: 12 }}>
                       {t.received_at ? new Date(t.received_at).toLocaleDateString() : '—'}
                     </td>
+                    <td style={{ padding: '9px 12px' }}>
+                      {(t.status === 'dispatched' || t.status === 'partially_received') && (
+                        <button
+                          onClick={() => setReceiveTransferTarget(t)}
+                          style={{
+                            padding: '4px 12px', background: '#16a34a', color: '#fff', border: 'none',
+                            borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >
+                          Receive
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {transfers.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No transfers</td></tr>
+                  <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No transfers</td></tr>
                 )}
               </tbody>
             </table>
@@ -541,6 +599,45 @@ export default function StoreroomManager() {
           onClose={() => setTransferTarget(null)}
           onDone={() => {
             setTransferTarget(null);
+            Promise.all([
+              storeroomApi.listRequests({}, token!, tenantSlug!),
+              storeroomApi.listTransfers({}, token!, tenantSlug!),
+            ]).then(([reqs, trans]) => { setRequests(reqs); setTransfers(trans); });
+          }}
+        />
+      )}
+
+      {approveTarget && (
+        <ApproveRequestModal
+          request={approveTarget}
+          onClose={() => setApproveTarget(null)}
+          onDone={() => {
+            setApproveTarget(null);
+            storeroomApi.listRequests({}, token!, tenantSlug!).then(setRequests);
+          }}
+        />
+      )}
+
+      {showReceiveStockModal && (
+        <ReceiveStockModal
+          defaultLocationId={selectedLocation}
+          onClose={() => setShowReceiveStockModal(false)}
+          onDone={() => {
+            setShowReceiveStockModal(false);
+            if (selectedLocation) {
+              storeroomApi.getStockByLocation(selectedLocation, {}, token!, tenantSlug!).then(setStock);
+            }
+            storeroomApi.getDashboard(token!, tenantSlug!).then(setDashboard);
+          }}
+        />
+      )}
+
+      {receiveTransferTarget && (
+        <ReceiveTransferModal
+          transfer={receiveTransferTarget}
+          onClose={() => setReceiveTransferTarget(null)}
+          onDone={() => {
+            setReceiveTransferTarget(null);
             Promise.all([
               storeroomApi.listRequests({}, token!, tenantSlug!),
               storeroomApi.listTransfers({}, token!, tenantSlug!),

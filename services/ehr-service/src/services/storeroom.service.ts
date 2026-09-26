@@ -619,7 +619,7 @@ export class StoreroomService {
       `SELECT COALESCE(MAX(CAST(SPLIT_PART(receipt_number,'-',3) AS BIGINT)),0)+1 AS next
          FROM storeroom_supplier_receipts`,
     );
-    const receiptNumber = `SRR-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
+    const receiptNumber = `SRR-${new Date().getFullYear()}-${String(seq[0].next).padStart(5,'0')}`;
 
     const rows = await tenantDb.query(
       `INSERT INTO storeroom_supplier_receipts
@@ -661,7 +661,7 @@ export class StoreroomService {
       `SELECT COALESCE(MAX(CAST(SPLIT_PART(request_number,'-',3) AS BIGINT)),0)+1 AS next
          FROM stock_requests`,
     );
-    const requestNumber = `SR-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
+    const requestNumber = `SR-${new Date().getFullYear()}-${String(seq[0].next).padStart(5,'0')}`;
 
     const rows = await tenantDb.query(
       `INSERT INTO stock_requests
@@ -782,7 +782,7 @@ export class StoreroomService {
       `SELECT COALESCE(MAX(CAST(SPLIT_PART(transfer_number,'-',3) AS BIGINT)),0)+1 AS next
          FROM stock_transfers`,
     );
-    const transferNumber = `ST-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
+    const transferNumber = `ST-${new Date().getFullYear()}-${String(seq[0].next).padStart(5,'0')}`;
 
     const rows = await tenantDb.query(
       `INSERT INTO stock_transfers
@@ -861,6 +861,7 @@ export class StoreroomService {
     );
     if (!transfer) throw new NotFoundException(`Transfer ${transferId} not found`);
 
+    let allReceived = true;
     for (const ri of receivedItems) {
       const { rows: [item] } = await tenantDb.query(
         `SELECT * FROM stock_transfer_items WHERE id = $1`, [ri.item_id],
@@ -874,17 +875,26 @@ export class StoreroomService {
         [ri.quantity_received, ri.condition, ri.item_id],
       );
 
+      if (ri.quantity_received < item.quantity_transferred) {
+        allReceived = false;
+      }
+
       if (ri.condition !== 'expired' && ri.condition !== 'damaged' && ri.quantity_received > 0) {
         await this.receiveStock(
           tenantDb, transfer.to_location_id, item.catalog_id,
           item.batch_number, item.expiry_date, ri.quantity_received,
         );
+        if (transfer.request_id) {
+          await tenantDb.query(
+            `UPDATE stock_request_items
+                SET quantity_fulfilled = quantity_fulfilled + $1
+              WHERE request_id = $2 AND catalog_id = $3`,
+            [ri.quantity_received, transfer.request_id, item.catalog_id],
+          );
+        }
       }
     }
 
-    const allReceived = receivedItems.every(
-      (ri) => ri.quantity_received >= (receivedItems.find(x => x.item_id === ri.item_id)?.quantity_received ?? 0),
-    );
     await tenantDb.query(
       `UPDATE stock_transfers
           SET status = $1, received_by = $2, received_at = NOW()
@@ -924,12 +934,12 @@ export class StoreroomService {
          LIMIT 10`),
     ]);
     return {
-      total_catalog_items: Number(catalog.rows[0].total),
-      stockout_count: Number(stock.rows[0].stockout_count),
-      low_stock_count: Number(stock.rows[0].low_stock_count),
-      open_alerts: Number(alerts.rows[0].open),
-      pending_requests: Number(requests.rows[0].pending),
-      expiring_soon: expiring.rows,
+      total_catalog_items: Number(catalog[0].total),
+      stockout_count: Number(stock[0].stockout_count),
+      low_stock_count: Number(stock[0].low_stock_count),
+      open_alerts: Number(alerts[0].open),
+      pending_requests: Number(requests[0].pending),
+      expiring_soon: expiring,
     };
   }
 
