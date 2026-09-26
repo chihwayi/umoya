@@ -1399,10 +1399,10 @@ export class StoreroomService {
     const newStatus = allFulfilled ? 'fulfilled' : anyFulfilled ? 'partially_fulfilled' : 'approved';
     await tenantDb.query(
       `UPDATE stock_requests
-          SET status = $1, fulfilled_at = CASE WHEN $1 = 'fulfilled' THEN NOW() ELSE NULL END,
+          SET status = $1, fulfilled_at = $2,
               updated_at = NOW()
-        WHERE id = $2`,
-      [newStatus, requestId],
+        WHERE id = $3`,
+      [newStatus, allFulfilled ? new Date() : null, requestId],
     );
   }
 }
