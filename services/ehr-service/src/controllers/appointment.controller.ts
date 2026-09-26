@@ -211,6 +211,16 @@ export class AppointmentController {
     return this.appointmentService.createAppointmentTemplate(template, req.tenantId, userId);
   }
 
+  @Put('templates/:id')
+  @ApiOperation({ summary: 'Update appointment template', description: 'Update an existing appointment template' })
+  updateAppointmentTemplate(
+    @Param('id') id: string,
+    @Body() template: { name?: string; type?: string; duration?: number; instructions?: string; color?: string },
+    @Req() req: RequestWithTenant
+  ) {
+    return this.appointmentService.updateAppointmentTemplate(id, template, req.tenantId);
+  }
+
   @Delete('templates/:id')
   @ApiOperation({ summary: 'Delete appointment template', description: 'Delete an appointment template (soft delete)' })
   deleteAppointmentTemplate(@Param('id') id: string, @Req() req: RequestWithTenant) {
