@@ -285,7 +285,7 @@ export class StoreroomService {
     unit_cost: number | null;
   }>> {
     // Direct equivalency mappings
-    const { rows: mapped } = await tenantDb.query(
+    const mapped = await tenantDb.query(
       `SELECT
          de.equivalent_id AS catalog_id,
          sc.name,
@@ -301,12 +301,12 @@ export class StoreroomService {
        GROUP BY de.equivalent_id, sc.name, de.equivalence_type, sc.unit_price
        HAVING COALESCE(SUM(ls.quantity_on_hand - ls.quantity_reserved), 0) >= $2`,
       [catalogId, quantity, locationId],
-    ).catch(() => ({ rows: [] }));
+    ).catch(() => []);
 
     if (mapped.length > 0) return mapped;
 
     // Fallback: same ATC code family (first 4 chars = same therapeutic group)
-    const { rows: atcMatch } = await tenantDb.query(
+    const atcMatch = await tenantDb.query(
       `SELECT
          sc2.id AS catalog_id,
          sc2.name,
@@ -325,7 +325,7 @@ export class StoreroomService {
        HAVING COALESCE(SUM(ls.quantity_on_hand - ls.quantity_reserved), 0) >= $2
        LIMIT 5`,
       [catalogId, quantity, locationId],
-    ).catch(() => ({ rows: [] }));
+    ).catch(() => []);
 
     return atcMatch;
   }
@@ -350,7 +350,7 @@ export class StoreroomService {
       );
     }
 
-    const { rows: batches } = await tenantDb.query(
+    const batches = await tenantDb.query(
       `SELECT id, quantity_on_hand, quantity_reserved
          FROM location_stock
         WHERE location_id = $1 AND catalog_id = $2
@@ -446,7 +446,7 @@ export class StoreroomService {
   ): Promise<void> {
     // If deducting for a prescription, convert existing soft lock to hard deduct
     if (sourceModule === 'prescription' && sourceReferenceId) {
-      const { rows: reservations } = await tenantDb.query(
+      const reservations = await tenantDb.query(
         `SELECT id, batch_id, quantity FROM stock_reservations
           WHERE prescription_id = $1 AND catalog_id = $2 AND location_id = $3
             AND status = 'active'
@@ -480,7 +480,7 @@ export class StoreroomService {
       }
     }
 
-    const { rows: batches } = await tenantDb.query(
+    const batches = await tenantDb.query(
       `SELECT id, batch_number, quantity_on_hand, quantity_reserved, min_level
          FROM location_stock
         WHERE location_id = $1 AND catalog_id = $2
@@ -531,12 +531,12 @@ export class StoreroomService {
 
     // Auto-replenish emergency kit locations when below minimum
     try {
-      const { rows: locMeta } = await tenantDb.query(
+      const locMeta = await tenantDb.query(
         `SELECT location_subtype FROM inventory_locations WHERE id = $1`,
         [locationId],
       );
       if (locMeta[0]?.location_subtype === 'emergency_kit') {
-        const { rows: kitItem } = await tenantDb.query(
+        const kitItem = await tenantDb.query(
           `SELECT eki.minimum_qty, eki.replenish_qty,
                   COALESCE(SUM(ls.quantity_on_hand - ls.quantity_reserved), 0) AS current_qty
              FROM emergency_kit_items eki
@@ -856,14 +856,14 @@ export class StoreroomService {
     tenantDb: any, transferId: string,
     receivedItems: ReceiveTransferItemDto[], userId: string,
   ): Promise<any> {
-    const { rows: [transfer] } = await tenantDb.query(
+    const [transfer] = await tenantDb.query(
       `SELECT * FROM stock_transfers WHERE id = $1`, [transferId],
     );
     if (!transfer) throw new NotFoundException(`Transfer ${transferId} not found`);
 
     let allReceived = true;
     for (const ri of receivedItems) {
-      const { rows: [item] } = await tenantDb.query(
+      const [item] = await tenantDb.query(
         `SELECT * FROM stock_transfer_items WHERE id = $1`, [ri.item_id],
       );
       if (!item) continue;
@@ -1102,7 +1102,7 @@ export class StoreroomService {
     replenishQty: number,
     triggeredBy = 'system',
   ): Promise<void> {
-    const { rows: central } = await tenantDb.query(
+    const central = await tenantDb.query(
       `SELECT id FROM inventory_locations WHERE location_type = 'central' LIMIT 1`,
     );
     if (!central[0]) return;
@@ -1117,7 +1117,7 @@ export class StoreroomService {
   }
 
   async getArvStockVsPatientLoad(tenantDb: any): Promise<any[]> {
-    const { rows: arvStock } = await tenantDb.query(
+    const arvStock = await tenantDb.query(
       `SELECT
          sc.id AS catalog_id,
          sc.name,
@@ -1128,7 +1128,7 @@ export class StoreroomService {
        GROUP BY sc.id, sc.name`,
     );
 
-    const { rows: patientLoad } = await tenantDb.query(
+    const patientLoad = await tenantDb.query(
       `SELECT
          p.drug_id,
          COUNT(DISTINCT p.patient_id) AS patients_due,
@@ -1137,7 +1137,7 @@ export class StoreroomService {
        WHERE p.next_refill_date <= NOW() + INTERVAL '30 days'
          AND p.status = 'active'
        GROUP BY p.drug_id`,
-    ).catch(() => ({ rows: [] }));
+    ).catch(() => []);
 
     const loadMap: Record<string, { patients_due: number; total_qty_needed: number }> = {};
     for (const pl of patientLoad) {
@@ -1164,7 +1164,7 @@ export class StoreroomService {
     regimenId: string,
     locationId: string,
   ): Promise<{ ready: boolean; missing: any[] }> {
-    const { rows: components } = await tenantDb.query(
+    const components = await tenantDb.query(
       `SELECT
          crc.catalog_id,
          sc.name,
@@ -1284,7 +1284,7 @@ export class StoreroomService {
   }
 
   async autoGeneratePOs(tenantDb: any): Promise<number> {
-    const { rows: items } = await tenantDb.query(
+    const items = await tenantDb.query(
       `SELECT
          sc.id                    AS catalog_id,
          sc.preferred_supplier_id AS supplier_id,
@@ -1332,7 +1332,7 @@ export class StoreroomService {
   private async checkAndAlertLowStock(
     tenantDb: any, locationId: string, catalogId: string,
   ): Promise<void> {
-    const { rows: [stock] } = await tenantDb.query(
+    const [stock] = await tenantDb.query(
       `SELECT quantity_on_hand, min_level FROM location_stock
         WHERE location_id = $1 AND catalog_id = $2
         ORDER BY quantity_on_hand ASC LIMIT 1`,
@@ -1361,7 +1361,7 @@ export class StoreroomService {
     );
 
     if (catalog.default_reorder_qty > 0) {
-      const { rows: existing } = await tenantDb.query(
+      const existing = await tenantDb.query(
         `SELECT sr.id FROM stock_requests sr
           JOIN stock_request_items sri ON sri.request_id = sr.id
          WHERE sr.requesting_location_id = $1
@@ -1371,7 +1371,7 @@ export class StoreroomService {
         [locationId, catalogId],
       );
       if (existing.length === 0) {
-        const { rows: [central] } = await tenantDb.query(
+        const [central] = await tenantDb.query(
           `SELECT id FROM inventory_locations WHERE code = 'CENTRAL' LIMIT 1`,
         );
         if (central) {
@@ -1388,7 +1388,7 @@ export class StoreroomService {
   }
 
   private async refreshRequestStatus(tenantDb: any, requestId: string): Promise<void> {
-    const { rows: items } = await tenantDb.query(
+    const items = await tenantDb.query(
       `SELECT quantity_requested, quantity_fulfilled FROM stock_request_items WHERE request_id = $1`,
       [requestId],
     );
