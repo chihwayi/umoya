@@ -176,6 +176,16 @@ services:
       - REDIS_URL=${SERVICE_REDIS_URL}
       - PYTHONUNBUFFERED=1
       - MASTER_DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${SERVICE_POSTGRES_HOST}:5432/${POSTGRES_DB}
+      # _pg_conn_sync() in main.py (used by the pgvector /guidelines/search
+      # path) builds its own connection from these raw vars rather than
+      # MASTER_DATABASE_URL, and silently falls back to a hardcoded
+      # "postgres"/"postgres" default if they're missing — causing a quiet
+      # auth failure (graceful fallback to ChromaDB) instead of a startup
+      # error. Keep these in sync with MASTER_DATABASE_URL above.
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - PORT_POSTGRES=${PORT_POSTGRES}
       - CDSS_ENABLE_AI=${CDSS_ENABLE_AI}
       - CDSS_REQUIRE_SERVICE_AUTH=${CDSS_REQUIRE_SERVICE_AUTH}
       - CDSS_SERVICE_AUTH_MODE=${CDSS_SERVICE_AUTH_MODE}
@@ -274,6 +284,16 @@ services:
       - REDIS_URL=${SERVICE_REDIS_URL}
       - PYTHONUNBUFFERED=1
       - MASTER_DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${SERVICE_POSTGRES_HOST}:5432/${POSTGRES_DB}
+      # _pg_conn_sync() in main.py (used by the pgvector /guidelines/search
+      # path) builds its own connection from these raw vars rather than
+      # MASTER_DATABASE_URL, and silently falls back to a hardcoded
+      # "postgres"/"postgres" default if they're missing — causing a quiet
+      # auth failure (graceful fallback to ChromaDB) instead of a startup
+      # error. Keep these in sync with MASTER_DATABASE_URL above.
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - PORT_POSTGRES=${PORT_POSTGRES}
       - CDSS_ENABLE_AI=${CDSS_ENABLE_AI}
       - CDSS_REQUIRE_SERVICE_AUTH=${CDSS_REQUIRE_SERVICE_AUTH}
       - CDSS_SERVICE_AUTH_MODE=${CDSS_SERVICE_AUTH_MODE}
