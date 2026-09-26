@@ -13192,8 +13192,11 @@ _embedding_model_instance = None
 def _get_embedding_model():
     global _embedding_model_instance
     if _embedding_model_instance is None and _ST_AVAILABLE:
-        model_name = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-        _embedding_model_instance = _SentenceTransformer(model_name)
+        model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        # See ai_models/rag_engine.py for why cache_folder must be computed explicitly
+        # rather than left to SENTENCE_TRANSFORMERS_HOME's default resolution.
+        hf_hub_cache = os.path.join(os.getenv("HF_HOME", os.getenv("SENTENCE_TRANSFORMERS_HOME", "")), "hub")
+        _embedding_model_instance = _SentenceTransformer(model_name, cache_folder=hf_hub_cache)
     return _embedding_model_instance
 
 def _pg_conn_sync(tenant_id: Optional[str] = None):

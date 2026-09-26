@@ -76,8 +76,20 @@ class RAGEngine:
             logger.info(f"Loaded Medical Guidelines Collection (cosine space). Total Documents: {count}")
 
             # 2. Initialize Embedding Model & Cross-Encoder
+            # SentenceTransformer/CrossEncoder resolve their on-disk cache via the
+            # SENTENCE_TRANSFORMERS_HOME env var passed straight through as `cache_dir`
+            # to huggingface_hub, which treats it as the hub cache root (i.e. the
+            # directory directly containing `models--org--name/`) — unlike HF_HOME,
+            # which huggingface_hub itself resolves one level up (`HF_HOME/hub`). If
+            # SENTENCE_TRANSFORMERS_HOME is set to the same value as HF_HOME (a common
+            # misconfiguration), every load silently misses the cache and, in offline
+            # mode, fails outright instead of falling back to a network download.
+            # Compute the real hub cache root explicitly so this works regardless of
+            # how that env var is set.
+            _hf_hub_cache = os.path.join(os.getenv("HF_HOME", os.getenv("SENTENCE_TRANSFORMERS_HOME", "")), "hub")
+
             # Bi-Encoder for fast retrieval
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+            self.embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', cache_folder=_hf_hub_cache)
             logger.info("SentenceTransformer (all-MiniLM-L6-v2) loaded.")
 
             # Cross-Encoder for precise re-ranking (a lightweight but effective model).
@@ -89,7 +101,7 @@ class RAGEngine:
                 logger.info("CrossEncoder re-ranking disabled via RAG_ENABLE_RERANK=false")
             else:
                 try:
-                    self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+                    self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', cache_folder=_hf_hub_cache)
                     logger.info("CrossEncoder (ms-marco-MiniLM-L-6-v2) loaded for re-ranking.")
                 except Exception as e:
                     logger.warning(f"Failed to load CrossEncoder: {e}. Re-ranking will be disabled.")
