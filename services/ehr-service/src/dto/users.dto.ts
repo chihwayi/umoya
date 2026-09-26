@@ -10,7 +10,9 @@ export enum UserRole {
   RECEPTIONIST = 'receptionist',
   PHARMACIST = 'pharmacist',
   LAB_TECH = 'lab_tech',
-  ACCOUNTS = 'accounts'
+  ACCOUNTS = 'accounts',
+  STORE_MANAGER = 'store_manager',
+  TECHNOLOGIST = 'technologist'
 }
 
 export class CreateUserDto {

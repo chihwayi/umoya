@@ -34,7 +34,7 @@ const UserManagement: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const { showSuccess, showError, showInfo } = useNotification();
 
-  const roles = ['admin', 'doctor', 'nurse', 'nurse_accounts', 'radiologist', 'lab_tech', 'pharmacist', 'receptionist', 'accounts'];
+  const roles = ['admin', 'doctor', 'nurse', 'nurse_accounts', 'radiologist', 'lab_tech', 'pharmacist', 'receptionist', 'accounts', 'store_manager', 'technologist'];
 
   useEffect(() => {
     fetchUsers();
@@ -143,6 +143,8 @@ const UserManagement: React.FC = () => {
         return 'bg-cyan-100 text-cyan-800';
       case 'radiologist': return 'bg-rose-100 text-rose-700';
       case 'accounts': return 'bg-amber-100 text-amber-700';
+      case 'store_manager': return 'bg-lime-100 text-lime-700';
+      case 'technologist': return 'bg-sky-100 text-sky-700';
       default: return 'bg-gray-100 text-gray-800';
     }
   };

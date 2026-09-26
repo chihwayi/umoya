@@ -290,8 +290,8 @@ export class DatabaseProvisioningService {
     try {
       await tenantDb.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;`);
       await tenantDb.query(`
-        ALTER TABLE users ADD CONSTRAINT users_role_check 
-        CHECK (role IN ('doctor', 'nurse', 'nurse_accounts', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts', 'store_manager'));
+        ALTER TABLE users ADD CONSTRAINT users_role_check
+        CHECK (role IN ('doctor', 'nurse', 'nurse_accounts', 'receptionist', 'admin', 'pharmacist', 'lab_tech', 'radiologist', 'accounts', 'store_manager', 'technologist'));
       `);
     } catch (e) {
       this.logger.warn(`Skipping constraint update due to error: ${e instanceof Error ? e.message : String(e)}`);
