@@ -14,6 +14,10 @@ export const roleToRoute = (tenantSlug: string, role: string): string => {
     case 'nurse':
     case 'nurse_accounts':
       return `/ehr/${tenantSlug}/nurse`;
+    case 'store_manager':
+      return `/ehr/${tenantSlug}/storeroom`;
+    case 'technologist':
+      return `/ehr/${tenantSlug}/technologist/imaging`;
     default:
       return `/ehr/${tenantSlug}/dashboard`;
   }

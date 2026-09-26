@@ -115,7 +115,17 @@ const EHRDashboard: React.FC = () => {
         navigate(`/ehr/${tenantSlug}/pharmacy`);
         return;
       }
-      
+      // Redirect store managers directly to the storeroom dashboard
+      if (parsedUser.role === 'store_manager') {
+        navigate(`/ehr/${tenantSlug}/storeroom`);
+        return;
+      }
+      // Redirect imaging technologists directly to their worklist
+      if (parsedUser.role === 'technologist') {
+        navigate(`/ehr/${tenantSlug}/technologist/imaging`);
+        return;
+      }
+
       // Only show welcome message once per session
       const welcomeShown = sessionStorage.getItem('ehr_welcome_shown');
       if (!welcomeShown) {
