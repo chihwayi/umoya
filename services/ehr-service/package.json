@@ -4,7 +4,7 @@
   "description": "Umoya Electronic Health Records Service",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/data && cp src/data/nhls-loinc-map.json dist/data/",
     "start": "node dist/main.js",
     "dev": "nodemon --exec ts-node --transpile-only src/main.ts",
     "simple": "ts-node --transpile-only src/simple-main.ts",
