@@ -224,7 +224,7 @@ class SettingsProvider:
         openai_key = os.getenv("OPENAI_API_KEY", "").strip()
         openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
         gemini_key = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
         if anthropic_key:
             provider, version = "anthropic", anthropic_model
@@ -275,7 +275,7 @@ class SettingsProvider:
         openai_key = os.getenv("OPENAI_API_KEY", "").strip()
         openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
         gemini_key = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
         use_anthropic = bool(anthropic_key)
         use_openai = bool(openai_key) and not use_anthropic
         use_gemini = bool(gemini_key) and not use_anthropic and not use_openai

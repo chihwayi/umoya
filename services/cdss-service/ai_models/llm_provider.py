@@ -87,7 +87,7 @@ class LLMProvider:
         elif self.provider == "openai":
             self.model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         elif self.provider == "gemini":
-            self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+            self.model_name = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
         else:
             self.model_name = os.getenv("LLM_MODEL_NAME", "llama3.1:latest")
 
