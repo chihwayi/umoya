@@ -66,14 +66,20 @@ const AppointmentTemplatesPanel: React.FC<AppointmentTemplatesPanelProps> = ({
         return;
       }
 
-      await ehrApi.createAppointmentTemplate(formData, token, tenantSlug);
-      showSuccess('Success', 'Template created successfully');
+      if (editingTemplate) {
+        await ehrApi.updateAppointmentTemplate(editingTemplate.id, formData, token, tenantSlug);
+        showSuccess('Success', 'Template updated successfully');
+      } else {
+        await ehrApi.createAppointmentTemplate(formData, token, tenantSlug);
+        showSuccess('Success', 'Template created successfully');
+      }
       setShowCreateModal(false);
+      setEditingTemplate(null);
       setFormData({ name: '', type: 'consultation', duration: 30, instructions: '', color: '#3B82F6' });
       fetchTemplates();
     } catch (error: any) {
-      console.error('Error creating template:', error);
-      showError('Error', 'Failed to create template');
+      console.error('Error saving template:', error);
+      showError('Error', editingTemplate ? 'Failed to update template' : 'Failed to create template');
     }
   };
 

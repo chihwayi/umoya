@@ -1165,6 +1165,16 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  updateAppointmentTemplate: async (templateId: string, template: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.put(`/appointments/templates/${templateId}`, template, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
   deleteAppointmentTemplate: async (templateId: string, token: string, tenantSlug: string) => {
     const response = await ehrAxios.delete(`/appointments/templates/${templateId}`, {
       headers: {

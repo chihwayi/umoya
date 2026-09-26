@@ -1251,6 +1251,40 @@ export class AppointmentService {
     };
   }
 
+  async updateAppointmentTemplate(templateId: string, template: any, tenantId: string): Promise<any> {
+    const connection = await this.tenantService.getTenantDatabase(tenantId);
+    if (!connection) {
+      throw new Error(`Failed to connect to tenant database: ${tenantId}`);
+    }
+
+    const { AppointmentTemplate } = await import('../entities/appointment-template.entity');
+    const templateRepository = connection.getRepository(AppointmentTemplate);
+
+    const existing = await templateRepository.findOne({ where: { id: templateId } });
+    if (!existing) {
+      throw new NotFoundException(`Template with ID ${templateId} not found`);
+    }
+
+    Object.assign(existing, {
+      name: template.name ?? existing.name,
+      type: template.type ?? existing.type,
+      durationMinutes: template.duration || template.durationMinutes || existing.durationMinutes,
+      instructions: template.instructions ?? existing.instructions,
+      color: template.color ?? existing.color,
+    });
+
+    const saved = await templateRepository.save(existing);
+    return {
+      id: saved.id,
+      name: saved.name,
+      type: saved.type,
+      duration: saved.durationMinutes,
+      instructions: saved.instructions,
+      color: saved.color,
+      createdAt: saved.createdAt,
+    };
+  }
+
   async deleteAppointmentTemplate(templateId: string, tenantId: string): Promise<void> {
     const connection = await this.tenantService.getTenantDatabase(tenantId);
     if (!connection) {
