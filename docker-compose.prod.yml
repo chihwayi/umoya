@@ -227,7 +227,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - chroma_data:/app/data/chroma_db
+      - ./data/chroma_db:/app/data/chroma_db
     depends_on:
       redis:
         condition: service_healthy
@@ -299,7 +299,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - chroma_data:/app/data/chroma_db
+      - ./data/chroma_db:/app/data/chroma_db
     depends_on:
       - cdss-service
     networks:
