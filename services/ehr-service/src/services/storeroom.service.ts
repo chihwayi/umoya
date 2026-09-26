@@ -619,7 +619,7 @@ export class StoreroomService {
       `SELECT COALESCE(MAX(CAST(SPLIT_PART(receipt_number,'-',3) AS BIGINT)),0)+1 AS next
          FROM storeroom_supplier_receipts`,
     );
-    const receiptNumber = `SRR-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
+    const receiptNumber = `SRR-${new Date().getFullYear()}-${String(seq[0].next).padStart(5,'0')}`;
 
     const rows = await tenantDb.query(
       `INSERT INTO storeroom_supplier_receipts
@@ -661,7 +661,7 @@ export class StoreroomService {
       `SELECT COALESCE(MAX(CAST(SPLIT_PART(request_number,'-',3) AS BIGINT)),0)+1 AS next
          FROM stock_requests`,
     );
-    const requestNumber = `SR-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
+    const requestNumber = `SR-${new Date().getFullYear()}-${String(seq[0].next).padStart(5,'0')}`;
 
     const rows = await tenantDb.query(
       `INSERT INTO stock_requests
@@ -782,7 +782,7 @@ export class StoreroomService {
       `SELECT COALESCE(MAX(CAST(SPLIT_PART(transfer_number,'-',3) AS BIGINT)),0)+1 AS next
          FROM stock_transfers`,
     );
-    const transferNumber = `ST-${new Date().getFullYear()}-${String(seq.rows[0].next).padStart(5,'0')}`;
+    const transferNumber = `ST-${new Date().getFullYear()}-${String(seq[0].next).padStart(5,'0')}`;
 
     const rows = await tenantDb.query(
       `INSERT INTO stock_transfers
@@ -934,12 +934,12 @@ export class StoreroomService {
          LIMIT 10`),
     ]);
     return {
-      total_catalog_items: Number(catalog.rows[0].total),
-      stockout_count: Number(stock.rows[0].stockout_count),
-      low_stock_count: Number(stock.rows[0].low_stock_count),
-      open_alerts: Number(alerts.rows[0].open),
-      pending_requests: Number(requests.rows[0].pending),
-      expiring_soon: expiring.rows,
+      total_catalog_items: Number(catalog[0].total),
+      stockout_count: Number(stock[0].stockout_count),
+      low_stock_count: Number(stock[0].low_stock_count),
+      open_alerts: Number(alerts[0].open),
+      pending_requests: Number(requests[0].pending),
+      expiring_soon: expiring,
     };
   }
 
