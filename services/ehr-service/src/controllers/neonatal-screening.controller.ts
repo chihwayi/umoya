@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Patch, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { NeonatalScreeningService } from '../services/neonatal-screening.service';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('nurse', 'doctor', 'admin', 'lab_tech')
 @Controller('neonatal-screening')
 export class NeonatalScreeningController {
   constructor(private readonly svc: NeonatalScreeningService) {}
