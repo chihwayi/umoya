@@ -137,14 +137,14 @@ export class OrthopaedicsService {
       specialty: 'orthopaedics',
       module: 'rehabilitation',
       ...payload,
-    }).catch((e: any) => {
+    }, tenantId).catch((e: any) => {
       this.logger.warn(`CDSS orthopaedic rehabilitation guideline fetch failed: ${e?.message}`);
       return null;
     });
     return { ...local, cdssGuidelines: cdss ?? { cdssUnavailable: true } };
   }
 
-  async dvtRisk(payload: Record<string, any>): Promise<any> {
+  async dvtRisk(payload: Record<string, any>, tenantId?: string): Promise<any> {
     // Wells DVT score calculation
     const wells = calculateWellsDvt(payload);
     const cdss = await this.cdssService.riskAssessment({
@@ -154,7 +154,7 @@ export class OrthopaedicsService {
       context: 'dvt_prophylaxis',
       specialty: 'orthopaedics',
       module: 'vte_prevention',
-    }, null as any, undefined).catch((e: any) => {
+    }, undefined, tenantId).catch((e: any) => {
       this.logger.warn(`CDSS DVT risk assessment failed: ${e?.message}`);
       return null;
     });
