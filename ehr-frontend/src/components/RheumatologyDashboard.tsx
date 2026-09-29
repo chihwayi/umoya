@@ -282,10 +282,10 @@ const RheumatologyDashboard: React.FC = () => {
   };
 
   const checkBiologicSafety = () => {
-    const safe = !biologicForm.tbScreeningDone || biologicForm.quantiferonResult === 'negative';
+    const safe = biologicForm.tbScreeningDone && biologicForm.quantiferonResult === 'negative';
     const recommendation = safe
       ? 'Safe to start biologic therapy; ensure INH prophylaxis if CXR+ or QFT indeterminate'
-      : 'DO NOT START biologic until TB treatment completed. High risk of TB reactivation.';
+      : 'DO NOT START biologic until TB screening completed and results negative. High risk of TB reactivation.';
 
     setBiologicResult({ safe, recommendation });
   };
