@@ -72,7 +72,7 @@ export class OrthopaedicsController {
   }
 
   @Post('cdss/dvt-risk')
-  dvtRisk(@Body() body: any) {
-    return this.orthoSvc.dvtRisk(body);
+  dvtRisk(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.orthoSvc.dvtRisk(body, req.tenantId!);
   }
 }

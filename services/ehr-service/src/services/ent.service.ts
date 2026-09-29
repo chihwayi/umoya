@@ -104,7 +104,7 @@ export class EntService {
 
   // ── CDSS ──────────────────────────────────────────────────────────────────
 
-  async tonsillitisTriage(payload: Record<string, any>): Promise<any> {
+  async tonsillitisTriage(payload: Record<string, any>, tenantId?: string): Promise<any> {
     const centor = calculateCentor(payload);
     const cdss = await this.cdssService.diagnosisAssist({
       chiefComplaint: 'sore throat',
@@ -114,20 +114,20 @@ export class EntService {
       context: 'ent_tonsillitis',
       specialty: 'ent',
       module: 'pharyngitis_tonsillitis',
-    }, false).catch((e: any) => {
+    }, false, tenantId).catch((e: any) => {
       this.logger.warn(`CDSS tonsillitis triage diagnosis assistance fetch failed: ${e?.message}`);
       return null;
     });
     return { ...centor, cdss: cdss ?? { cdssUnavailable: true } };
   }
 
-  async rhinosinusitisTriage(payload: Record<string, any>): Promise<any> {
+  async rhinosinusitisTriage(payload: Record<string, any>, tenantId?: string): Promise<any> {
     const local = rhinosinusitisClassify(payload);
     const cdss = await this.cdssService.getGuidelines('ent', {
       specialty: 'ent',
       module: 'rhinosinusitis',
       ...payload,
-    }).catch((e: any) => {
+    }, tenantId).catch((e: any) => {
       this.logger.warn(`CDSS rhinosinusitis guideline fetch failed: ${e?.message}`);
       return null;
     });

@@ -39,12 +39,12 @@ export class EntController {
   }
 
   @Post('cdss/tonsillitis-triage')
-  tonsillitisTriage(@Body() body: any) {
-    return this.entSvc.tonsillitisTriage(body);
+  tonsillitisTriage(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.entSvc.tonsillitisTriage(body, req.tenantId!);
   }
 
   @Post('cdss/rhinosinusitis-triage')
-  rhinosinusitisTriage(@Body() body: any) {
-    return this.entSvc.rhinosinusitisTriage(body);
+  rhinosinusitisTriage(@Body() body: any, @Request() req: RequestWithTenant) {
+    return this.entSvc.rhinosinusitisTriage(body, req.tenantId!);
   }
 }
