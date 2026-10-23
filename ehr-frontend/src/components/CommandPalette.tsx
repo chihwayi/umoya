@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Search, ChevronRight, AlertCircle } from 'lucide-react';
 import { fuzzyFilter } from '../utils/fuzzySearch';
 import { buildCommandRegistry, requiresConfirmation, CommandAction } from '../utils/commandPaletteActions';
-import { cdssApi } from '../services/api';
+import { cdssApi, ehrApi } from '../services/api';
 
 interface CommandPaletteProps {
   tenantSlug?: string;
@@ -77,6 +77,37 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
     }
   }, [isOpen]);
 
+  // Patient quick-jump: searches the real patient directory (not the static
+  // nav registry) so "jump to a patient" actually resolves to that patient's
+  // chart rather than only the generic /patients list.
+  const searchPatientsQuickJump = useCallback(
+    async (query: string): Promise<CommandAction[]> => {
+      if (!tenantSlug) return [];
+      try {
+        const response = await ehrApi.searchPatients(query, token, tenantSlug);
+        const patients = (response.data || []) as Array<{
+          id: string;
+          firstName: string;
+          lastName: string;
+          patientNumber?: string;
+        }>;
+        return patients.slice(0, 5).map((p) => ({
+          id: `patient-${p.id}`,
+          label: `${p.firstName} ${p.lastName}`,
+          description: p.patientNumber ? `Open chart — MRN: ${p.patientNumber}` : 'Open patient chart',
+          category: 'search' as const,
+          keywords: [p.firstName, p.lastName, p.patientNumber || ''].filter(Boolean),
+          handler: ({ navigate: nav }) => {
+            nav(`/ehr/${tenantSlug}/patients/${p.id}`);
+          },
+        }));
+      } catch {
+        return []; // Best-effort — command/nav results still render even if this fails.
+      }
+    },
+    [tenantSlug, token]
+  );
+
   // Search clinical guidelines
   const searchClinicalGuidelines = useCallback(
     async (query: string) => {
@@ -137,34 +168,44 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
     [tenantSlug, token]
   );
 
-  // Handle search input changes
+  // Handle search input changes — just updates the query; the debounced
+  // effect below does the actual searching so a fast typer never leaves an
+  // orphaned timer running against a stale query.
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setSelectedIndex(0);
-    setIsClinicalMode(false);
     setError(null);
 
     if (!value.trim()) {
+      setIsClinicalMode(false);
       setResults([]);
-      return;
-    }
-
-    // Check if this is a clinical question (longer, descriptive queries)
-    const isClinicalQuery = value.length > 10 && value.includes(' ');
-
-    if (isClinicalQuery) {
-      // Debounce clinical search slightly (250ms) to avoid overwhelming the server
-      const timer = setTimeout(() => {
-        setIsClinicalMode(true);
-        searchClinicalGuidelines(value);
-      }, 250);
-      return () => clearTimeout(timer);
-    } else {
-      // Regular command filtering
-      const matches = fuzzyFilter(actionRegistry, value, ['label', 'description', 'keywords']);
-      setResults(matches.map((m) => m.item));
     }
   };
+
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+
+    // Check if this is a clinical question (longer, descriptive queries)
+    const isClinicalQuery = searchQuery.length > 10 && searchQuery.includes(' ');
+    setIsClinicalMode(isClinicalQuery);
+
+    const timer = setTimeout(async () => {
+      if (isClinicalQuery) {
+        await searchClinicalGuidelines(searchQuery);
+      } else {
+        // Command/nav matches render immediately; patient quick-jump merges
+        // in once it resolves (best-effort, doesn't block command results).
+        const matches = fuzzyFilter(actionRegistry, searchQuery, ['label', 'description', 'keywords']);
+        setResults(matches.map((m) => m.item));
+        const patientMatches = await searchPatientsQuickJump(searchQuery);
+        if (patientMatches.length > 0) {
+          setResults((prev) => [...prev, ...patientMatches]);
+        }
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, actionRegistry, searchClinicalGuidelines, searchPatientsQuickJump]);
 
   // Execute action
   const executeAction = (action: CommandAction) => {
