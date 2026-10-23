@@ -249,6 +249,7 @@ import { OneHealthController } from './controllers/one-health.controller';
 import { MaternalMortalityController } from './controllers/maternal-mortality.controller';
 import { NcdComplicationController } from './controllers/ncd-complication.controller';
 import { AtMessagingController } from './controllers/at-messaging.controller';
+import { WhatsappWebhookController } from './whatsapp/whatsapp-webhook.controller';
 import { PushTokensController } from './controllers/push-tokens.controller';
 import { CdpaController } from './controllers/cdpa.controller';
 import { BreachDetectionController } from './controllers/breach-detection.controller';
@@ -653,6 +654,7 @@ import { OutcomeCollectionService } from './services/outcome-collection.service'
 import { RegistrationAiService } from './services/registration-ai.service';
 import { ProactiveAiService } from './services/proactive-ai.service';
 import { AtMessagingService } from './services/at-messaging.service';
+import { WhatsappMessagingService } from './whatsapp/whatsapp-messaging.service';
 import { TotpService } from './services/totp.service';
 import { BreachDetectionService } from './services/breach-detection.service';
 import { BackupService } from './services/backup.service';
@@ -923,6 +925,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     KnowledgeController,
     ClaimsAiController,
     AtMessagingController,
+    WhatsappWebhookController,
     PushTokensController,
     CdpaController,
     BreachDetectionController,
@@ -1261,6 +1264,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     RegistrationAiService,
     ProactiveAiService,
     AtMessagingService,
+    WhatsappMessagingService,
     CrvsService,
     CbhiService,
     NcidService,

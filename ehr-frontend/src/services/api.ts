@@ -1016,6 +1016,42 @@ export const ehrApi = {
     return { data: response.data };
   },
 
+  // S281 WhatsApp Patient Engagement
+  getWhatsappConsent: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/webhooks/whatsapp/consent/${patientId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  setWhatsappConsent: async (
+    patientId: string,
+    payload: { phoneNumber: string; optedIn: boolean },
+    token: string,
+    tenantSlug: string
+  ) => {
+    const response = await ehrAxios.post(`/webhooks/whatsapp/consent/${patientId}`, payload, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
+  getWhatsappThread: async (patientId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/webhooks/whatsapp/thread/${patientId}`, {
+      headers: {
+        'X-Tenant-ID': tenantSlug,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return { data: response.data };
+  },
+
       // Appointment Management
     getAppointments: async (token: string, tenantSlug: string, params?: any) => {
       const response = await ehrAxios.get('/appointments', {

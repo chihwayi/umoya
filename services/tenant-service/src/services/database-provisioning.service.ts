@@ -8617,7 +8617,55 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_workflow_step_executions_resume_at ON workflow_step_executions(resume_at) WHERE resume_at IS NOT NULL`,
         ],
       },
+      {
+        id: 'whatsapp_engagement',
+        label: 'Sprint 281 — WhatsApp Patient Engagement Channel',
+        version: '2026.10.23.1',
+        description: 'Per-tenant WhatsApp Business channel config and patient opt-in consent, columns matching whatsapp-channel-config.entity.ts / whatsapp-consent.entity.ts',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS whatsapp_channel_configs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            phone_number_id VARCHAR(50) NOT NULL,
+            business_account_id VARCHAR(50),
+            access_token TEXT NOT NULL,
+            app_secret TEXT NOT NULL,
+            webhook_verify_token TEXT NOT NULL,
+            api_version VARCHAR(10) NOT NULL DEFAULT 'v21.0',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_whatsapp_channel_configs_active ON whatsapp_channel_configs(is_active)`,
+          `CREATE TABLE IF NOT EXISTS whatsapp_consents (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL UNIQUE,
+            phone_number VARCHAR(30) NOT NULL,
+            opted_in BOOLEAN NOT NULL DEFAULT false,
+            opted_in_at TIMESTAMPTZ,
+            opted_out_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_whatsapp_consents_patient ON whatsapp_consents(patient_id)`,
+        ],
+        tasks: [(db) => this.ensureUpdatedAtTriggerFunction(db).then(() => this.applyWhatsappEngagementTriggers(db))],
+      },
     ];
+  }
+
+  private async applyWhatsappEngagementTriggers(tenantDb: DataSource) {
+    await tenantDb.query(`
+      DROP TRIGGER IF EXISTS set_timestamp_whatsapp_channel_configs ON whatsapp_channel_configs;
+      CREATE TRIGGER set_timestamp_whatsapp_channel_configs
+      BEFORE UPDATE ON whatsapp_channel_configs
+      FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+    `);
+    await tenantDb.query(`
+      DROP TRIGGER IF EXISTS set_timestamp_whatsapp_consents ON whatsapp_consents;
+      CREATE TRIGGER set_timestamp_whatsapp_consents
+      BEFORE UPDATE ON whatsapp_consents
+      FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+    `);
   }
 
   private getSprint165PushTokensStatements(): string[] {

@@ -13,6 +13,7 @@ import PatientProTrends from '../components/PatientProTrends';
 import PatientProSchedules from '../components/PatientProSchedules';
 import UbuntuCulturalPanel from '../components/UbuntuCulturalPanel';
 import NcidPanel from '../components/NcidPanel';
+import WhatsappEngagementPanel from '../components/WhatsappEngagementPanel';
 
 interface Patient {
   id: string;
@@ -342,6 +343,11 @@ const PatientDetail: React.FC = () => {
       {/* Ubuntu Cultural Health */}
       <div className="mt-6">
         <UbuntuCulturalPanel patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} />
+      </div>
+
+      {/* WhatsApp Patient Engagement */}
+      <div className="mt-6">
+        <WhatsappEngagementPanel patientId={patient.id} tenantSlug={tenantSlug!} token={authToken} phone={patient.phone} />
       </div>
 
       {/* NCID — national identifiers & programme gaps */}

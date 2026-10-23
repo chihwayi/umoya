@@ -57,7 +57,19 @@ export class TenantMiddleware implements NestMiddleware {
       // can't send X-Tenant-Id. Tenant resolution falls back to
       // SINGLE_TENANT_ID inside TelemedicineWebhookController.
       normalizedPath === '/telemedicine/webhook/daily' ||
-      normalizedOriginal === '/telemedicine/webhook/daily'
+      normalizedOriginal === '/telemedicine/webhook/daily' ||
+      // S281 WhatsApp webhook: Meta cannot send X-Tenant-Id either, but unlike
+      // the payment/Daily.co callbacks above this one IS genuinely per-tenant
+      // (each tenant has its own WhatsApp Business number), so it can't use
+      // the SINGLE_TENANT_ID fallback those use. Instead the tenant slug is
+      // baked into the webhook URL itself
+      // (/webhooks/whatsapp/meta/:tenantSlug) and WhatsappWebhookController
+      // resolves it directly via TenantService.getTenantDatabase(). Only the
+      // Meta-facing routes are bypassed here — /webhooks/whatsapp/consent/*
+      // and /thread/* are normal authenticated, tenant-header-bearing routes
+      // and must keep going through this middleware as usual.
+      normalizedPath.startsWith('/webhooks/whatsapp/meta/') ||
+      normalizedOriginal.startsWith('/webhooks/whatsapp/meta/')
     );
     
     if (isPublicTenantEndpoint) {

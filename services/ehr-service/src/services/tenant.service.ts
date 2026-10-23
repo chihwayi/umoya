@@ -385,6 +385,8 @@ import { EtrNetNotification } from '../entities/etr-net-notification.entity';
 import { DatimIndicatorMapping } from '../entities/datim-indicator-mapping.entity';
 import { DatimSubmission } from '../entities/datim-submission.entity';
 import { AtMessageLog } from '../entities/at-message-log.entity';
+import { WhatsappChannelConfig } from '../whatsapp/entities/whatsapp-channel-config.entity';
+import { WhatsappConsent } from '../whatsapp/entities/whatsapp-consent.entity';
 import { UssdSession } from '../entities/ussd-session.entity';
 import { NotificationTemplate } from '../entities/notification-template.entity';
 import { NotificationTriggerConfig } from '../entities/notification-trigger-config.entity';
@@ -1109,6 +1111,8 @@ export class TenantService {
         DatimIndicatorMapping,
         DatimSubmission,
         AtMessageLog,
+        WhatsappChannelConfig,
+        WhatsappConsent,
         UssdSession,
         NotificationTemplate,
         NotificationTriggerConfig,

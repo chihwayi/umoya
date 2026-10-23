@@ -8,10 +8,35 @@ import { Bill } from '../entities/billing.entity';
 import { SmsGatewayConfig } from '../entities/sms-gateway-config.entity';
 import { config as envConfig } from '@umoya/config';
 import { SmsService } from './sms.service';
+import { WhatsappMessagingService } from '../whatsapp/whatsapp-messaging.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(@Optional() private readonly smsService?: SmsService) {}
+  constructor(
+    @Optional() private readonly smsService?: SmsService,
+    @Optional() private readonly whatsappService?: WhatsappMessagingService,
+  ) {}
+
+  // S281: WhatsApp is a best-effort, consent-gated add-on alongside the
+  // existing SMS send — never blocks or fails the caller, and deliberately
+  // uses a generic body (no medication/test names) since WhatsApp threads
+  // are a less controlled surface than a one-way SMS. sendToPatient()
+  // itself no-ops safely (not_configured/not_consented/no_phone) so this is
+  // just a fire-and-forget best-effort call.
+  private async sendWhatsappBestEffort(
+    tenantDb: DataSource,
+    patientId: string,
+    phone: string,
+    genericBody: string,
+    messageType: string,
+  ): Promise<void> {
+    if (!this.whatsappService) return;
+    try {
+      await this.whatsappService.sendToPatient(tenantDb, patientId, phone, genericBody, messageType);
+    } catch (error) {
+      console.warn(`WhatsApp best-effort send failed for patient ${patientId}`, error);
+    }
+  }
 
   async sendSms(smsData: { phone: string, message: string, network?: string }, tenantDb?: DataSource) {
     const { phone, message, network } = smsData;
@@ -106,6 +131,14 @@ export class NotificationsService {
 
     const message = `Dear ${appointment.patient.firstName}, this is a reminder for your appointment on ${appointment.appointmentDate.toDateString()} at ${appointment.appointmentDate.toTimeString()}. Please arrive 15 minutes early. Umoya Clinic`;
 
+    await this.sendWhatsappBestEffort(
+      tenantDb,
+      appointment.patient.id,
+      appointment.patient.phone,
+      `Dear ${appointment.patient.firstName}, you have an upcoming appointment on ${appointment.appointmentDate.toDateString()} at ${appointment.appointmentDate.toTimeString()}. Please arrive 15 minutes early. Umoya Clinic`,
+      'appointment_reminder',
+    );
+
     return this.sendSms({
       phone: appointment.patient.phone,
       message
@@ -124,6 +157,14 @@ export class NotificationsService {
     }
 
     const message = `Dear ${prescription.patient.firstName}, your prescription for ${prescription.medicationName} is ready for collection. Please bring your ID. Umoya Pharmacy`;
+
+    await this.sendWhatsappBestEffort(
+      tenantDb,
+      prescription.patient.id,
+      prescription.patient.phone,
+      `Dear ${prescription.patient.firstName}, a prescription is ready for collection at Umoya Pharmacy. Please bring your ID.`,
+      'prescription_ready',
+    );
 
     return this.sendSms({
       phone: prescription.patient.phone,
@@ -144,6 +185,14 @@ export class NotificationsService {
 
     const testName = labOrder.tests?.[0]?.testName || 'the requested tests';
     const message = `Dear ${labOrder.patient.firstName}, your lab results for ${testName} are ready. Please visit the clinic to collect them or call us for details. Umoya Lab`;
+
+    await this.sendWhatsappBestEffort(
+      tenantDb,
+      labOrder.patient.id,
+      labOrder.patient.phone,
+      `Dear ${labOrder.patient.firstName}, your lab results are ready. Please visit the clinic to collect them or call us for details. Umoya Lab`,
+      'lab_results_ready',
+    );
 
     return this.sendSms({
       phone: labOrder.patient.phone,
