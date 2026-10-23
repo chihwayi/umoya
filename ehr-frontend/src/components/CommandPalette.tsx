@@ -86,30 +86,46 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
       setError(null);
       try {
         const response = await cdssApi.searchGuidelines(query, token, tenantSlug, 3);
-        const data = response.data as any;
+        // Real shape (services/cdss-service/main.py search_guidelines): a single
+        // { query, citations: [...], analysis, count, governed_corpus_used } object —
+        // NOT a `results` array and NOT a `recommendation` field. Each citation has
+        // `source`/`confidence`/`metadata.page`, not `relevance`/`page` directly.
+        const data = response.data as {
+          citations?: Array<{
+            source?: string;
+            confidence?: number | null;
+            metadata?: { source?: string; page?: number };
+          }>;
+          analysis?: string | null;
+          count?: number;
+        };
 
-        const clinicalResults: ClinicalResult[] = [];
+        const citations = (data.citations || []).map((c) => ({
+          // c.source is often already "<file>.pdf (p.N)" — prefer the clean
+          // filename from metadata.source and let the page render separately,
+          // to avoid "<file>.pdf (p.30), p.30" duplication in the UI.
+          source: c.metadata?.source || c.source || 'Unknown source',
+          page: c.metadata?.page,
+          relevance: typeof c.confidence === 'number' ? c.confidence : undefined,
+        }));
 
-        if (data.results && Array.isArray(data.results)) {
-          for (const result of data.results) {
-            clinicalResults.push({
-              type: 'clinical',
-              title: result.condition || 'Clinical Guideline',
-              summary: result.summary || result.recommendation || 'No summary available',
-              citations: result.citations || [],
-            });
-          }
-        } else if (data.recommendation) {
-          clinicalResults.push({
-            type: 'clinical',
-            title: 'Clinical Guideline Result',
-            summary: data.recommendation,
-            citations: data.citations || [],
-          });
-        }
+        const clinicalResults: ClinicalResult[] =
+          citations.length > 0 || data.analysis
+            ? [
+                {
+                  type: 'clinical',
+                  title: `Clinical guideline search: "${query}"`,
+                  summary: data.analysis || 'No analysis available — see citations below.',
+                  citations,
+                },
+              ]
+            : [];
 
         setResults(clinicalResults);
         setSelectedIndex(0);
+        if (clinicalResults.length === 0) {
+          setError('No matching guidance found for this query.');
+        }
       } catch (err: any) {
         const msg = err?.response?.data?.message || err?.message || 'Failed to search guidelines';
         setError(msg);

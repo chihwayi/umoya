@@ -213,7 +213,7 @@ export function buildCommandRegistry(tenantSlug: string, userRole: string): Comm
  * Allowlist of actions that require confirmation before execution
  * (e.g., actions that modify state or delete data)
  */
-export const MUTATING_ACTION_ALLOWLIST = new Set([
+export const MUTATING_ACTION_ALLOWLIST = new Set<string>([
   // Currently, most actions are navigation-safe.
   // Add IDs here if we add mutating operations (e.g., "delete-patient", "archive-record").
 ]);
