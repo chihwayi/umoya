@@ -76,6 +76,7 @@ const LessonEditorModal: React.FC<LessonEditorModalProps> = ({ moduleId, onClose
               <option value="text">Text (Markdown)</option>
               <option value="video_url">Video URL</option>
               <option value="pdf_url">PDF URL</option>
+              <option value="interactive_image">Interactive Diagram (Image)</option>
             </select>
           </div>
 
@@ -100,6 +101,8 @@ const LessonEditorModal: React.FC<LessonEditorModalProps> = ({ moduleId, onClose
                   ? 'Enter lesson content in Markdown format...'
                   : formData.contentType === 'video_url'
                   ? 'Enter video URL (YouTube, Vimeo, etc)...'
+                  : formData.contentType === 'interactive_image'
+                  ? 'Enter image URL for the diagram (patients can tap to zoom in)...'
                   : 'Enter PDF URL...'
               }
               rows={6}
@@ -108,6 +111,11 @@ const LessonEditorModal: React.FC<LessonEditorModalProps> = ({ moduleId, onClose
             {formData.contentType === 'text' && (
               <p className="text-xs text-slate-500 mt-1">
                 Supports Markdown: **bold**, *italic*, [links](url), # headings, etc.
+              </p>
+            )}
+            {formData.contentType === 'interactive_image' && (
+              <p className="text-xs text-slate-500 mt-1">
+                Patients see a zoomable diagram — good for anatomy, medication charts, or process illustrations.
               </p>
             )}
           </div>

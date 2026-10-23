@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronDown, CheckCircle, Clock, FileText, PlayCircle, Loader } from 'lucide-react';
+import { ChevronLeft, ChevronDown, CheckCircle, Clock, FileText, PlayCircle, Loader, ZoomIn, X } from 'lucide-react';
 import { usePatientAuth } from '../contexts/PatientAuthContext';
 import { useTenantSlug } from '../hooks/useTenantSlug';
 import { patientPortalApi } from '../services/api';
@@ -65,6 +65,7 @@ const CourseReaderPage: React.FC = () => {
   const [quiz] = useState<Quiz | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [quizSubmitting, setQuizSubmitting] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (courseId && tenantSlug && token) {
@@ -237,6 +238,24 @@ const CourseReaderPage: React.FC = () => {
                       </a>
                     </div>
                   )}
+                  {selectedLesson.content_type === 'interactive_image' && selectedLesson.translation?.content_body && (
+                    <div className="bg-slate-100 rounded-lg p-4 text-center">
+                      <button
+                        onClick={() => setZoomedImage(selectedLesson.translation!.content_body)}
+                        className="relative group inline-block"
+                      >
+                        <img
+                          src={selectedLesson.translation.content_body}
+                          alt={selectedLesson.translation?.title || selectedLesson.title}
+                          className="max-w-full max-h-96 rounded-lg mx-auto"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
+                          <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </button>
+                      <p className="text-xs text-slate-500 mt-2">Tap the diagram to zoom in</p>
+                    </div>
+                  )}
                   {selectedLesson.content_type === 'pdf_url' && (
                     <div className="bg-slate-100 rounded-lg p-8 text-center">
                       <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />
@@ -373,6 +392,26 @@ const CourseReaderPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Zoomed Interactive Diagram */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setZoomedImage(null)}
+        >
+          <button
+            onClick={() => setZoomedImage(null)}
+            className="absolute top-4 right-4 text-white hover:text-slate-300"
+          >
+            <X size={28} />
+          </button>
+          <img
+            src={zoomedImage}
+            alt="Interactive diagram"
+            className="max-w-full max-h-full object-contain cursor-zoom-out"
+          />
+        </div>
+      )}
 
       {/* Quiz Modal */}
       {quizModalOpen && quiz && (
