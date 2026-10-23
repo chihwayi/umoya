@@ -4,6 +4,7 @@ import { NotificationProvider } from './components/GlobalNotification';
 import { AutoLogoutProvider } from './components/AutoLogoutProvider';
 import { BackgroundTaskProvider } from './contexts/BackgroundTaskContext';
 import { BackgroundTaskDock } from './components/BackgroundTaskDock';
+import { CommandPalette } from './components/CommandPalette';
 import { tenantApi } from './services/api';
 import ModuleUnavailablePage from './pages/ModuleUnavailablePage';
 import { TenantModuleRoute } from './components/TenantModuleRoute';
@@ -465,6 +466,18 @@ const RouteThemeManager: React.FC = () => {
   return null;
 };
 
+const GlobalCommandPalette: React.FC = () => {
+  const location = useLocation();
+
+  // Extract tenantSlug from the current route if available
+  const tenantSlug = React.useMemo(() => {
+    const match = location.pathname.match(/\/ehr\/([^/]+)/);
+    return match ? match[1] : undefined;
+  }, [location.pathname]);
+
+  return <CommandPalette tenantSlug={tenantSlug} />;
+};
+
 function App() {
   const TenantRedirect: React.FC = () => {
     const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -481,6 +494,7 @@ function App() {
           <BackgroundTaskDock />
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <RouteThemeManager />
+          <GlobalCommandPalette />
           <Suspense fallback={<RouteLoader />}>
             <Routes>
               <Route path="/" element={<LandingPage />} />
