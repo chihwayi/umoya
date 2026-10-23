@@ -33,6 +33,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingAction, setConfirmingAction] = useState<CommandAction | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Get user data for role-specific actions
@@ -209,6 +210,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
 
   // Execute action
   const executeAction = (action: CommandAction) => {
+    // help-shortcuts has no real destination to navigate to — its handler
+    // is a deliberate no-op in commandPaletteActions.ts, and showing the
+    // shortcuts modal is the palette's own UI concern, not a navigation action.
+    if (action.id === 'help-shortcuts') {
+      setShowShortcuts(true);
+      return;
+    }
+
     if (requiresConfirmation(action.id)) {
       setConfirmingAction(action);
       return;
@@ -390,6 +399,42 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
           </div>
         </div>
       </div>
+
+      {/* Keyboard Shortcuts Modal */}
+      {showShortcuts && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div
+            className="bg-slate-900 rounded-lg border border-slate-700 p-6 max-w-sm mx-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-100 mb-4">Keyboard Shortcuts</h3>
+            <dl className="space-y-3 text-sm">
+              {[
+                ['⌘K / Ctrl+K', 'Open command palette'],
+                ['↑ / ↓', 'Navigate results'],
+                ['Enter', 'Execute selected command'],
+                ['Esc', 'Close palette'],
+              ].map(([keys, desc]) => (
+                <div key={keys} className="flex items-center justify-between">
+                  <dt className="text-slate-400">{desc}</dt>
+                  <dd className="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs font-mono text-slate-300">
+                    {keys}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <button
+              onClick={() => setShowShortcuts(false)}
+              className="mt-6 w-full px-4 py-2 rounded text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {confirmingAction && (

@@ -92,19 +92,11 @@ export function buildCommandRegistry(tenantSlug: string, userRole: string): Comm
       },
     },
 
-    // Search: Clinical Guidelines
-    {
-      id: 'search-guidelines',
-      label: 'Search Clinical Guidelines',
-      description: 'Query the clinical decision support system',
-      category: 'search',
-      keywords: ['clinical', 'guidelines', 'cdss', 'decision', 'evidence'],
-      icon: 'book',
-      handler: () => {
-        // This is a special action: it opens the clinical-question mode
-        // Handled by the CommandPalette component itself
-      },
-    },
+    // Note: there's deliberately no clickable "Search Clinical Guidelines"
+    // entry here — clinical mode activates automatically the moment the
+    // user types a question-shaped query (see CommandPalette's isClinicalQuery
+    // check), so a static action with no query attached would just be a
+    // dead click.
 
     // Help
     {
