@@ -306,32 +306,46 @@ services:
       - PORT_POSTGRES=${PORT_POSTGRES}
       - CDSS_ENABLE_AI=${CDSS_ENABLE_AI:-true}
       - CDSS_REQUIRE_SERVICE_AUTH=true
+      - CDSS_SERVICE_AUTH_MODE=${CDSS_SERVICE_AUTH_MODE:-both}
       - CDSS_SERVICE_TOKEN=${CDSS_SERVICE_TOKEN}
       - CDSS_SERVICE_JWT_SECRET=${CDSS_SERVICE_JWT_SECRET}
+      - CDSS_SERVICE_AUTH_ISSUER=${CDSS_SERVICE_AUTH_ISSUER:-umoya.ehr-service}
+      - CDSS_SERVICE_AUTH_AUDIENCE=${CDSS_SERVICE_AUTH_AUDIENCE:-umoya.cdss}
+      - CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT=${CDSS_SERVICE_AUTH_JWT_REPLAY_STRICT:-true}
       - CDSS_PHI_REDACTION_ENABLED=true
       - CDSS_BLOCK_OUTBOUND_PHI=true
       - CDSS_STRICT_EGRESS_ALLOWLIST=true
+      - CDSS_EGRESS_ALLOWLIST=${CDSS_EGRESS_ALLOWLIST:-}
       - CDSS_ENCRYPTION_ENABLED=true
+      - CDSS_ENCRYPTION_PROVIDER=${CDSS_ENCRYPTION_PROVIDER:-local}
+      - CDSS_ENCRYPTION_KEY_ID=${CDSS_ENCRYPTION_KEY_ID:-prod-v1}
       - CDSS_ENCRYPTION_KEY=${CDSS_ENCRYPTION_KEY}
       - CDSS_ENCRYPTION_ALLOW_PLAINTEXT_READS=false
       - CDSS_JOB_WORKER_ENABLED=true
       - CDSS_JOB_QUEUE_NAME=${CDSS_JOB_QUEUE_NAME:-cdss:jobs:queue}
       - CDSS_JOB_DLQ_NAME=${CDSS_JOB_DLQ_NAME:-cdss:jobs:dead_letter}
+      - CDSS_USE_EHR_TERMINOLOGY=true
       - MINIO_ENDPOINT=${SERVICE_MINIO_URL}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET=umoya-documents
       - EHR_SERVICE_URL=${SERVICE_EHR_URL}
       - JWT_SECRET=${JWT_SECRET}
-      # worker_main.py imports main.py, which evaluates _resolve_cors_origins()
-      # at import time regardless of entrypoint (there's no HTTP server in
-      # this process) — this was the one var missing from this block that
-      # actually crashed the worker on startup.
+      # _validate_security_config() in main.py (imported by worker_main.py
+      # at startup — there's no HTTP server in this process, but the module
+      # import still runs every module-level validation) required several
+      # vars this block was missing one at a time: CORS_ORIGINS, OWNER_EMAILS,
+      # and the service-auth/encryption/egress vars above. Brought to full
+      # parity with cdss-service's block instead of continuing to discover
+      # these one crash at a time.
+      - OWNER_EMAILS=${OWNER_EMAILS}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - LLM_ENABLED=${LLM_ENABLED:-true}
       - ANONYMIZED_TELEMETRY=False
       - LLM_API_URL=${LLM_API_URL}
       - LLM_MODEL_NAME=${LLM_MODEL_NAME:-llama3.1:latest}
+      - LLM_TIMEOUT_SECONDS=${LLM_TIMEOUT_SECONDS:-60}
+      - LLM_MAX_RETRIES=2
       - WHISPER_API_KEY=${WHISPER_API_KEY}
       - CHROMA_ANONYMIZED_TELEMETRY=False
       - REDIS_HOST=redis
