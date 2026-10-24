@@ -362,6 +362,20 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3013
+      # @umoya/config's env.js throws at startup in any non-development
+      # NODE_ENV without these — this file was missing them entirely
+      # (only docker-compose.yml's base config set them), so ehr-service
+      # could only actually start when deployed via a merged
+      # `-f docker-compose.yml -f docker-compose.prod.yml`. That merge,
+      # though, concatenates (not replaces) list fields like `ports:` across
+      # both files — causing a second, conflicting host-port bind for
+      # web-app/ehr-frontend/patient-portal. Adding these here lets this
+      # file run genuinely standalone (`-f docker-compose.prod.yml` alone,
+      # matching this file's own header comment) and avoids ever merging
+      # files that produced that conflict.
+      - SERVICE_BASE_URL=${SERVICE_BASE_URL}
+      - SERVICE_TENANT_URL=${SERVICE_TENANT_URL}
+      - SERVICE_EHR_URL=${SERVICE_EHR_URL}
       - DB_HOST=${SERVICE_POSTGRES_HOST}
       - DB_PORT=5432
       - DB_USERNAME=${POSTGRES_USER}
