@@ -4,12 +4,17 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # See ehr-frontend/nginx.conf.template for why this resolver + variable
+    # pattern is used instead of a literal proxy_pass target.
+    resolver 127.0.0.11 valid=10s;
+
     location / {
         try_files $uri $uri/ /index.html;
     }
 
     location /api/ {
-        proxy_pass ${REACT_APP_TENANT_API_URL_INTERNAL}/;
+        set $upstream_tenant ${REACT_APP_TENANT_API_URL_INTERNAL};
+        proxy_pass $upstream_tenant/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

@@ -4,12 +4,24 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Docker's embedded DNS (127.0.0.11). Resolving proxy_pass targets via a
+    # variable (instead of a bare literal) forces nginx to look up the
+    # upstream per-request through this resolver rather than once at config
+    # load/startup — a literal proxy_pass fails permanently ("host not found
+    # in upstream") if the upstream container isn't resolvable in the exact
+    # instant nginx starts, which happened in production: any unrelated
+    # container churn on the shared network could transiently disrupt DNS
+    # just long enough to crash-loop this container. With a variable, a
+    # failed lookup is a per-request 502 instead of nginx refusing to start.
+    resolver 127.0.0.11 valid=10s;
+
     location / {
         try_files $uri $uri/ /index.html;
     }
 
     location /tenant-service/ {
-        proxy_pass ${SERVICE_TENANT_URL}/;
+        set $upstream_tenant ${SERVICE_TENANT_URL};
+        proxy_pass $upstream_tenant/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -17,7 +29,8 @@ server {
     }
 
     location /ehr-service/ {
-        proxy_pass ${SERVICE_EHR_URL}/;
+        set $upstream_ehr ${SERVICE_EHR_URL};
+        proxy_pass $upstream_ehr/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -25,7 +38,8 @@ server {
     }
 
     location /cdss-service/ {
-        proxy_pass ${SERVICE_CDSS_URL}/;
+        set $upstream_cdss ${SERVICE_CDSS_URL};
+        proxy_pass $upstream_cdss/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
