@@ -465,6 +465,17 @@ services:
     image: umoya/web-app:${IMAGE_TAG:-latest}
     container_name: umoya-web-app
     restart: unless-stopped
+    # Deploys in practice run with both -f docker-compose.yml -f docker-compose.prod.yml
+    # merged (base file supplies SERVICE_BASE_URL/SERVICE_TENANT_URL/etc. that this
+    # file alone doesn't set for every service). The base file's web-app entry sets
+    # command: sh -lc "npm run build && node scripts/serve-build.js" for its
+    # Dockerfile.dev (full node image); compose merge only overrides scalar keys
+    # that are explicitly redefined, so without this override that dev command
+    # survives onto this file's nginx:alpine-based image, which has no npm/node —
+    # producing "sh: npm: not found" (exit 127) at runtime. This was a real,
+    # live production bug: umoya-web-app was crash-looping on exactly this for
+    # ~3 weeks before it was diagnosed.
+    command: ["nginx", "-g", "daemon off;"]
     ports:
       - "${PORT_WEB_APP:-3011}:80"
     environment:
