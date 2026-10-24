@@ -59,6 +59,13 @@ services:
     image: minio/minio:RELEASE.2023-10-07T15-07-38Z
     container_name: umoya-minio
     restart: unless-stopped
+    # Caddy (host-level reverse proxy, /etc/caddy/Caddyfile) proxies
+    # minio-*.sslip.io to localhost:9000 — this file never published that
+    # port, so Caddy 502'd until this was added. localhost-only, matching
+    # the base file's scoping (Caddy terminates TLS and is the only
+    # intended public entry point).
+    ports:
+      - "127.0.0.1:9000:9000"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -88,6 +95,10 @@ services:
     image: umoya/tenant-service:${IMAGE_TAG:-latest}
     container_name: umoya-tenant-service
     restart: unless-stopped
+    # Caddy proxies tenant-*.sslip.io to localhost:3001 — see the minio
+    # block above for why this is here.
+    ports:
+      - "127.0.0.1:3001:3001"
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -166,6 +177,10 @@ services:
     image: umoya/cdss-service:${IMAGE_TAG:-latest}
     container_name: umoya-cdss-service
     restart: unless-stopped
+    # Caddy proxies cdss-*.sslip.io to localhost:8000 — see the minio
+    # block above for why this is here.
+    ports:
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 8000); conn.request('GET', '/health'); r = conn.getresponse(); exit(0 if r.status == 200 else 1)"]
       interval: 15s
@@ -359,6 +374,10 @@ services:
     image: umoya/ehr-service:${IMAGE_TAG:-latest}
     container_name: umoya-ehr-service
     restart: unless-stopped
+    # Caddy proxies ehr-*.sslip.io to localhost:3013 — see the minio block
+    # in this file for why this is here.
+    ports:
+      - "127.0.0.1:3013:3013"
     environment:
       - NODE_ENV=production
       - PORT=3013
@@ -490,8 +509,11 @@ services:
     # live production bug: umoya-web-app was crash-looping on exactly this for
     # ~3 weeks before it was diagnosed.
     command: ["nginx", "-g", "daemon off;"]
+    # localhost-only, matching the base file's scoping — Caddy (same host)
+    # is the intended public entry point (admin-*.sslip.io -> localhost:3011),
+    # not this port directly.
     ports:
-      - "${PORT_WEB_APP:-3011}:80"
+      - "127.0.0.1:${PORT_WEB_APP:-3011}:80"
     environment:
       - REACT_APP_TENANT_API_URL_INTERNAL=http://umoya-tenant-service:3001
       - SERVICE_TENANT_URL=${SERVICE_TENANT_URL}
@@ -518,8 +540,10 @@ services:
     image: umoya/ehr-frontend:${IMAGE_TAG:-latest}
     container_name: umoya-ehr-frontend
     restart: unless-stopped
+    # localhost-only, matching the base file's scoping — Caddy (same host)
+    # is the intended public entry point (app-*.sslip.io -> localhost:3000).
     ports:
-      - "${PORT_EHR_FRONTEND:-3000}:80"
+      - "127.0.0.1:${PORT_EHR_FRONTEND:-3000}:80"
     environment:
       - SERVICE_TENANT_URL=${SERVICE_TENANT_URL:-http://tenant-service:3001}
       - SERVICE_EHR_URL=${SERVICE_EHR_URL:-http://ehr-service:3013}
@@ -545,8 +569,10 @@ services:
     image: umoya/patient-portal:${IMAGE_TAG:-latest}
     container_name: umoya-patient-portal
     restart: unless-stopped
+    # localhost-only, matching the base file's scoping — Caddy (same host)
+    # is the intended public entry point (patient-*.sslip.io -> localhost:3015).
     ports:
-      - "${PORT_PATIENT_PORTAL:-3015}:80"
+      - "127.0.0.1:${PORT_PATIENT_PORTAL:-3015}:80"
     environment:
       - SERVICE_EHR_URL=${SERVICE_EHR_URL:-http://ehr-service:3013}
     deploy:
@@ -584,8 +610,12 @@ services:
     image: grafana/grafana:latest
     container_name: umoya-grafana
     restart: unless-stopped
+    # localhost-only, not 0.0.0.0 — Caddy is the only intended public entry
+    # point (proxies grafana-*.sslip.io to localhost:3012), matching the
+    # base file's scoping. This was previously bound on all interfaces,
+    # exposing the Grafana login directly to the internet on :3012.
     ports:
-      - "${PORT_GRAFANA:-3012}:3000"
+      - "127.0.0.1:${PORT_GRAFANA:-3012}:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
