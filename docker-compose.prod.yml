@@ -323,6 +323,11 @@ services:
       - MINIO_BUCKET=umoya-documents
       - EHR_SERVICE_URL=${SERVICE_EHR_URL}
       - JWT_SECRET=${JWT_SECRET}
+      # worker_main.py imports main.py, which evaluates _resolve_cors_origins()
+      # at import time regardless of entrypoint (there's no HTTP server in
+      # this process) — this was the one var missing from this block that
+      # actually crashed the worker on startup.
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - LLM_ENABLED=${LLM_ENABLED:-true}
       - ANONYMIZED_TELEMETRY=False
       - LLM_API_URL=${LLM_API_URL}
