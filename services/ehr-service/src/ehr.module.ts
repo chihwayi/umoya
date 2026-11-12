@@ -301,6 +301,8 @@ import { PatientSafetyIncidentController } from './controllers/patient-safety-in
 import { PatientSafetyIncidentService } from './services/patient-safety-incident.service';
 import { ClinicalStaffCredentialingController } from './controllers/clinical-staff-credentialing.controller';
 import { ClinicalStaffCredentialingService } from './services/clinical-staff-credentialing.service';
+import { ClinicianNetworkMasterDbService } from './clinician-network/clinician-network-master-db.service';
+import { ClinicianIdentityService } from './clinician-network/clinician-identity.service';
 import { StaffDutyRosteringController } from './controllers/staff-duty-rostering.controller';
 import { StaffDutyRosteringService } from './services/staff-duty-rostering.service';
 import { BiomedicalEquipmentController } from './controllers/biomedical-equipment.controller';
@@ -1347,6 +1349,8 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     OemSurveillanceService,
     PatientSafetyIncidentService,
     ClinicalStaffCredentialingService,
+    ClinicianNetworkMasterDbService,
+    ClinicianIdentityService,
     StaffDutyRosteringService,
     BiomedicalEquipmentService,
     OutcomeLinkageService,
