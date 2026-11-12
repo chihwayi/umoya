@@ -8650,6 +8650,104 @@ export class DatabaseProvisioningService {
         ],
         tasks: [(db) => this.ensureUpdatedAtTriggerFunction(db).then(() => this.applyWhatsappEngagementTriggers(db))],
       },
+      {
+        id: 'clinician_network_platform',
+        label: 'Clinician Network — Cross-Tenant Platform Schema',
+        version: '2026.11.12.1',
+        description:
+          'NON-TENANT-SCOPED EXCEPTION to the golden rule: this bundle is applied ONCE to the shared ' +
+          'master database (via repairMasterDatabase.ts with MASTER_PROVISION_BUNDLES=clinician_network_platform), ' +
+          'never to a tenant database. It backs the cross-tenant doctor discussion feature — see ' +
+          'docs/CLINICIAN-NETWORK-ARCHITECTURE.md. Do not copy this pattern for anything that should ' +
+          'actually be tenant-scoped.',
+        statements: () => [
+          `CREATE SCHEMA IF NOT EXISTS clinician_network`,
+
+          `CREATE TABLE IF NOT EXISTS clinician_network.clinicians (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            license_body TEXT NOT NULL,
+            license_number_hash TEXT NOT NULL,
+            display_handle TEXT NOT NULL UNIQUE,
+            is_moderator BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (license_body, license_number_hash)
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS clinician_network.panels (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            specialty TEXT NOT NULL,
+            description TEXT,
+            visibility TEXT NOT NULL DEFAULT 'invite' CHECK (visibility IN ('open', 'invite')),
+            invite_token TEXT UNIQUE,
+            created_by_clinician_id UUID REFERENCES clinician_network.clinicians(id),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+
+          `CREATE TABLE IF NOT EXISTS clinician_network.panel_memberships (
+            panel_id UUID NOT NULL REFERENCES clinician_network.panels(id) ON DELETE CASCADE,
+            clinician_id UUID NOT NULL REFERENCES clinician_network.clinicians(id) ON DELETE CASCADE,
+            joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            left_at TIMESTAMPTZ,
+            PRIMARY KEY (panel_id, clinician_id)
+          )`,
+
+          `CREATE EXTENSION IF NOT EXISTS vector`,
+
+          `CREATE TABLE IF NOT EXISTS clinician_network.topics (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            panel_id UUID NOT NULL REFERENCES clinician_network.panels(id) ON DELETE CASCADE,
+            author_clinician_id UUID NOT NULL REFERENCES clinician_network.clinicians(id),
+            title TEXT NOT NULL,
+            body_redacted TEXT NOT NULL,
+            structured_fields JSONB NOT NULL DEFAULT '{}',
+            tags TEXT[] NOT NULL DEFAULT '{}',
+            embedding vector(384),
+            status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'flagged')),
+            resolved_reply_id UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cn_topics_panel ON clinician_network.topics(panel_id, created_at DESC)`,
+
+          `CREATE TABLE IF NOT EXISTS clinician_network.replies (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            topic_id UUID NOT NULL REFERENCES clinician_network.topics(id) ON DELETE CASCADE,
+            parent_reply_id UUID REFERENCES clinician_network.replies(id) ON DELETE CASCADE,
+            author_clinician_id UUID NOT NULL REFERENCES clinician_network.clinicians(id),
+            body_redacted TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cn_replies_topic ON clinician_network.replies(topic_id, created_at ASC)`,
+
+          `CREATE TABLE IF NOT EXISTS clinician_network.reports (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            topic_id UUID REFERENCES clinician_network.topics(id) ON DELETE CASCADE,
+            reply_id UUID REFERENCES clinician_network.replies(id) ON DELETE CASCADE,
+            reported_by_clinician_id UUID NOT NULL REFERENCES clinician_network.clinicians(id),
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'dismissed', 'actioned')),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+        ],
+      },
+      {
+        id: 'clinician_network_identity_links',
+        label: 'Clinician Network — Per-Tenant Identity Link',
+        version: '2026.11.12.1',
+        description:
+          'Maps this tenant\'s own user_id to a clinician_network.clinicians.id in the master DB. ' +
+          'Deliberately stored per-tenant (not in the master DB) so that resolving a pseudonymous ' +
+          'Clinician Network post back to a real staff member always requires access to this specific ' +
+          'tenant\'s own database — see docs/CLINICIAN-NETWORK-ARCHITECTURE.md.',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS clinician_network_identity_links (
+            user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            clinician_id UUID NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_cnil_clinician ON clinician_network_identity_links(clinician_id)`,
+        ],
+      },
     ];
   }
 
