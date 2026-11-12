@@ -686,6 +686,10 @@ _PUBLIC_PATH_PREFIXES = ("/docs", "/redoc")
 _SERVICE_AUTH_EXEMPT_PREFIXES = _PUBLIC_PATH_PREFIXES + ("/admin",)
 _TENANT_REQUIRED_EXEMPT_EXACT = set(_PUBLIC_PATH_EXACT)
 _TENANT_REQUIRED_EXEMPT_PREFIXES = _PUBLIC_PATH_PREFIXES + ("/admin",)
+# S286 — platform-level endpoints that stay behind service_to_service_auth_middleware
+# but need no tenant context (no tenant data is read or written). Exact paths only —
+# do not add a broad prefix here.
+_TENANT_NOT_REQUIRED_EXACT = {"/internal/embed"}
 COPILOT_TIMEOUT_SECONDS = float(os.getenv("CDSS_COPILOT_TIMEOUT_SECONDS", "20"))
 COPILOT_RETRY_MAX = max(0, int(os.getenv("CDSS_COPILOT_RETRY_MAX", "1")))
 COPILOT_RETRY_BASE_SECONDS = float(os.getenv("CDSS_COPILOT_RETRY_BASE_SECONDS", "0.25"))
@@ -1468,6 +1472,8 @@ async def tenant_context_guard_middleware(request: Request, call_next):
 
     path = request.url.path
     if not _is_tenant_required_path(path):
+        return await call_next(request)
+    if path in _TENANT_NOT_REQUIRED_EXACT:
         return await call_next(request)
 
     tenant_header = str(request.headers.get("x-tenant-id") or "").strip()
@@ -3938,6 +3944,23 @@ async def search_guidelines(request: GuidelineSearchRequest, req: Request):
         "applied_governed_filters": scope_filters,
         "governed_corpus_used": any(bool((c.get("metadata") or {}).get("governed_source")) for c in citations),
     }
+
+
+# S286 — Clinician Network duplicate-topic detection needs text embeddings, but
+# the embedding model (sentence-transformers/all-MiniLM-L6-v2, 384 dims) only runs
+# in-process here in cdss-service. ehr-service calls this via CdssService.getEmbedding().
+# Covered by the global service_to_service_auth_middleware (not a public/exempt path).
+class EmbedRequest(BaseModel):
+    text: str
+
+
+@app.post("/internal/embed")
+async def embed_text(request: EmbedRequest):
+    model = _get_embedding_model()
+    if model is None:
+        raise HTTPException(status_code=503, detail="Embedding model unavailable")
+    vector = model.encode([request.text])[0].tolist()
+    return {"embedding": vector, "dimensions": len(vector)}
 
 
 @app.get("/knowledge/registry/status")
