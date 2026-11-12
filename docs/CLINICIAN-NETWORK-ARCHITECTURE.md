@@ -86,6 +86,8 @@ A doctor-facing page (`/ehr/:tenantSlug/clinician-network/my-participation`) lis
 
 ## Part 2 — Sprint Plan (S285–S289)
 
+Each row below is summarized here; **`docs/CLINICIAN-NETWORK-SPRINT-BRIEFS.md`** has the full, standalone, copy-pasteable implementation brief for each sprint — exact file paths, exact schema, exact existing code to copy patterns from — written so any sprint can be handed to another AI assistant with zero other context.
+
 | Sprint | Title | What It Delivers | DB provisioning touch? |
 |---|---|---|---|
 | **S285** | Clinician Network — Platform Identity & Data Model | `clinician_network` schema in the master DB (`clinicians`, `panels`, `panel_memberships`, `topics`, `replies`, `reports`) via a new `clinician_network_platform` bundle applied through `repairMasterDatabase.ts` — explicitly documented as non-tenant-scoped, the one exception to the golden rule. Per-tenant `clinician_network_identity_links` table added via the normal golden-rule per-tenant bundle. Credential-reuse logic wired to existing `clinical_staff_credentials`. No UI yet — this sprint is foundation only, verified via direct DB/API calls. | Yes — one master-DB bundle (exception to golden rule, documented as such) + one normal per-tenant golden-rule bundle |
