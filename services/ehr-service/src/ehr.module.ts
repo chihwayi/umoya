@@ -303,6 +303,7 @@ import { ClinicalStaffCredentialingController } from './controllers/clinical-sta
 import { ClinicalStaffCredentialingService } from './services/clinical-staff-credentialing.service';
 import { ClinicianNetworkMasterDbService } from './clinician-network/clinician-network-master-db.service';
 import { ClinicianIdentityService } from './clinician-network/clinician-identity.service';
+import { ClinicianNetworkService } from './clinician-network/clinician-network.service';
 import { StaffDutyRosteringController } from './controllers/staff-duty-rostering.controller';
 import { StaffDutyRosteringService } from './services/staff-duty-rostering.service';
 import { BiomedicalEquipmentController } from './controllers/biomedical-equipment.controller';
@@ -1351,6 +1352,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     ClinicalStaffCredentialingService,
     ClinicianNetworkMasterDbService,
     ClinicianIdentityService,
+    ClinicianNetworkService,
     StaffDutyRosteringService,
     BiomedicalEquipmentService,
     OutcomeLinkageService,

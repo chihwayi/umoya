@@ -1448,6 +1448,19 @@ export class CdssService {
   /**
    * Search for clinical guidelines using RAG and WHO Smart Guidelines
    */
+  // S286 — Clinician Network duplicate-topic detection. Embeds text with the
+  // sentence-transformers model that only runs inside cdss-service
+  // (POST /internal/embed), via the standard postWithPolicy client.
+  async getEmbedding(text: string): Promise<number[]> {
+    const result = await this.postWithPolicy<{ embedding: number[] }>(
+      'clinician_network_embed',
+      '/internal/embed',
+      { text },
+      10000,
+    );
+    return result.embedding;
+  }
+
   async searchGuidelines(query: string, limit: number = 5, patientContext?: any, tenantId?: string, tenantDb?: DataSource) {
     const results = {
       query,
