@@ -23,6 +23,23 @@ describe('clinicianNetwork error helpers', () => {
     });
   });
 
+  it('extracts field + span from the AllExceptionsFilter envelope details', () => {
+    const err = extractPhiError(
+      phiAxiosError({
+        code: 'PHI_REJECTED',
+        message: 'Field X was not posted.',
+        details: { field: 'question', phiKind: 'name', matchedSpan: 'John Mukamuri' },
+        requestId: 'r1',
+        timestamp: 't',
+      }),
+    );
+    expect(err).toEqual({
+      field: 'question',
+      matchedSpan: 'John Mukamuri',
+      message: 'Field X was not posted.',
+    });
+  });
+
   it('extracts field + span from a message-nested body', () => {
     const err = extractPhiError(
       phiAxiosError({

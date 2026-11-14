@@ -95,6 +95,13 @@ describe('ClinicianNetworkService PHI enforcement', () => {
     const payload = (error as BadRequestException).getResponse() as any;
     expect(payload.field).toBe('presentingComplaint');
     expect(payload.matchedSpan).toContain('John Mukamuri');
+    // AllExceptionsFilter only forwards code/message/details — the composer
+    // highlight depends on this channel, not the top-level keys.
+    expect(payload.code).toBe('PHI_REJECTED');
+    expect(payload.details).toMatchObject({
+      field: 'presentingComplaint',
+      matchedSpan: expect.stringContaining('John Mukamuri'),
+    });
     expect(masterDbService.query).not.toHaveBeenCalled();
   });
 

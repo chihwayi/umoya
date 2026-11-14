@@ -61,17 +61,25 @@ function asRecord(value: unknown): Record<string, any> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, any>) : null;
 }
 
-// Nest serializes `throw new BadRequestException({...})` either as the object
-// itself or nested under `message` — handle both so field-level PHI errors
-// always highlight the right composer field.
+// ehr-service's AllExceptionsFilter envelope keeps only code/message/details
+// from an HttpException response, so the composer's field info arrives as
+// `data.details` ({ field, phiKind, matchedSpan }). Older/direct Nest bodies
+// may carry it flat or nested under `message` — handle all three shapes so
+// field-level PHI errors always highlight the right composer field.
 export function extractPhiError(error: any): PhiFieldError {
   const data = error?.response?.data;
+  const fromDetails = asRecord(data?.details);
   const nested = asRecord(data?.message) ?? asRecord(data);
-  const field = typeof nested?.field === 'string' ? nested.field : null;
+  const field =
+    (typeof fromDetails?.field === 'string' ? fromDetails.field : null) ??
+    (typeof nested?.field === 'string' ? nested.field : null);
   const matchedSpan =
-    typeof nested?.matchedSpan === 'string' && nested.matchedSpan.length > 0
+    (typeof fromDetails?.matchedSpan === 'string' && fromDetails.matchedSpan.length > 0
+      ? fromDetails.matchedSpan
+      : null) ??
+    (typeof nested?.matchedSpan === 'string' && nested.matchedSpan.length > 0
       ? nested.matchedSpan
-      : null;
+      : null);
   const message =
     typeof nested?.message === 'string'
       ? nested.message

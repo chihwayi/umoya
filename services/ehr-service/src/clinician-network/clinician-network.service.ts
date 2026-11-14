@@ -112,8 +112,14 @@ export class ClinicianNetworkService {
     }
     if (containsPHI(value)) {
       const found = findPhiMatch(value);
+      // NOTE: ehr-service's AllExceptionsFilter envelope keeps only
+      // code/message/details from an HttpException response — the structured
+      // field info must ride in `details` or the frontend cannot highlight
+      // the offending composer field.
       throw new BadRequestException({
         message: `Field '${field}' appears to contain patient-identifying information and was not posted. Remove the highlighted text and resubmit.`,
+        code: 'PHI_REJECTED',
+        details: { field, phiKind: found?.kind, matchedSpan: found?.match },
         field,
         phiKind: found?.kind,
         matchedSpan: found?.match,
@@ -125,6 +131,8 @@ export class ClinicianNetworkService {
     if (bareDate) {
       throw new BadRequestException({
         message: `Field '${field}' appears to contain a date that could identify a patient and was not posted. Use the age band field instead of exact dates, then resubmit.`,
+        code: 'PHI_REJECTED',
+        details: { field, phiKind: bareDate.kind, matchedSpan: bareDate.match },
         field,
         phiKind: bareDate.kind,
         matchedSpan: bareDate.match,
