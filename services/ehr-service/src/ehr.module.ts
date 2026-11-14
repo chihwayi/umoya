@@ -193,6 +193,7 @@ import { HimisReportingController } from './controllers/himis-reporting.controll
 import { FhirInboundController } from './controllers/fhir-inbound.controller';
 import { MultilingualEducationController } from './controllers/multilingual-education.controller';
 import { HealthEducationController } from './controllers/health-education.controller';
+import { ClinicianNetworkController } from './clinician-network/clinician-network.controller';
 import { PatientPortalHealthEducationController } from './controllers/patient-portal-health-education.controller';
 import { OfflineSyncController } from './controllers/offline-sync.controller';
 import { ClinicalSpecialtiesController } from './controllers/clinical-specialties.controller';
@@ -892,6 +893,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     FhirInboundController,
     MultilingualEducationController,
     HealthEducationController,
+    ClinicianNetworkController,
     PatientPortalHealthEducationController,
     OfflineSyncController,
     ConflictResolutionController,
