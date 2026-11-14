@@ -14124,3 +14124,69 @@ export const ncdComorbidityApi = {
   cvdRisk: (data: any, token: string, tenantSlug: string) =>
     ehrAxios.post('/ncd-comorbidity/cdss/cvd-risk', data, { headers: h(token, tenantSlug) }),
 };
+
+export const clinicianNetworkApi = {
+  getMe: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinician-network/me', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listPanels: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinician-network/panels', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  joinPanel: async (panelId: string, payload: { inviteToken?: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/clinician-network/panels/${panelId}/join`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listTopics: async (panelId: string, sort: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/clinician-network/panels/${panelId}/topics`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: { sort },
+    });
+    return { data: response.data };
+  },
+
+  createTopic: async (payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/clinician-network/topics', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getTopic: async (topicId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/clinician-network/topics/${topicId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listReplies: async (topicId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/clinician-network/topics/${topicId}/replies`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  createReply: async (topicId: string, payload: any, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/clinician-network/topics/${topicId}/replies`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  resolveTopic: async (topicId: string, payload: { resolvedReplyId?: string | null }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/clinician-network/topics/${topicId}/resolve`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+};
