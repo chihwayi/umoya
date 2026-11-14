@@ -51,6 +51,10 @@ const NcidDeduplicationPage = lazy(() => import('./pages/NcidDeduplicationPage')
 const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then(m => ({ default: m.KnowledgeBasePage })));
 const AiOpsDashboard = lazy(() => import('./pages/AiOpsDashboard').then(m => ({ default: m.AiOpsDashboard })));
 const HealthEducationPage = lazy(() => import('./pages/HealthEducationPage'));
+const ClinicianNetworkDirectory = lazy(() => import('./pages/ClinicianNetworkDirectory'));
+const ClinicianNetworkPanelFeed = lazy(() => import('./pages/ClinicianNetworkPanelFeed'));
+const ClinicianNetworkNewTopic = lazy(() => import('./pages/ClinicianNetworkNewTopic'));
+const ClinicianNetworkTopicThread = lazy(() => import('./pages/ClinicianNetworkTopicThread'));
 const CourseEditorPage = lazy(() => import('./pages/CourseEditorPage'));
 const CourseProgressPage = lazy(() => import('./pages/CourseProgressPage'));
 const EDDashboard = lazy(() => import('./pages/EDDashboard'));
@@ -1682,6 +1686,38 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin']}>
                   <CourseProgressPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/clinician-network"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor']}>
+                  <ClinicianNetworkDirectory />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/clinician-network/panels/:panelId"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor']}>
+                  <ClinicianNetworkPanelFeed />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/clinician-network/panels/:panelId/new"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor']}>
+                  <ClinicianNetworkNewTopic />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/clinician-network/topics/:topicId"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor']}>
+                  <ClinicianNetworkTopicThread />
                 </RoleProtectedRoute>
               }
             />

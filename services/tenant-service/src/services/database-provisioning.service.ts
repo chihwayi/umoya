@@ -8653,13 +8653,13 @@ export class DatabaseProvisioningService {
       {
         id: 'clinician_network_platform',
         label: 'Clinician Network — Cross-Tenant Platform Schema',
-        version: '2026.11.12.1',
+        version: '2026.11.14.1',
         description:
           'NON-TENANT-SCOPED EXCEPTION to the golden rule: this bundle is applied ONCE to the shared ' +
           'master database (via repairMasterDatabase.ts with MASTER_PROVISION_BUNDLES=clinician_network_platform), ' +
           'never to a tenant database. It backs the cross-tenant doctor discussion feature — see ' +
           'docs/CLINICIAN-NETWORK-ARCHITECTURE.md. Do not copy this pattern for anything that should ' +
-          'actually be tenant-scoped.',
+          'actually be tenant-scoped. S287 seeds the six default specialty panels via tasks (idempotent).',
         statements: () => [
           `CREATE SCHEMA IF NOT EXISTS clinician_network`,
 
@@ -8683,6 +8683,19 @@ export class DatabaseProvisioningService {
             created_by_clinician_id UUID REFERENCES clinician_network.clinicians(id),
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
           )`,
+          // S287: panel names are the stable dedupe key for the default-panel
+          // seed in tasks below (INSERT ... ON CONFLICT (name) DO NOTHING).
+          // DO-block (not bare ALTER ... ADD CONSTRAINT) so re-applying this
+          // bumped bundle version is a no-op instead of a duplicate-constraint error.
+          `DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint WHERE conname = 'uq_cn_panels_name'
+            ) THEN
+              ALTER TABLE clinician_network.panels ADD CONSTRAINT uq_cn_panels_name UNIQUE (name);
+            END IF;
+          END
+          $$`,
 
           `CREATE TABLE IF NOT EXISTS clinician_network.panel_memberships (
             panel_id UUID NOT NULL REFERENCES clinician_network.panels(id) ON DELETE CASCADE,
@@ -8729,6 +8742,10 @@ export class DatabaseProvisioningService {
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
           )`,
         ],
+        // S287: master-DB path (same exception as the bundle itself — this task
+        // runs against the master DB via repairMasterDatabase.ts, never per-tenant).
+        // Idempotent: safe to re-run on every version bump.
+        tasks: [(db) => this.seedClinicianNetworkDefaultPanels(db)],
       },
       {
         id: 'clinician_network_identity_links',
@@ -8749,6 +8766,58 @@ export class DatabaseProvisioningService {
         ],
       },
     ];
+  }
+
+  /**
+   * S287 — seed the six default specialty panels in the MASTER database.
+   * Runs as a task of the clinician_network_platform bundle (master-DB-only
+   * exception, applied via repairMasterDatabase.ts — never per-tenant).
+   * Idempotent: INSERT ... ON CONFLICT (name) DO NOTHING, so re-running on
+   * future version bumps is a safe no-op. Requires the uq_cn_panels_name
+   * UNIQUE constraint declared in the bundle statements above.
+   */
+  private async seedClinicianNetworkDefaultPanels(masterDb: DataSource): Promise<void> {
+    const panels: Array<{ name: string; specialty: string; description: string }> = [
+      {
+        name: 'General Practice',
+        specialty: 'General Practice',
+        description: 'Everyday cases, undifferentiated presentations, and referral questions from primary care.',
+      },
+      {
+        name: 'Internal Medicine',
+        specialty: 'Internal Medicine',
+        description: 'Complex adult medical cases, diagnostics, and longitudinal management.',
+      },
+      {
+        name: 'Paediatrics',
+        specialty: 'Paediatrics',
+        description: 'Neonatal, infant, child, and adolescent cases across subspecialties.',
+      },
+      {
+        name: 'Obstetrics & Gynaecology',
+        specialty: 'Obstetrics & Gynaecology',
+        description: 'Antenatal, intrapartum, postpartum, and gynaecological cases.',
+      },
+      {
+        name: 'General Surgery',
+        specialty: 'General Surgery',
+        description: 'Operative decision-making, acute abdomen, trauma, and perioperative care.',
+      },
+      {
+        name: 'Dermatology',
+        specialty: 'Dermatology',
+        description: 'Rashes, lesions, and chronic skin conditions — describe, never photograph with identifiers.',
+      },
+    ];
+    for (const panel of panels) {
+      await masterDb.query(
+        `INSERT INTO clinician_network.panels (name, specialty, description, visibility)
+         VALUES ($1, $2, $3, 'open')
+         ON CONFLICT (name) DO NOTHING`,
+        [panel.name, panel.specialty, panel.description],
+      );
+    }
+    this.logger.log(`Seeded ${panels.length} default Clinician Network panels (idempotent).`);
   }
 
   private async applyWhatsappEngagementTriggers(tenantDb: DataSource) {

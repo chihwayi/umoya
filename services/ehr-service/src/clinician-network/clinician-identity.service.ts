@@ -73,6 +73,22 @@ export class ClinicianIdentityService {
     return `${adjective}Doctor${digits}`;
   }
 
+  /**
+   * S287 — non-creating lookup for read endpoints. Returns the linked
+   * clinician_id, or null when this user has never joined (no throw, no
+   * side effects — unlike resolveOrCreate, which requires credentials).
+   */
+  async findClinicianIdForUser(tenantDb: DataSource, userId: string): Promise<string | null> {
+    const linkRows = await tenantDb.query(
+      `SELECT clinician_id FROM clinician_network_identity_links WHERE user_id = $1`,
+      [userId],
+    );
+    if (linkRows && linkRows.length > 0) {
+      return String(linkRows[0].clinician_id);
+    }
+    return null;
+  }
+
   async resolveOrCreateClinicianIdentity(
     tenantDb: DataSource,
     userId: string,
