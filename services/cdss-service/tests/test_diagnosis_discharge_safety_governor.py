@@ -1,6 +1,6 @@
 """S262 — the acute-deterioration safety governor must apply to /diagnosis/suggest,
 /diagnosis/suggest/intelligent, and /discharge/intelligence, not just /risk/calculate.
-See docs/AI-INTELLIGENCE-AUDIT-ROADMAP.md F1.
+See the AI/Intelligence Hardening section of README.md.
 
 Tests the pure clinical_safety.py helpers directly (diagnosis_acute_check,
 discharge_acute_check) rather than going through main.py's FastAPI app — main.py
