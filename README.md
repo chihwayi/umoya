@@ -545,6 +545,7 @@ cd mobile && npm run test:e2e
 | [docs/PROVISIONING_GUIDE.md](./docs/PROVISIONING_GUIDE.md) | Tenant/system DB provisioning workflow |
 | [docs/CDSS_GUIDELINE_SEARCH_TUNING.md](./docs/CDSS_GUIDELINE_SEARCH_TUNING.md) | Guideline-search RAG tuning + GPU-time tweaks |
 | [docs/UMOYA_BRAND.md](./docs/UMOYA_BRAND.md) | Brand and design guidelines |
+| [docs/UMOYA.pdf](./docs/UMOYA.pdf) | Marketing/sales one-pager |
 | [docs/UMOYA_EHR_Master_Assurance_Programme.md](./docs/UMOYA_EHR_Master_Assurance_Programme.md) | Governing audit/testing/gap-analysis framework for ongoing quality assurance |
 | [docs/DRILLDOWN-TESTING-CHECKLIST.md](./docs/DRILLDOWN-TESTING-CHECKLIST.md) | Living end-to-end module × platform × role test log (append-only — never delete completed rows) |
 | [DEMO_CREDENTIALS.md](./DEMO_CREDENTIALS.md) | Demo accounts provisioned per tenant |
