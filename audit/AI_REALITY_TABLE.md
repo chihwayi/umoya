@@ -15,7 +15,7 @@ synthetic input; otherwise code-read (stated).
 | 5 | Registration phonetic match | **Rule-based** | pg_trgm+SOUNDEX SQL. Code-read | Suggestions only | `[]` without pg_trgm |
 | 7–8 | Appointment scoring/briefs | **Rule-based** | Hand arithmetic + SQL assembly. Code-read | Score only | n/a |
 | 9 | Grounded generation (referral/note/polish/answers/escalation) | **LLM** | Governed prompts + citation validation. Code-read (live calls NOT run — blocker: DB-backed use-case policy + tenant ctx) | Abstain-on-thin-context, `validateCitationIds`, `draft_ready→doctor_reviewed`, patient answers from approved content only | Deterministic fallback + abstention log |
-| 10 | Discharge bundle | **Rule-based** | Template assembly. Code-read | **WEAK: signed_at-generation + no-hand-signature footer (S1)** | n/a |
+| 10 | Discharge bundle | **Rule-based** | Template assembly. Code-read + live role oracle (Sprint F) | **WEAK, narrowed: doctor/nurse role gate enforced live (receptionist 403); but single-clinician finalise = signed, no author/signer separation, no countersignature (S1)** | n/a |
 | 11–12 | Clinical summary / pre-auth | **LLM w/ rules fallback / Rule-based** | Inline prompts; state machine. Code-read | Rules always computed; PA terminal states | LLM fail → rules |
 | 13 | Lab narratives | **Rule-based** | Reference-range/trend engine (CDSS). Code-read | Abstention default on CDSS fail; critical alerts | "Interpretation pending" message |
 | 14 | PRO score tables | **Rule-based** | Static lookups. Code-read | None | n/a |
