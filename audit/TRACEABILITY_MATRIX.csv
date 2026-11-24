@@ -1,0 +1,52 @@
+claim_id,claim_short,final_verdict,worst_severity,finding_ids,evidence_basis,test_status
+C-001,AI-first. FHIR-native. Offline-capable. Fully connected.,MISLEADING,S1,"B-005,B-018,R-001,R-005,O-001,O-007,AI-table-rollup",Rules-based CDS + LLM drafting (not AI-first); FHIR is a facade (R-001); offline has silent LWW (O-001); mock EHR ships (R-005),tested
+C-002,"Standards: HIPAA, FHIR R4/R5, HL7, ICD-10, SNOMED",PARTIAL,S1,"I-008,I-005,I-001,I-009,S-007,S-010,F-002","R4-only (I-008); HL7v2 ghost patients (I-005); ICD-10 needs canonical string (I-001); SNOMED genuinely loaded (I-009); HIPAA audit/consent gaps (S-007,S-010)",tested
+C-003,FHIR R4/R5 full interoperability,BROKEN,S2,"R-001,I-008,F-001",R4-only confirmed; no version negotiation; $-routes unreachable (F-001),tested
+C-004,"DHIS2 bidirectional, real-time two-way sync",BROKEN,S2,"R-002,I-010,I-011,I-012,I-018",Mock default (I-010); manual-or-hourly (I-011); dashboard-vs-DHIS2 divergence (I-012); no consent gate (I-018),tested
+C-005,"8 languages, SADC-native",PARTIAL,S3,"P-006,recon-key-parity",8 locales shipped; dosing/allergy mistranslations nd/zu (P-006),tested
+C-006,Works offline,PARTIAL,S1,"O-001,O-002,O-003,O-005,O-006,O-007","Core flows queue/replay (O-003 PASS) but silent LWW (O-001), queue-500 (O-002), no interaction screening (O-007)",tested
+C-010,"Unified longitudinal record, any device, even offline",PARTIAL,S1,"R-001,O-001,O-002",Relational canonical + mappers (R-001); offline conflict/replay losses,tested
+C-011,Drug-interaction hard-stops,BROKEN,S0,"B-001,O-007,E2E-005","Sensitivity 0.301, TB/HIV cornerstones invisible (B-001); none offline (O-007); defeasible by rekeying (E2E-005)",tested
+C-012,30-day mortality risk scores,MISLEADING,S0,B-005,Unvalidated weighted sum; missing data scores low (B-005),tested
+C-013,Nightly care-gap flags,UNVERIFIED,S3,REL-004,No finding executes care-gap content; 20+ crons have no alerting (REL-004),NEVER TESTED
+C-014,AI discharge summaries before patient leaves,MISLEADING,S1,"AI-table-row10,F-003,B-016","Template assembly, not AI generation; single-clinician sign-off (F-003)",tested
+C-015,FHIR bidirectional real-time zero manual rekeying,BROKEN,S1,"I-013,I-004,P-004,F-001",Referral/pre-auth/lab legs falsified (I-013); inbound success-for-skips (I-004); $-routes dead (F-001),tested
+C-016,De-identified cohort builder,BROKEN,S0,"RES-001,RES-002,RES-004",12/18 identifiers leak (RES-001); default salts (RES-002); identified rows to any role (RES-004),tested
+C-017,Kaplan-Meier survival curves,PARTIAL,S3,"RES-005,Q-001",Correct to 3dp vs lifelines; 1e-6 impossible; NaN CIs degenerate (RES-005); mutants survive (Q-001),tested
+C-018,VigiBase pharmacovigilance reporting,BROKEN,S1,RES-006,"Raw JSON rows, not E2B; exported flag asserts undelivered (RES-006)",tested
+C-019,"Automatic DHIS2 sync, no spreadsheet",BROKEN,S1,"B-007,I-010,I-011,I-012",Wrong denominators (B-007); mock default; manual/hourly; dashboard-vs-DHIS2 divergence (I-012),tested
+C-020,"AI CDS suite: hard-stops, dosing, mortality badge, nightly scoring + nurse alerts",BROKEN,S0,"B-001,B-002,B-003,B-004,B-005,REL-004",Interaction/dosing/mortality all broken; nightly alerting unmonitored (REL-004),tested
+C-021,"Smart prescribing: formulary, PDMP, AI substitution",PARTIAL,S1,"B-018,AI-table-subst",PDMP is proxy-literal STUB (B-018); substitution is 4-drug map + LLM reword,tested
+C-022,"Digital documentation: ambient, discharge, referral, pre-auth, e-signature",PARTIAL,S1,"AI-table-1,I-013,F-003",Ambient is proxy STUB; pre-auth demo-backed (I-013); discharge template (F-003),tested
+C-023,"DICOM viewer with AI heatmaps, dual AI interpretation",MISLEADING,S1,"AI-table-3/4,E2E-005?,UX-003",Heatmap producer is register/review only; dual interpretation is score-band lookup; critical escalation manual (UX-003),tested
+C-024,"Inpatient: bed mgmt, ADT, BCMA, OR Gantt",BROKEN,S0,"UX-001,E2E-002",BCMA five-rights always verifies; wrong-patient/wrong-drug passes (UX-001),tested
+C-025,"HIV Centre: CDPA, ART switch, MMD, 95-95-95, disclosure",BROKEN,S0,"B-007,B-008,B-009,B-011,S-002,B-012",Denominators (B-007); DTG contradiction (B-008); disclosure role gap (B-011/S-002); CDPA gaps (B-012),tested
+C-026,"NCD registers: CKD, CVD, foot, SCD, epilepsy, oncology, maternity, eye",BROKEN,S1,"B-002,B-013,B-014",No eGFR function (B-013); Framingham divergent (B-014); creatinine unit trap (B-002),tested
+C-027,"Pharmacy: FEFO, cold-chain, AI forecasting, stock balancing",UNVERIFIED,S3,,No finding tests FEFO/cold-chain/stock-balancing; forecasting rule-based per AI table,NEVER TESTED
+C-028,"Population health: screenings, follow-ups, risk stratification",PARTIAL,S2,AI-table-19-22,Risk scores are simplified/hand-weighted; overdue-screening content untested,partially-tested
+C-030,FHIR is the data model; every resource standards-compliant,BROKEN,S1,"R-001,I-001,I-002,I-003,I-006,F-001",Relational canonical (R-001); round-trip losses dose/instructions/allergy/BP (I-002/3/6); code-system normalization (I-001),tested
+C-031,Referral/insurer/registry/lab bidirectional,BROKEN,S1,"I-013,I-004",Zero-rekeying legs falsified (I-013); inbound integrity (I-004),tested
+C-032,SMART on FHIR apps supported,ABSENT,S2,recon-no-well-known,"No .well-known/smart-configuration repo-wide (Sprint A confirmed); no finding row, recon fact",recon-only
+C-033,DHIS2 aggregate AND tracker both ways; PEPFAR/MOHCC ready,PARTIAL,S2,"I-010,I-012,I-018",Aggregate push exercised in real mode; tracker pull metadata/config only; divergence (I-012); no consent gate (I-018),tested
+C-034,HIPAA Safe Harbor all 18 identifiers,BROKEN,S0,"RES-001,RES-003",12/18 leak incl UUIDs/free-text (RES-001); export path 500s on drift (RES-003),tested
+C-035,Kaplan-Meier with Greenwood 95% CI,PARTIAL,S3,RES-005,Plain Greenwood to 3dp; null CIs on degenerate input; no 1e-6 (RES-005),tested
+C-036,VigiBase adverse event reporting,BROKEN,S1,RES-006,Same as C-018 (RES-006),tested
+C-037,Time-limited external collaborator access without EHR account,BROKEN,S1,RES-007,Tokens unusable without EHR JWT; portal broken on drift (RES-007),tested
+C-040,"Import existing records, meds, history",PARTIAL,S2,"I-014,I-015","Silent row loss, impossible dates, demographics-only (I-014); MPI DOB precedence bug (I-015)",tested
+C-041,"FHIR adapters for lab/imaging/billing, no downtime",PARTIAL,S1,"I-004,I-005,I-013",Inbound success-for-skips (I-004); HL7v2 ghost patients (I-005); lab leg partial (I-013),tested
+C-042,Role-based training per department,UNVERIFIED,S3,,Content exists (recon); role-basis/completion evidence untested,NEVER TESTED
+C-043,Parallel go-live tooling,ABSENT,S2,I-016,"No reconciliation tooling, re-checked broadly (I-016)",tested
+C-050,Pre-visit SMS 48h; encounter pre-populated,PARTIAL,S2,P-004,Resubmission overwrites consent; sync drops meds/allergies (P-004),tested
+C-051,I'm Here QR opens full record,BROKEN,S1,P-001,"Redeem always fails, wrong column (P-001)",tested
+C-052,Live queue position / wait time,PARTIAL,S4,P-009,Works but exposes full names to any role (P-009),tested
+C-053,"Patient views care plan, digital consent, real-time lab requests",PARTIAL,S2,S-010,Portal exists; consent recorded but never enforced (S-010),tested
+C-054,Discharge/Rx/follow-up in patient language,BROKEN,S3,P-006,Dosing-language mistranslations nd/zu; allergy string untranslated (P-006),tested
+C-055,Post-visit survey 2-4 hours later,UNVERIFIED,S4,,No finding tests survey delivery/timing/content,NEVER TESTED
+C-056,AI follow-up reminders at exact interval,UNVERIFIED,S3,,"No finding tests reminder content, timing, or interval logic",NEVER TESTED
+C-057,"Telemedicine HD video, EHR context, mid-call Rx, auto note, in-app payment",PARTIAL,S2,"P-007,P-010,P-005",No E2EE (SFU+recorded egress); consent gate positive (P-007); mid-call untested (P-010); payment forgeable (P-005),tested
+C-058,"EcoCash/ZiG payments, instant staff notify",BROKEN,S1,"S-012,P-005",Unauthenticated callback forgery 4/5 providers (S-012); no ZiG FX layer (P-005),tested
+C-059,Apple Health/Google Fit background sync,STUB,S2,R-006,JS calls native modules with no native implementation (R-006),tested
+C-060,BLE BP/glucometers with range checking,UNVERIFIED,S3,P-008,No BLE device tested; backend trend pipeline exists but downgrades criticals (P-008),NEVER TESTED
+C-061,3 abnormal readings in 24h auto alert,BROKEN,S2,P-008,"Critical trends downgraded to warning, missing column (P-008)",tested
+C-062,Household risk privacy-safe,BROKEN,S0,"P-002,P-003",Named HIV broadcast to any role via changed-ID (P-002); family panel by design exposes diagnosis (P-003),tested
+C-063,Zero waiting-room paperwork,PARTIAL,S2,"P-001,P-004","Intake exists but QR broken (P-001) and sync lossy (P-004): reduces, does not eliminate",tested

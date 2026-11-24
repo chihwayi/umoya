@@ -12,7 +12,7 @@ Validation: HL7 validator_cli 7.0.6 (base R4 + smart.who.int.hiv#1.0.0).
 | Data elements → Umoya fields → FHIR → codesystems | **~5%** | Blobs stored, no ValueSet (0/268), no validation, facility-local identifier systems, ICD-letter sniffing instead of WHO staging values |
 | Decision tables, executable | **0/17** | 9 DAK tables have no computable form anywhere (even upstream); 8 have oracle CQL, 0 deployed; engine absent; `isActionApplicable` defaults applicable |
 | Decision tables, form coverage | **~50%** | 7–8/17 tables have a Questionnaire/PD shell; S.1–S.4/E4/E12/D17/D21.1/D21.2/B7 have forms at best |
-| Indicators (HIVIND/Measure) | **0%** | ~90 oracle Measures; 0 deployed; Umoya computes its own cascade (with wrong denominators — see §3.5) |
+| Indicators (HIVIND/Measure) | **0%** | ~90 oracle Measures; 0 deployed; Umoya computes its own cascade (with wrong denominators — see §3.5). Sprint F addendum: Sprint C proved the dashboard and the DHIS2-bound aggregate are *separately* computed and disagree (I-012) — so even the wrong-denominator number is not the number that reaches national reporting |
 | FHIR profile validation (structure) | **PASS** | Q B7 vs v1.0.0 IG: 0E/0W; PD D15 vs IG: 0E/1W (narrative); PD B2 vs R4: 0E/1W; dangling Library/ActivityDefinition canonicals confirmed |
 | Workflow fidelity | **Form-deep only** | Containers served as schemas; no flow execution, no state machine |
 | Personas/RBAC mapping | **UNVERIFIED** | Blocker: seeded role matrix + endpoint walk |
