@@ -11,6 +11,7 @@ import { ClinicianNetworkMasterDbService } from './clinician-network-master-db.s
 import { AGE_BANDS, CreateReplyDto, CreateTopicDto } from './dto/create-topic.dto';
 import { containsPHI, findBareDateMatch, findPhiMatch, redactText } from './privacy-guard';
 import { CdssService } from '../services/cdss.service';
+import { ClinicalNlpService } from '../services/clinical-nlp.service';
 
 // S286 — PHI-safe case composer + duplicate detection.
 //
@@ -119,6 +120,22 @@ export interface ParticipationView {
 
 export type ReportAction = 'dismissed' | 'actioned';
 
+// S289 — cross-panel topic search hit. Deliberately minimal (no author
+// identity, no body): the command palette only needs enough to link through.
+export interface TopicSearchHit {
+  id: string;
+  title: string;
+  panelId: string;
+  panelName: string;
+  similarity: number;
+}
+
+export interface TagSuggestionInput {
+  presentingComplaint?: unknown;
+  relevantHistory?: unknown;
+  question?: unknown;
+}
+
 // Stricter than CDSS's own 0.6 guideline-match threshold: a false positive here
 // costs only a "please check this first" prompt, a false negative a duplicate thread.
 const SIMILARITY_THRESHOLD = 0.8;
@@ -134,6 +151,7 @@ export class ClinicianNetworkService {
     private readonly clinicianIdentityService: ClinicianIdentityService,
     private readonly masterDbService: ClinicianNetworkMasterDbService,
     private readonly cdssService: CdssService,
+    private readonly clinicalNlpService: ClinicalNlpService,
   ) {}
 
   private assertNoPhi(field: string, value: string): void {
@@ -801,6 +819,97 @@ export class ClinicianNetworkService {
         topicTitle: String(row.topic_title),
       })),
     };
+  }
+
+  // ---- S289: tag suggestions + cross-panel search ----
+
+  // Tag suggestion, NOT specialty classification: surfaces the diagnoses and
+  // symptoms ClinicalNlpService.extractEntities() finds in the draft text as
+  // one-click tag candidates. Every field passes the S286 PHI guard first —
+  // PHI-tripping drafts are rejected, never sent to the NLP/LLM layer.
+  async suggestTags(input: TagSuggestionInput): Promise<{ suggestions: string[] }> {
+    const fields: Array<[field: string, value: unknown]> = [
+      ['presentingComplaint', input?.presentingComplaint],
+      ['relevantHistory', input?.relevantHistory],
+      ['question', input?.question],
+    ];
+    const texts: string[] = [];
+    for (const [field, value] of fields) {
+      if (typeof value !== 'string' || !value.trim()) continue;
+      this.assertNoPhi(field, value);
+      texts.push(value.trim());
+    }
+    if (texts.length === 0) {
+      return { suggestions: [] };
+    }
+    let entities;
+    try {
+      entities = await this.clinicalNlpService.extractEntities(texts.join('\n'), {
+        context: 'clinician_network_tag_suggest',
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Clinician Network tag suggestion failed, returning none: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return { suggestions: [] };
+    }
+    const seen = new Set<string>();
+    const suggestions: string[] = [];
+    for (const item of [...(entities?.diagnoses ?? []), ...(entities?.symptoms ?? [])]) {
+      const text = typeof item?.text === 'string' ? item.text.trim().toLowerCase() : '';
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      suggestions.push(text);
+      if (suggestions.length >= 10) break;
+    }
+    return { suggestions };
+  }
+
+  // Cross-panel variant of S286's findSimilarTopics: same embedding model,
+  // same 0.80 threshold, but scoped to every panel the caller has joined
+  // (membership join) instead of one panel. Powers the command-palette
+  // "Related Clinician Network discussion" result.
+  async searchTopics(
+    viewerClinicianId: string | null,
+    query: string,
+    limit = 3,
+  ): Promise<TopicSearchHit[]> {
+    if (!viewerClinicianId || typeof query !== 'string' || !query.trim()) {
+      return [];
+    }
+    const embedding = await this.cdssService.getEmbedding(query.trim());
+    const vectorLiteral = `[${embedding.join(',')}]`;
+    const rows: Array<{
+      id: string;
+      title: string;
+      panel_id: string;
+      panel_name: string;
+      similarity: number;
+    }> = await this.masterDbService.query(
+      `SELECT t.id, t.title, t.panel_id, p.name AS panel_name,
+              1 - (t.embedding <=> $2::vector) AS similarity
+         FROM clinician_network.topics t
+         JOIN clinician_network.panels p ON p.id = t.panel_id
+         JOIN clinician_network.panel_memberships m
+           ON m.panel_id = t.panel_id
+          AND m.clinician_id = $1
+          AND m.left_at IS NULL
+        WHERE t.status = 'open' AND t.embedding IS NOT NULL
+        ORDER BY t.embedding <=> $2::vector
+        LIMIT $3`,
+      [viewerClinicianId, vectorLiteral, limit],
+    );
+    // author_clinician_id is never selected — hits carry only what the
+    // palette needs to render a link.
+    return rows
+      .filter((row) => typeof row.similarity === 'number' && row.similarity > SIMILARITY_THRESHOLD)
+      .map((row) => ({
+        id: String(row.id),
+        title: String(row.title),
+        panelId: String(row.panel_id),
+        panelName: String(row.panel_name),
+        similarity: Number(row.similarity),
+      }));
   }
 
   private toTopicView(row: {

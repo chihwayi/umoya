@@ -14231,4 +14231,19 @@ export const clinicianNetworkApi = {
     });
     return { data: response.data };
   },
+
+  suggestTags: async (payload: { presentingComplaint?: string; relevantHistory?: string; question?: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post('/clinician-network/tag-suggestions', payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  searchNetworkTopics: async (query: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinician-network/topics/search', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+      params: { q: query },
+    });
+    return { data: response.data };
+  },
 };
