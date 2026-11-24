@@ -34,6 +34,9 @@ const ClinicianNetworkNewTopic: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [phiError, setPhiError] = useState<PhiFieldError | null>(null);
   const [similar, setSimilar] = useState<SimilarTopic[] | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   const token = localStorage.getItem('ehr_token') || '';
 
@@ -79,6 +82,47 @@ const ClinicianNetworkNewTopic: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // S289 — tag suggestions from the draft text. The server PHI-checks the
+  // draft before it reaches the NLP layer; a PHI rejection surfaces here as
+  // an error rather than suggestions.
+  const fetchSuggestions = async () => {
+    if (!tenantSlug || !token) return;
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      const res = await clinicianNetworkApi.suggestTags(
+        {
+          presentingComplaint: presentingComplaint.trim(),
+          relevantHistory: relevantHistory.trim(),
+          question: question.trim(),
+        },
+        token,
+        tenantSlug,
+      );
+      setSuggestions(Array.isArray(res.data?.suggestions) ? res.data.suggestions : []);
+      if (!res.data?.suggestions?.length) {
+        setSuggestError('No tag suggestions for this draft yet.');
+      }
+    } catch (error: any) {
+      setSuggestions([]);
+      setSuggestError(cnErrorMessage(error, 'Could not suggest tags.'));
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const addSuggestion = (tag: string) => {
+    const current = tagsInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (!current.map((t) => t.toLowerCase()).includes(tag.toLowerCase())) {
+      current.push(tag);
+    }
+    setTagsInput(current.join(', '));
+    setSuggestions((prev) => prev.filter((s) => s.toLowerCase() !== tag.toLowerCase()));
   };
 
   const fieldClass = (name: string) =>
@@ -226,13 +270,37 @@ const ClinicianNetworkNewTopic: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-slate-800">Tags (comma-separated)</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium text-slate-800">Tags (comma-separated)</label>
+              <button
+                onClick={fetchSuggestions}
+                disabled={suggesting || submitting}
+                className="text-xs font-medium text-teal-700 hover:text-teal-800 border border-teal-600 rounded px-2 py-1 disabled:opacity-50"
+              >
+                {suggesting ? 'Suggesting…' : 'Suggest tags'}
+              </button>
+            </div>
             <input
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              className="w-full text-sm border border-slate-300 rounded px-3 py-2"
+              className="w-full text-sm border border-slate-300 rounded px-3 py-2 mt-1"
               placeholder="e.g. fever, referral"
             />
+            {suggestError && <p className="text-xs text-slate-500 mt-1">{suggestError}</p>}
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {suggestions.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => addSuggestion(tag)}
+                    title="Add this tag"
+                    className="text-xs font-medium text-teal-800 bg-teal-50 border border-teal-200 hover:bg-teal-100 rounded-full px-3 py-1"
+                  >
+                    + {tag}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <button

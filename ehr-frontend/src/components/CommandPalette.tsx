@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { X, Search, ChevronRight, AlertCircle } from 'lucide-react';
 import { fuzzyFilter } from '../utils/fuzzySearch';
 import { buildCommandRegistry, requiresConfirmation, CommandAction } from '../utils/commandPaletteActions';
-import { cdssApi, ehrApi } from '../services/api';
+import { cdssApi, clinicianNetworkApi, ehrApi } from '../services/api';
 
 interface CommandPaletteProps {
   tenantSlug?: string;
@@ -20,7 +20,17 @@ interface ClinicalResult {
   }>;
 }
 
-type SearchResult = CommandAction | ClinicalResult;
+// S289 — a Clinician Network topic related to the clinical question. Rendered
+// distinctly from CDSS citations; selecting it navigates to the thread.
+interface RelatedDiscussionResult {
+  kind: 'related-discussion';
+  topicId: string;
+  title: string;
+  panelName: string;
+  similarity: number;
+}
+
+type SearchResult = CommandAction | ClinicalResult | RelatedDiscussionResult;
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) => {
   const navigate = useNavigate();
@@ -35,6 +45,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
   const [confirmingAction, setConfirmingAction] = useState<CommandAction | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // S289 — mirrors the debounced query so a slow related-discussion response
+  // never attaches to a newer query's result list.
+  const latestQuery = useRef('');
 
   // Get user data for role-specific actions
   const storedUser = React.useMemo(() => {
@@ -158,6 +171,37 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
         if (clinicalResults.length === 0) {
           setError('No matching guidance found for this query.');
         }
+
+        // S289 — additive related-discussion lookup against the joined-panel
+        // topic index (same 0.80 threshold as duplicate detection, enforced
+        // server-side). Best-effort: never blocks or replaces CDSS results.
+        // Guarded by latestQuery so a slow response can't attach to a newer query.
+        try {
+          const netRes = await clinicianNetworkApi.searchNetworkTopics(query, token, tenantSlug);
+          const hits = (Array.isArray(netRes.data) ? netRes.data : []) as Array<{
+            id: string;
+            title: string;
+            panelName?: string;
+            similarity?: number;
+          }>;
+          if (hits.length > 0 && latestQuery.current === query) {
+            setResults((prev) => [
+              ...prev,
+              ...hits.map(
+                (h): RelatedDiscussionResult => ({
+                  kind: 'related-discussion',
+                  topicId: h.id,
+                  title: h.title,
+                  panelName: h.panelName ?? '',
+                  similarity: typeof h.similarity === 'number' ? h.similarity : 0,
+                }),
+              ),
+            ]);
+            setError(null);
+          }
+        } catch {
+          // Best-effort — CDSS results still render even if this fails.
+        }
       } catch (err: any) {
         const msg = err?.response?.data?.message || err?.message || 'Failed to search guidelines';
         setError(msg);
@@ -174,6 +218,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
   // orphaned timer running against a stale query.
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
+    latestQuery.current = value;
     setSelectedIndex(0);
     setError(null);
 
@@ -237,6 +282,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
     }
   };
 
+  // S289 — open a related Clinician Network discussion in its thread view.
+  const openDiscussion = (discussion: RelatedDiscussionResult) => {
+    if (!tenantSlug) return;
+    navigate(`/ehr/${tenantSlug}/clinician-network/topics/${discussion.topicId}`);
+    setIsOpen(false);
+    setSearchQuery('');
+    latestQuery.current = '';
+  };
+
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -250,6 +304,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
       const selected = results[selectedIndex];
       if (selected && 'handler' in selected) {
         executeAction(selected as CommandAction);
+      } else if (selected && 'kind' in selected && selected.kind === 'related-discussion') {
+        openDiscussion(selected);
       }
     }
   };
@@ -336,6 +392,31 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ tenantSlug }) =>
                           {isSelected && (
                             <ChevronRight className="w-4 h-4 text-blue-400 mt-1 flex-shrink-0 ml-2" />
                           )}
+                        </div>
+                      </button>
+                    );
+                  } else if ('kind' in result && result.kind === 'related-discussion') {
+                    // S289 — Related Clinician Network discussion, visually
+                    // distinct from the CDSS citation above it.
+                    const hit = result as RelatedDiscussionResult;
+                    return (
+                      <button
+                        key={`cn-discussion-${hit.topicId}`}
+                        onClick={() => openDiscussion(hit)}
+                        className={`w-full px-4 py-3 text-left border-t border-teal-800/60 transition-colors ${
+                          isSelected ? 'bg-teal-600/20' : 'hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <div className="text-xs font-semibold text-teal-300 mb-1">
+                          Related Clinician Network discussion
+                          {hit.panelName ? ` · ${hit.panelName}` : ''}
+                          {hit.similarity > 0
+                            ? ` · ${Math.round(hit.similarity * 100)}% match`
+                            : ''}
+                        </div>
+                        <div className="text-sm font-medium text-slate-100">{hit.title}</div>
+                        <div className="text-xs text-slate-400 mt-1">
+                          Open thread →
                         </div>
                       </button>
                     );

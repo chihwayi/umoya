@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { ClinicianIdentityService } from './clinician-identity.service';
-import { ClinicianNetworkService, TopicSort } from './clinician-network.service';
+import { ClinicianNetworkService, TagSuggestionInput, TopicSort } from './clinician-network.service';
 import { CreateTopicDto } from './dto/create-topic.dto';
 
 // S287 — Clinician Network discussion UI backend. Routes under
@@ -71,6 +71,19 @@ export class ClinicianNetworkController {
     const viewerId = await this.viewerClinicianId(req);
     const topic = await this.network.getTopic(result.topic.id, viewerId);
     return { created: true as const, topic };
+  }
+
+  // S289 — declared BEFORE topics/:id so Express matches /topics/search
+  // literally instead of capturing "search" as an :id.
+  @Get('topics/search')
+  async searchTopics(@Query('q') q: string, @Req() req) {
+    const viewerId = await this.viewerClinicianId(req);
+    return this.network.searchTopics(viewerId, q ?? '');
+  }
+
+  @Post('tag-suggestions')
+  suggestTags(@Body() body: TagSuggestionInput) {
+    return this.network.suggestTags(body ?? {});
   }
 
   @Get('topics/:id')

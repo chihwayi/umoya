@@ -60,12 +60,16 @@ function makeService(deps?: {
   const cdssService = {
     getEmbedding: jest.fn(async () => deps?.embedding ?? [0.1, 0.2, 0.3]),
   };
+  const clinicalNlpService = {
+    extractEntities: jest.fn(async () => ({ diagnoses: [], symptoms: [], aiSource: 'rule' })),
+  };
   const service = new ClinicianNetworkService(
     clinicianIdentityService as any,
     masterDbService as any,
     cdssService as any,
+    clinicalNlpService as any,
   );
-  return { service, masterDbService, clinicianIdentityService, cdssService, masterQueries };
+  return { service, masterDbService, clinicianIdentityService, cdssService, clinicalNlpService, masterQueries };
 }
 
 function cleanDto(): CreateTopicDto {
@@ -268,12 +272,16 @@ function makeAnonService(viewerId: string | null = 'clinician-1', identityId = '
     resolveOrCreateClinicianIdentity: jest.fn(async () => ({ clinicianId: identityId, isNew: false })),
     findClinicianIdForUser: jest.fn(async () => viewerId),
   };
+  const clinicalNlpService = {
+    extractEntities: jest.fn(async () => ({ diagnoses: [], symptoms: [], aiSource: 'rule' })),
+  };
   const service = new ClinicianNetworkService(
     clinicianIdentityService as any,
     masterDbService as any,
     { getEmbedding: jest.fn(async () => [0.1]) } as any,
+    clinicalNlpService as any,
   );
-  return { service, masterDbService, queries };
+  return { service, masterDbService, clinicalNlpService, queries };
 }
 
 describe('ClinicianNetworkService anonymized views (S287)', () => {
@@ -451,12 +459,16 @@ function makeModService(opts?: {
       isNew: false,
     })),
   };
+  const clinicalNlpService = {
+    extractEntities: jest.fn(async () => ({ diagnoses: [], symptoms: [], aiSource: 'rule' })),
+  };
   const service = new ClinicianNetworkService(
     clinicianIdentityService as any,
     masterDbService as any,
     { getEmbedding: jest.fn(async () => [0.1]) } as any,
+    clinicalNlpService as any,
   );
-  return { service, masterDbService, tenantDb, masterQueries };
+  return { service, masterDbService, clinicalNlpService, tenantDb, masterQueries };
 }
 
 describe('ClinicianNetworkService moderation (S288)', () => {
@@ -549,5 +561,105 @@ describe('ClinicianNetworkService moderation (S288)', () => {
     expect(record.topics[0]).toMatchObject({ isOwnPost: true });
     expect(record.replies[0]).toMatchObject({ isOwnPost: true, topicTitle: 't1' });
     expect(JSON.stringify(record)).not.toContain('author_clinician_id');
+  });
+});
+
+// S289 — tag suggestions (honest NLP use: diagnoses/symptoms only, no
+// specialty classifier) + cross-panel embedding search.
+function makeSuggestService() {
+  const masterDbService = { query: jest.fn(async () => []) };
+  const clinicalNlpService = {
+    extractEntities: jest.fn(async () => ({
+      diagnoses: [{ text: 'Malaria', confidence: 0.6 }, { text: 'malaria', confidence: 0.6 }],
+      symptoms: [{ text: 'Fever', confidence: 0.5 }, { text: 'Cough', confidence: 0.5 }],
+      aiSource: 'rule',
+    })),
+  };
+  const service = new ClinicianNetworkService(
+    {} as any,
+    masterDbService as any,
+    { getEmbedding: jest.fn(async () => [0.1]) } as any,
+    clinicalNlpService as any,
+  );
+  return { service, masterDbService, clinicalNlpService };
+}
+
+function makeSearchService(rows: any[]) {
+  const queries: string[] = [];
+  const masterDbService = {
+    query: jest.fn(async (sql: string) => {
+      queries.push(sql);
+      return rows;
+    }),
+  };
+  const service = new ClinicianNetworkService(
+    {} as any,
+    masterDbService as any,
+    { getEmbedding: jest.fn(async () => [0.2]) } as any,
+    { extractEntities: jest.fn() } as any,
+  );
+  return { service, masterDbService, queries };
+}
+
+describe('ClinicianNetworkService smart suggestions (S289)', () => {
+  it('suggestTags surfaces diagnoses + symptoms, deduped and lowercased', async () => {
+    const { service, clinicalNlpService } = makeSuggestService();
+    const res = await service.suggestTags({
+      presentingComplaint: 'Persistent fever and cough for three weeks.',
+      relevantHistory: 'Prior malaria episode last year.',
+      question: 'What workup is recommended?',
+    });
+    expect(res).toEqual({ suggestions: ['malaria', 'fever', 'cough'] });
+    expect(clinicalNlpService.extractEntities).toHaveBeenCalledTimes(1);
+    const sentText = (clinicalNlpService.extractEntities.mock.calls[0] as unknown[])[0] as string;
+    expect(sentText).toContain('Persistent fever');
+  });
+
+  it('suggestTags returns empty without calling NLP when all fields are blank', async () => {
+    const { service, clinicalNlpService } = makeSuggestService();
+    await expect(
+      service.suggestTags({ presentingComplaint: '  ', relevantHistory: '', question: '' }),
+    ).resolves.toEqual({ suggestions: [] });
+    expect(clinicalNlpService.extractEntities).not.toHaveBeenCalled();
+  });
+
+  it('suggestTags rejects PHI drafts before they reach the NLP layer', async () => {
+    const { service, clinicalNlpService } = makeSuggestService();
+    await expect(
+      service.suggestTags({ presentingComplaint: 'Patient name: John Mukamuri has fever.' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(clinicalNlpService.extractEntities).not.toHaveBeenCalled();
+  });
+
+  it('suggestTags returns empty when NLP throws', async () => {
+    const { service, clinicalNlpService } = makeSuggestService();
+    clinicalNlpService.extractEntities.mockRejectedValueOnce(new Error('LLM down'));
+    await expect(
+      service.suggestTags({ question: 'What workup is recommended for persistent cough?' }),
+    ).resolves.toEqual({ suggestions: [] });
+  });
+
+  it('searchTopics scopes to joined panels and applies the 0.80 threshold', async () => {
+    const { service, queries } = makeSearchService([
+      { id: 't1', title: 'Fever case', panel_id: 'p1', panel_name: 'General Practice', similarity: 0.91 },
+      { id: 't2', title: 'Unrelated', panel_id: 'p1', panel_name: 'General Practice', similarity: 0.4 },
+    ]);
+    const hits = await service.searchTopics('clinician-1', 'persistent fever and cough');
+    expect(hits).toEqual([
+      { id: 't1', title: 'Fever case', panelId: 'p1', panelName: 'General Practice', similarity: 0.91 },
+    ]);
+    const sql = queries.find((q) => q.includes('FROM clinician_network.topics t'));
+    expect(sql).toBeDefined();
+    expect(sql).toContain('panel_memberships');
+    expect(sql).toContain('m.left_at IS NULL');
+    expect(sql).not.toContain('author_clinician_id');
+    expect(JSON.stringify(hits)).not.toContain('author_clinician_id');
+  });
+
+  it('searchTopics returns empty without a viewer or query, without hitting the DB', async () => {
+    const { service, masterDbService } = makeSearchService([]);
+    await expect(service.searchTopics(null, 'fever')).resolves.toEqual([]);
+    await expect(service.searchTopics('clinician-1', '   ')).resolves.toEqual([]);
+    expect(masterDbService.query).not.toHaveBeenCalled();
   });
 });
