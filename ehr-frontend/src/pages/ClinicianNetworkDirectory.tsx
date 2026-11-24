@@ -129,7 +129,23 @@ const ClinicianNetworkDirectory: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-slate-900">Clinician Network</h1>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold text-slate-900">Clinician Network</h1>
+          <div className="flex gap-2">
+            <Link
+              to={`/ehr/${tenantSlug}/clinician-network/my-participation`}
+              className="text-sm font-medium text-teal-700 hover:text-teal-800 border border-teal-600 rounded px-3 py-1.5"
+            >
+              My participation
+            </Link>
+            <Link
+              to={`/ehr/${tenantSlug}/clinician-network/moderation`}
+              className="text-sm font-medium text-slate-600 hover:text-slate-800 border border-slate-300 rounded px-3 py-1.5"
+            >
+              Moderation
+            </Link>
+          </div>
+        </div>
         <p className="text-sm text-slate-600 mt-1">
           Anonymous-to-panel case discussions with doctors at other clinics.
           {handle ? (

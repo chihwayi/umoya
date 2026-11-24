@@ -14189,4 +14189,46 @@ export const clinicianNetworkApi = {
     });
     return { data: response.data };
   },
+
+  reportTopic: async (topicId: string, payload: { reason: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/clinician-network/topics/${topicId}/report`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  reportReply: async (replyId: string, payload: { reason: string }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/clinician-network/replies/${replyId}/report`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  getParticipation: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinician-network/me/participation', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  listReports: async (token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get('/clinician-network/moderation/reports', {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  resolveReport: async (reportId: string, payload: { action: 'dismissed' | 'actioned' }, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.post(`/clinician-network/moderation/reports/${reportId}/resolve`, payload, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
+
+  resolveAuthor: async (topicId: string, token: string, tenantSlug: string) => {
+    const response = await ehrAxios.get(`/clinician-network/moderation/resolve-author/${topicId}`, {
+      headers: { 'X-Tenant-ID': tenantSlug, Authorization: `Bearer ${token}` },
+    });
+    return { data: response.data };
+  },
 };

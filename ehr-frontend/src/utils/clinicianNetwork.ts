@@ -89,6 +89,23 @@ export function extractPhiError(error: any): PhiFieldError {
   return { field, matchedSpan, message };
 }
 
+export interface CnReport {
+  id: string;
+  topicId: string | null;
+  replyId: string | null;
+  reason: string;
+  status: string;
+  createdAt: string;
+  topicTitle: string | null;
+  replyExcerpt: string | null;
+  reporterHandle: string;
+}
+
+export interface CnParticipation {
+  topics: CnTopic[];
+  replies: Array<CnReply & { topicTitle: string }>;
+}
+
 export function cnErrorMessage(error: any, fallback: string): string {
   const data = error?.response?.data;
   const nested = asRecord(data?.message);

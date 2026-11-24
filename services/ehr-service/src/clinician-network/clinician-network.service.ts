@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ClinicianIdentityService } from './clinician-identity.service';
 import { ClinicianNetworkMasterDbService } from './clinician-network-master-db.service';
@@ -85,6 +91,33 @@ export interface ReplyView {
 }
 
 export type TopicSort = 'recent' | 'discussed' | 'unresolved';
+
+// S288 — moderation + participation views. author_clinician_id NEVER appears in
+// these: the report queue joins only display_handles/titles/excerpts, and the
+// de-anonymization flow resolves to the tenant's own users row, never echoing
+// the raw clinician_id back.
+export interface ReportView {
+  id: string;
+  topicId: string | null;
+  replyId: string | null;
+  reason: string;
+  status: string;
+  createdAt: string;
+  topicTitle: string | null;
+  replyExcerpt: string | null;
+  reporterHandle: string;
+}
+
+export interface ParticipationReplyView extends ReplyView {
+  topicTitle: string;
+}
+
+export interface ParticipationView {
+  topics: TopicView[];
+  replies: ParticipationReplyView[];
+}
+
+export type ReportAction = 'dismissed' | 'actioned';
 
 // Stricter than CDSS's own 0.6 guideline-match threshold: a false positive here
 // costs only a "please check this first" prompt, a false negative a duplicate thread.
@@ -501,6 +534,268 @@ export class ClinicianNetworkService {
       [topicId, resolvedReplyId ?? null],
     );
     return this.getTopic(topicId, clinicianId);
+  }
+
+  // ---- S288: moderation, reporting & participation record ----
+
+  // Every moderation endpoint funnels through this server-side check — the
+  // frontend hiding the moderation page for non-moderators is NOT sufficient.
+  // is_moderator is a manual-DB-update flag for v1 (no admin UI sets it).
+  private async assertModerator(clinicianId: string): Promise<void> {
+    const rows: Array<{ is_moderator: boolean }> = await this.masterDbService.query(
+      `SELECT is_moderator FROM clinician_network.clinicians WHERE id = $1`,
+      [clinicianId],
+    );
+    if (!rows || rows.length === 0 || rows[0].is_moderator !== true) {
+      throw new ForbiddenException('Moderator access required.');
+    }
+  }
+
+  private async resolveModerator(tenantDb: DataSource, userId: string): Promise<string> {
+    const { clinicianId } =
+      await this.clinicianIdentityService.resolveOrCreateClinicianIdentity(tenantDb, userId);
+    await this.assertModerator(clinicianId);
+    return clinicianId;
+  }
+
+  private assertReportReason(reason: unknown): string {
+    const trimmed = typeof reason === 'string' ? reason.trim() : '';
+    if (!trimmed) {
+      throw new BadRequestException('A reason is required to file a report.');
+    }
+    if (trimmed.length > 2000) {
+      throw new BadRequestException('Report reason must be 2000 characters or fewer.');
+    }
+    return trimmed;
+  }
+
+  async reportTopic(
+    tenantDb: DataSource,
+    userId: string,
+    topicId: string,
+    reason: unknown,
+  ): Promise<{ id: string; status: string }> {
+    const cleanReason = this.assertReportReason(reason);
+    const { clinicianId } =
+      await this.clinicianIdentityService.resolveOrCreateClinicianIdentity(tenantDb, userId);
+    const topicRows: Array<{ id: string }> = await this.masterDbService.query(
+      `SELECT id FROM clinician_network.topics WHERE id = $1`,
+      [topicId],
+    );
+    if (!topicRows || topicRows.length === 0) {
+      throw new NotFoundException('Topic not found.');
+    }
+    const inserted: Array<{ id: string; status: string }> = await this.masterDbService.query(
+      `INSERT INTO clinician_network.reports (topic_id, reported_by_clinician_id, reason)
+       VALUES ($1, $2, $3)
+       RETURNING id, status`,
+      [topicId, clinicianId, cleanReason],
+    );
+    return { id: String(inserted[0].id), status: String(inserted[0].status) };
+  }
+
+  async reportReply(
+    tenantDb: DataSource,
+    userId: string,
+    replyId: string,
+    reason: unknown,
+  ): Promise<{ id: string; status: string }> {
+    const cleanReason = this.assertReportReason(reason);
+    const { clinicianId } =
+      await this.clinicianIdentityService.resolveOrCreateClinicianIdentity(tenantDb, userId);
+    const replyRows: Array<{ id: string }> = await this.masterDbService.query(
+      `SELECT id FROM clinician_network.replies WHERE id = $1`,
+      [replyId],
+    );
+    if (!replyRows || replyRows.length === 0) {
+      throw new NotFoundException('Reply not found.');
+    }
+    const inserted: Array<{ id: string; status: string }> = await this.masterDbService.query(
+      `INSERT INTO clinician_network.reports (reply_id, reported_by_clinician_id, reason)
+       VALUES ($1, $2, $3)
+       RETURNING id, status`,
+      [replyId, clinicianId, cleanReason],
+    );
+    return { id: String(inserted[0].id), status: String(inserted[0].status) };
+  }
+
+  async listReports(tenantDb: DataSource, userId: string): Promise<ReportView[]> {
+    await this.resolveModerator(tenantDb, userId);
+    // Deliberately no author_clinician_id anywhere in this SELECT — moderators
+    // see the flagged content + reporter handle, never raw author identity.
+    const rows: Array<{
+      id: string;
+      topic_id: string | null;
+      reply_id: string | null;
+      reason: string;
+      status: string;
+      created_at: string;
+      topic_title: string | null;
+      reply_excerpt: string | null;
+      reporter_handle: string;
+    }> = await this.masterDbService.query(
+      `SELECT r.id, r.topic_id, r.reply_id, r.reason, r.status, r.created_at,
+              COALESCE(t.title, rt.title) AS topic_title,
+              LEFT(rp.body_redacted, 200) AS reply_excerpt,
+              rc.display_handle AS reporter_handle
+         FROM clinician_network.reports r
+         LEFT JOIN clinician_network.topics t ON t.id = r.topic_id
+         LEFT JOIN clinician_network.replies rp ON rp.id = r.reply_id
+         LEFT JOIN clinician_network.topics rt ON rt.id = rp.topic_id
+         JOIN clinician_network.clinicians rc ON rc.id = r.reported_by_clinician_id
+        WHERE r.status = 'open'
+        ORDER BY r.created_at DESC`,
+      [],
+    );
+    return rows.map((row) => ({
+      id: String(row.id),
+      topicId: row.topic_id ? String(row.topic_id) : null,
+      replyId: row.reply_id ? String(row.reply_id) : null,
+      reason: String(row.reason),
+      status: String(row.status),
+      createdAt: String(row.created_at),
+      topicTitle: row.topic_title ? String(row.topic_title) : null,
+      replyExcerpt: row.reply_excerpt ? String(row.reply_excerpt) : null,
+      reporterHandle: String(row.reporter_handle),
+    }));
+  }
+
+  async resolveReport(
+    tenantDb: DataSource,
+    userId: string,
+    reportId: string,
+    action: unknown,
+  ): Promise<{ id: string; status: string }> {
+    await this.resolveModerator(tenantDb, userId);
+    if (action !== 'dismissed' && action !== 'actioned') {
+      throw new BadRequestException(`action must be one of: dismissed, actioned.`);
+    }
+    const updated: Array<{ id: string; status: string }> = await this.masterDbService.query(
+      `UPDATE clinician_network.reports SET status = $2
+        WHERE id = $1 AND status = 'open'
+       RETURNING id, status`,
+      [reportId, action],
+    );
+    if (!updated || updated.length === 0) {
+      throw new NotFoundException('Open report not found.');
+    }
+    return { id: String(updated[0].id), status: String(updated[0].status) };
+  }
+
+  // Moderator-only, deliberately high-friction de-anonymization. Resolves ONLY
+  // against the calling moderator's own current tenant database — never across
+  // tenants (that would defeat the architecture; see
+  // docs/CLINICIAN-NETWORK-ARCHITECTURE.md moderation section).
+  async resolveAuthor(
+    tenantDb: DataSource,
+    userId: string,
+    topicId: string,
+  ): Promise<{ userId: string; name: string; email: string | null }> {
+    await this.resolveModerator(tenantDb, userId);
+    const topicRows: Array<{ author_clinician_id: string }> =
+      await this.masterDbService.query(
+        `SELECT author_clinician_id FROM clinician_network.topics WHERE id = $1`,
+        [topicId],
+      );
+    if (!topicRows || topicRows.length === 0) {
+      throw new NotFoundException('Topic not found.');
+    }
+    const authorClinicianId = String(topicRows[0].author_clinician_id);
+    const linkRows: Array<{ user_id: string }> = await tenantDb.query(
+      `SELECT user_id FROM clinician_network_identity_links WHERE clinician_id = $1`,
+      [authorClinicianId],
+    );
+    if (!linkRows || linkRows.length === 0) {
+      throw new NotFoundException(
+        'Author is not resolvable from this tenant — the originating clinic must be identified separately.',
+      );
+    }
+    const userIdResolved = String(linkRows[0].user_id);
+    const userRows: Array<{
+      id: string;
+      first_name: string;
+      last_name: string;
+      email: string | null;
+    }> = await tenantDb.query(
+      `SELECT id, first_name, last_name, email FROM users WHERE id = $1`,
+      [userIdResolved],
+    );
+    if (!userRows || userRows.length === 0) {
+      throw new NotFoundException(
+        'Author is not resolvable from this tenant — the originating clinic must be identified separately.',
+      );
+    }
+    const user = userRows[0];
+    return {
+      userId: String(user.id),
+      name: `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim(),
+      email: user.email ?? null,
+    };
+  }
+
+  // The one case where clinician_id-linked content is returned to its own
+  // author: the participation record lists only the caller's own
+  // topics/replies (isOwnPost: true throughout).
+  async getParticipation(tenantDb: DataSource, userId: string): Promise<ParticipationView> {
+    const { clinicianId } =
+      await this.clinicianIdentityService.resolveOrCreateClinicianIdentity(tenantDb, userId);
+    const topicRows: Array<{
+      id: string;
+      panel_id: string;
+      title: string;
+      body_redacted: string;
+      structured_fields: Record<string, unknown>;
+      tags: string[];
+      status: string;
+      resolved_reply_id: string | null;
+      created_at: string;
+      author_handle: string;
+      reply_count: string | number;
+    }> = await this.masterDbService.query(
+      `SELECT t.id, t.panel_id, t.title, t.body_redacted, t.structured_fields, t.tags,
+              t.status, t.resolved_reply_id, t.created_at,
+              c.display_handle AS author_handle,
+              (SELECT COUNT(*)::int FROM clinician_network.replies r WHERE r.topic_id = t.id) AS reply_count
+         FROM clinician_network.topics t
+         JOIN clinician_network.clinicians c ON c.id = t.author_clinician_id
+        WHERE t.author_clinician_id = $1
+        ORDER BY t.created_at DESC`,
+      [clinicianId],
+    );
+    const replyRows: Array<{
+      id: string;
+      topic_id: string;
+      parent_reply_id: string | null;
+      body_redacted: string;
+      created_at: string;
+      author_handle: string;
+      topic_title: string;
+    }> = await this.masterDbService.query(
+      `SELECT r.id, r.topic_id, r.parent_reply_id, r.body_redacted, r.created_at,
+              c.display_handle AS author_handle,
+              t.title AS topic_title
+         FROM clinician_network.replies r
+         JOIN clinician_network.clinicians c ON c.id = r.author_clinician_id
+         JOIN clinician_network.topics t ON t.id = r.topic_id
+        WHERE r.author_clinician_id = $1
+        ORDER BY r.created_at DESC`,
+      [clinicianId],
+    );
+    return {
+      topics: topicRows.map((row) =>
+        this.toTopicView({ ...row, is_own_post: true }),
+      ),
+      replies: replyRows.map((row) => ({
+        id: String(row.id),
+        topic_id: String(row.topic_id),
+        parent_reply_id: row.parent_reply_id ? String(row.parent_reply_id) : null,
+        body_redacted: String(row.body_redacted),
+        created_at: String(row.created_at),
+        authorHandle: String(row.author_handle),
+        isOwnPost: true,
+        topicTitle: String(row.topic_title),
+      })),
+    };
   }
 
   private toTopicView(row: {

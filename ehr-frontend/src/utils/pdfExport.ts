@@ -201,6 +201,117 @@ export const exportVisitToPDF = (visitData: VisitPDFData): void => {
   doc.save(`HIV_Visit_${visitData.patientNumber}_${visitData.visitDate.replace(/\//g, '_')}.pdf`);
 };
 
+export interface ParticipationPDFData {
+  displayHandle: string;
+  topics: Array<{ title: string; createdAt: string; status: string; replyCount: number }>;
+  replies: Array<{ topicTitle: string; excerpt: string; createdAt: string }>;
+}
+
+// S288 — Clinician Network participation record. Copies the exportVisitToPDF
+// structure (header, sections, footer, save) + the autoTable pattern from
+// exportQualityMetricsToPDF. The disclaimer copy below is non-negotiable.
+export const PARTICIPATION_DISCLAIMER =
+  'Record of participation only — this is not an accredited CPD activity.';
+
+export const exportParticipationToPDF = (data: ParticipationPDFData): void => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  let yPos = margin;
+
+  // Header
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Clinician Network — Participation Record', pageWidth / 2, yPos, { align: 'center' });
+  yPos += 7;
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Network identity: ${data.displayHandle}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 5;
+  doc.setFontSize(10);
+  doc.text(`Generated on ${new Date().toLocaleDateString()}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 10;
+
+  // Disclaimer — exact required copy, rendered prominently.
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  const disclaimerLines = doc.splitTextToSize(PARTICIPATION_DISCLAIMER, pageWidth - 2 * margin);
+  doc.text(disclaimerLines, pageWidth / 2, yPos, { align: 'center' });
+  yPos += disclaimerLines.length * 6 + 6;
+  doc.setFont('helvetica', 'normal');
+
+  // Topics table
+  if (data.topics.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Topics started', margin, yPos);
+    yPos += 4;
+    (doc as any).autoTable({
+      startY: yPos,
+      head: [['Topic', 'Started', 'Status', 'Replies']],
+      body: data.topics.map((t) => [
+        t.title,
+        new Date(t.createdAt).toLocaleDateString(),
+        t.status,
+        String(t.replyCount),
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [13, 148, 136], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 9 },
+      margin: { left: margin, right: margin },
+    });
+    yPos = (doc as any).lastAutoTable.finalY + 10;
+  } else {
+    doc.setFontSize(10);
+    doc.text('No topics started yet.', margin, yPos);
+    yPos += 8;
+  }
+
+  // Replies table
+  if (data.replies.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Replies posted', margin, yPos);
+    yPos += 4;
+    (doc as any).autoTable({
+      startY: yPos,
+      head: [['In discussion', 'Excerpt', 'Posted']],
+      body: data.replies.map((r) => [
+        r.topicTitle,
+        r.excerpt,
+        new Date(r.createdAt).toLocaleDateString(),
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [13, 148, 136], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 9 },
+      margin: { left: margin, right: margin },
+    });
+    yPos = (doc as any).lastAutoTable.finalY + 10;
+  } else {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('No replies posted yet.', margin, yPos);
+    yPos += 8;
+  }
+
+  // Footer
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.text(
+      `Generated on ${new Date().toLocaleDateString()} - Page ${i} of ${totalPages}`,
+      pageWidth / 2,
+      doc.internal.pageSize.getHeight() - 10,
+      { align: 'center' }
+    );
+  }
+
+  // Save PDF
+  doc.save(`ClinicianNetwork_Participation_${data.displayHandle}.pdf`);
+};
+
 export const exportQualityMetricsToPDF = (metrics: any, facilityName?: string): void => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();

@@ -113,4 +113,52 @@ export class ClinicianNetworkController {
   ) {
     return this.network.resolveTopic(req.tenantDb, req.user.sub, id, body?.resolvedReplyId ?? null);
   }
+
+  // ---- S288: reporting (any member) ----
+
+  @Post('topics/:id/report')
+  reportTopic(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() req,
+  ) {
+    return this.network.reportTopic(req.tenantDb, req.user.sub, id, body?.reason);
+  }
+
+  @Post('replies/:id/report')
+  reportReply(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() req,
+  ) {
+    return this.network.reportReply(req.tenantDb, req.user.sub, id, body?.reason);
+  }
+
+  // ---- S288: participation record (own content only) ----
+
+  @Get('me/participation')
+  getParticipation(@Req() req) {
+    return this.network.getParticipation(req.tenantDb, req.user.sub);
+  }
+
+  // ---- S288: moderation (server-side is_moderator check on every route) ----
+
+  @Get('moderation/reports')
+  listReports(@Req() req) {
+    return this.network.listReports(req.tenantDb, req.user.sub);
+  }
+
+  @Post('moderation/reports/:id/resolve')
+  resolveReport(
+    @Param('id') id: string,
+    @Body() body: { action?: string },
+    @Req() req,
+  ) {
+    return this.network.resolveReport(req.tenantDb, req.user.sub, id, body?.action);
+  }
+
+  @Get('moderation/resolve-author/:topicId')
+  resolveAuthor(@Param('topicId') topicId: string, @Req() req) {
+    return this.network.resolveAuthor(req.tenantDb, req.user.sub, topicId);
+  }
 }

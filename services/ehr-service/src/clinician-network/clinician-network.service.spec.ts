@@ -1,7 +1,7 @@
 // S286 — service-layer enforcement spec. PHI checks run with mocked
 // dependencies (no DB, no embedding model); the live adversarial + duplicate
 // verification is done manually against real services (see PR description).
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ClinicianNetworkService } from './clinician-network.service';
 import { CreateTopicDto } from './dto/create-topic.dto';
 
@@ -348,5 +348,202 @@ describe('ClinicianNetworkService anonymized views (S287)', () => {
       clinicianId: 'clinician-1',
       displayHandle: 'CalmDoctor123',
     });
+  });
+});
+
+// S288 — moderation, reporting & participation record.
+function makeModService(opts?: {
+  moderator?: boolean;
+  linkUserId?: string | null;
+  linkClinicianId?: string;
+}) {
+  const isModerator = opts?.moderator !== false;
+  const masterQueries: string[] = [];
+  const masterDbService = {
+    query: jest.fn(async (sql: string) => {
+      masterQueries.push(sql);
+      if (sql.includes('SELECT is_moderator FROM clinician_network.clinicians')) {
+        return [{ is_moderator: isModerator }];
+      }
+      if (sql.includes('INSERT INTO clinician_network.reports')) {
+        return [{ id: 'report-1', status: 'open' }];
+      }
+      if (sql.includes('FROM clinician_network.reports r')) {
+        return [
+          {
+            id: 'report-1',
+            topic_id: 'topic-1',
+            reply_id: null,
+            reason: 'Suspected PHI leak',
+            status: 'open',
+            created_at: '2026-01-02',
+            topic_title: 't1',
+            reply_excerpt: null,
+            reporter_handle: 'KeenDoctor789',
+          },
+        ];
+      }
+      if (sql.includes('UPDATE clinician_network.reports SET status')) {
+        return [{ id: 'report-1', status: 'dismissed' }];
+      }
+      if (sql.includes('SELECT author_clinician_id FROM clinician_network.topics')) {
+        return [{ author_clinician_id: opts?.linkClinicianId ?? 'clinician-author' }];
+      }
+      if (sql.includes('FROM clinician_network.topics WHERE id')) {
+        return [{ id: 'topic-1' }];
+      }
+      if (sql.includes('FROM clinician_network.replies WHERE id')) {
+        return [{ id: 'reply-1' }];
+      }
+      if (sql.includes('FROM clinician_network.topics t') && sql.includes('WHERE t.author_clinician_id')) {
+        return [
+          {
+            id: 'topic-1',
+            panel_id: 'panel-1',
+            title: 't1',
+            body_redacted: 'b1',
+            structured_fields: {},
+            tags: [],
+            status: 'open',
+            resolved_reply_id: null,
+            created_at: '2026-01-01',
+            author_handle: 'CalmDoctor123',
+            reply_count: 1,
+          },
+        ];
+      }
+      if (sql.includes('FROM clinician_network.replies r') && sql.includes('WHERE r.author_clinician_id')) {
+        return [
+          {
+            id: 'reply-1',
+            topic_id: 'topic-1',
+            parent_reply_id: null,
+            body_redacted: 'b',
+            created_at: '2026-01-01',
+            author_handle: 'CalmDoctor123',
+            topic_title: 't1',
+          },
+        ];
+      }
+      return [];
+    }),
+  };
+  const tenantDb = {
+    query: jest.fn(async (sql: string) => {
+      if (sql.includes('FROM clinician_network_identity_links')) {
+        return opts?.linkUserId === null || opts?.linkUserId === undefined
+          ? []
+          : [{ user_id: opts.linkUserId ?? 'user-author' }];
+      }
+      if (sql.includes('FROM users WHERE id')) {
+        return [{ id: 'user-author', first_name: 'Amina', last_name: 'Dube', email: 'amina@example.org' }];
+      }
+      return [];
+    }),
+  };
+  const clinicianIdentityService = {
+    resolveOrCreateClinicianIdentity: jest.fn(async () => ({
+      clinicianId: 'clinician-mod',
+      isNew: false,
+    })),
+  };
+  const service = new ClinicianNetworkService(
+    clinicianIdentityService as any,
+    masterDbService as any,
+    { getEmbedding: jest.fn(async () => [0.1]) } as any,
+  );
+  return { service, masterDbService, tenantDb, masterQueries };
+}
+
+describe('ClinicianNetworkService moderation (S288)', () => {
+  it('reportTopic files a report and rejects an empty reason', async () => {
+    const { service, masterDbService } = makeModService();
+    await expect(service.reportTopic({} as any, 'user-1', 'topic-1', '  ')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    const res = await service.reportTopic({} as any, 'user-1', 'topic-1', 'Suspected PHI leak');
+    expect(res).toEqual({ id: 'report-1', status: 'open' });
+    expect(masterDbService.query).toHaveBeenCalled();
+  });
+
+  it('reportReply rejects an unknown reply', async () => {
+    const { service, masterDbService } = makeModService();
+    masterDbService.query.mockImplementationOnce(async () => []);
+    // First call in reportReply is the reply-existence check.
+    masterDbService.query.mockReset();
+    masterDbService.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT is_moderator')) return [{ is_moderator: true }];
+      return [];
+    });
+    await expect(
+      service.reportReply({} as any, 'user-1', 'reply-missing', 'Off-topic'),
+    ).rejects.toThrow('Reply not found');
+  });
+
+  it('listReports 403s for non-moderators and hides author identity for moderators', async () => {
+    const { service } = makeModService({ moderator: false });
+    await expect(service.listReports({} as any, 'user-1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+
+    const { service: modService, masterQueries } = makeModService({ moderator: true });
+    const reports = await modService.listReports({} as any, 'user-1');
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({ id: 'report-1', reason: 'Suspected PHI leak' });
+    expect(JSON.stringify(reports)).not.toContain('author_clinician_id');
+    const queueSql = masterQueries.find((sql) => sql.includes('FROM clinician_network.reports r'));
+    expect(queueSql).toBeDefined();
+    expect(queueSql).not.toContain('author_clinician_id');
+  });
+
+  it('resolveReport validates the action and requires moderation rights', async () => {
+    const { service } = makeModService({ moderator: false });
+    await expect(
+      service.resolveReport({} as any, 'user-1', 'report-1', 'dismissed'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    const { service: modService } = makeModService({ moderator: true });
+    await expect(
+      modService.resolveReport({} as any, 'user-1', 'report-1', 'delete'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      modService.resolveReport({} as any, 'user-1', 'report-1', 'dismissed'),
+    ).resolves.toEqual({ id: 'report-1', status: 'dismissed' });
+  });
+
+  it('resolveAuthor returns the tenant user when linked, else a not-resolvable response', async () => {
+    const noLinkSetup = makeModService({ moderator: true, linkUserId: null });
+    await expect(
+      noLinkSetup.service.resolveAuthor(noLinkSetup.tenantDb as any, 'user-mod', 'topic-1'),
+    ).rejects.toThrow('not resolvable from this tenant');
+
+    const { service, tenantDb } = makeModService({ moderator: true, linkUserId: 'user-author' });
+    const resolved = await service.resolveAuthor(tenantDb as any, 'user-mod', 'topic-1');
+    expect(resolved).toEqual({
+      userId: 'user-author',
+      name: 'Amina Dube',
+      email: 'amina@example.org',
+    });
+    expect(JSON.stringify(resolved)).not.toContain('clinician-author');
+    // The lookup never fans out beyond the caller's own tenant DB: exactly
+    // the identity_links + users queries, no cross-tenant search.
+    expect(tenantDb.query.mock.calls.length).toBe(2);
+  });
+
+  it('resolveAuthor 403s for non-moderators', async () => {
+    const { service, tenantDb } = makeModService({ moderator: false });
+    await expect(service.resolveAuthor(tenantDb as any, 'user-1', 'topic-1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('getParticipation returns only the caller-owned content', async () => {
+    const { service } = makeModService();
+    const record = await service.getParticipation({} as any, 'user-1');
+    expect(record.topics).toHaveLength(1);
+    expect(record.replies).toHaveLength(1);
+    expect(record.topics[0]).toMatchObject({ isOwnPost: true });
+    expect(record.replies[0]).toMatchObject({ isOwnPost: true, topicTitle: 't1' });
+    expect(JSON.stringify(record)).not.toContain('author_clinician_id');
   });
 });
