@@ -670,12 +670,17 @@ export class ClinicianNetworkService {
     if (action !== 'dismissed' && action !== 'actioned') {
       throw new BadRequestException(`action must be one of: dismissed, actioned.`);
     }
-    const updated: Array<{ id: string; status: string }> = await this.masterDbService.query(
+    // NOTE: TypeORM's PostgresQueryRunner returns [rows, rowCount] for
+    // UPDATE/DELETE but flat rows for INSERT/SELECT — unwrap both shapes.
+    const rawResult = await this.masterDbService.query(
       `UPDATE clinician_network.reports SET status = $2
         WHERE id = $1 AND status = 'open'
        RETURNING id, status`,
       [reportId, action],
     );
+    const updated: Array<{ id: string; status: string }> = Array.isArray(rawResult?.[0])
+      ? (rawResult[0] as Array<{ id: string; status: string }>)
+      : (rawResult as Array<{ id: string; status: string }>);
     if (!updated || updated.length === 0) {
       throw new NotFoundException('Open report not found.');
     }

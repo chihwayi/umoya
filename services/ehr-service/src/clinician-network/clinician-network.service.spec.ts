@@ -384,7 +384,11 @@ function makeModService(opts?: {
         ];
       }
       if (sql.includes('UPDATE clinician_network.reports SET status')) {
-        return [{ id: 'report-1', status: 'dismissed' }];
+        // TypeORM returns [rows, rowCount] for UPDATE/DELETE (see
+        // PostgresQueryRunner: `result.raw = [raw.rows, raw.rowCount]`), not
+        // flat rows like INSERT/SELECT — the mock mirrors the real shape so
+        // resolveReport's unwrapping stays covered.
+        return [[{ id: 'report-1', status: 'dismissed' }], 1];
       }
       if (sql.includes('SELECT author_clinician_id FROM clinician_network.topics')) {
         return [{ author_clinician_id: opts?.linkClinicianId ?? 'clinician-author' }];
