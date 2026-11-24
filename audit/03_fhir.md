@@ -10,13 +10,15 @@ validator_cli 7.0.6 (base R4). Networked DHIS2/FHIR-server tests are in
 Harness: `/tmp/sprintC_rt2.ts` — 10 types × 25 synthetic records = **250
 resources, 3675 scalar values** through `toFhir → fromFhir` (real mapper code).
 
-**Result: 2225 kept / 1450 lost = 39.5% field-value loss.** Headline number
-overstates clinical harm (includes internal ids + audit timestamps), so the
-load-bearing evidence is the verified per-field set, each executed:
+**Result: 2275 kept / 1400 lost = 38.1% field-value loss** (re-run with
+canonical `ICD10` input after the row-1 correction; first run read 39.5% with
+hyphenated input). Headline number overstates clinical harm (includes internal
+ids + audit timestamps), so the load-bearing evidence is the verified
+per-field set, each executed:
 
 | # | Loss / corruption | Verified behavior | Severity |
 |---|---|---|---|
-| 1 | ICD-10 code **dropped** on export | `ConditionMapper.toFhir` prefers SNOMED (`code = snomedConceptId`, `codeSystem = 'http://snomed.info/sct'`); input `B24`/`ICD-10` absent from both FHIR JSON and round-trip. A system claiming ICD-10 reporting loses the ICD code in its own FHIR export | S1 |
+| 1 | **CORRECTED (reviewer re-executed):** `mapCodeSystem()` (condition.mapper.ts:158-168) uppercases but does no hyphen/whitespace stripping, so a non-canonical system string silently drops the coding | Harness used hyphenated `ICD-10` (harness artifact, not a design choice). Re-probe executed: `ICD10`+SNOMED → both codings preserved (`sct:86406008`, `icd-10:B24`); `ICD10` alone → preserved; `ICD-10` → `coding: []` with no warning; `SNOMED_CT`-as-system with ICD code → mislabeled `sct:B24`. Real exposure: the only in-repo writer (`problem.service.ts:78`) always writes canonical `SNOMED_CT`, and no schemas/seeds write ICD strings — production rows map correctly; affected rows are legacy/migrated/manual `code_system` values flowing verbatim via `patient.service.ts:761` into all five `toFhir` call sites | S2 |
 | 2 | Combination-drug dose **mangled** | `MedicationRequest` dosage `300/300/50mg` → `doseQuantity.value = 300` (first number); round-trip `dosage = "300"` — TLD becomes "300mg of something" | S1 |
 | 3 | Instructions **overwritten** | `"Take every morning with food"` replaced by generated dosageInstruction `"300/300/50mg once daily"` in FHIR and round-trip | S2 |
 | 4 | Allergy severity **downgraded** | moderate → criticality `low` → back `mild` | S1 (re-exposure risk assessment) |
