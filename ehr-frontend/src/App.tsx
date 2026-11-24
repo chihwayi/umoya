@@ -55,6 +55,8 @@ const ClinicianNetworkDirectory = lazy(() => import('./pages/ClinicianNetworkDir
 const ClinicianNetworkPanelFeed = lazy(() => import('./pages/ClinicianNetworkPanelFeed'));
 const ClinicianNetworkNewTopic = lazy(() => import('./pages/ClinicianNetworkNewTopic'));
 const ClinicianNetworkTopicThread = lazy(() => import('./pages/ClinicianNetworkTopicThread'));
+const ClinicianNetworkModeration = lazy(() => import('./pages/ClinicianNetworkModeration'));
+const ClinicianNetworkParticipation = lazy(() => import('./pages/ClinicianNetworkParticipation'));
 const CourseEditorPage = lazy(() => import('./pages/CourseEditorPage'));
 const CourseProgressPage = lazy(() => import('./pages/CourseProgressPage'));
 const EDDashboard = lazy(() => import('./pages/EDDashboard'));
@@ -1718,6 +1720,22 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['admin', 'doctor']}>
                   <ClinicianNetworkTopicThread />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/clinician-network/moderation"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor']}>
+                  <ClinicianNetworkModeration />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/ehr/:tenantSlug/clinician-network/my-participation"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'doctor']}>
+                  <ClinicianNetworkParticipation />
                 </RoleProtectedRoute>
               }
             />

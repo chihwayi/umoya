@@ -18,6 +18,29 @@ const ClinicianNetworkTopicThread: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [phiError, setPhiError] = useState<PhiFieldError | null>(null);
+  const [reportingId, setReportingId] = useState<string | null>(null);
+
+  // S288 — file a moderation report on this topic or a reply. Reason is
+  // collected with a plain prompt to keep the thread UI small; the report
+  // itself lands in the moderator queue via the new endpoint.
+  const fileReport = async (kind: 'topic' | 'reply', id: string) => {
+    if (!tenantSlug || !token) return;
+    const reason = window.prompt('Why are you reporting this? (e.g. suspected patient details, abuse, off-topic)');
+    if (!reason || !reason.trim()) return;
+    setReportingId(id);
+    try {
+      if (kind === 'topic') {
+        await clinicianNetworkApi.reportTopic(id, { reason: reason.trim() }, token, tenantSlug);
+      } else {
+        await clinicianNetworkApi.reportReply(id, { reason: reason.trim() }, token, tenantSlug);
+      }
+      showSuccess('Report filed', 'A moderator will review it.');
+    } catch (error: any) {
+      showError('Could not file report', cnErrorMessage(error, 'Please try again.'));
+    } finally {
+      setReportingId(null);
+    }
+  };
 
   const token = localStorage.getItem('ehr_token') || '';
 
@@ -102,6 +125,15 @@ const ClinicianNetworkTopicThread: React.FC = () => {
               <CheckCircle2 className="h-3 w-3" /> Answer
             </span>
           )}
+          {!reply.isOwnPost && (
+            <button
+              onClick={() => fileReport('reply', reply.id)}
+              disabled={reportingId === reply.id}
+              className="ml-2 font-medium text-slate-400 hover:text-amber-700 disabled:opacity-50"
+            >
+              Report
+            </button>
+          )}
         </p>
         <p className="text-sm text-slate-800 mt-1 whitespace-pre-wrap">{reply.body_redacted}</p>
         <div className="flex gap-3 mt-2">
@@ -172,15 +204,26 @@ const ClinicianNetworkTopicThread: React.FC = () => {
             {topic.authorHandle} · {new Date(topic.created_at).toLocaleString()}
           </p>
           <p className="text-sm text-slate-800 mt-3 whitespace-pre-wrap">{topic.body_redacted}</p>
-          {topic.isOwnPost && topic.status === 'open' && (
-            <button
-              onClick={() => markResolved(null)}
-              disabled={resolving}
-              className="mt-4 text-sm font-medium text-white bg-green-700 hover:bg-green-800 rounded px-3 py-2 disabled:opacity-50"
-            >
-              {resolving ? 'Saving…' : 'Mark Resolved'}
-            </button>
-          )}
+          <div className="flex flex-wrap gap-3 mt-4">
+            {topic.isOwnPost && topic.status === 'open' && (
+              <button
+                onClick={() => markResolved(null)}
+                disabled={resolving}
+                className="text-sm font-medium text-white bg-green-700 hover:bg-green-800 rounded px-3 py-2 disabled:opacity-50"
+              >
+                {resolving ? 'Saving…' : 'Mark Resolved'}
+              </button>
+            )}
+            {!topic.isOwnPost && (
+              <button
+                onClick={() => fileReport('topic', topic.id)}
+                disabled={reportingId === topic.id}
+                className="text-sm font-medium text-amber-800 border border-amber-300 hover:bg-amber-50 rounded px-3 py-2 disabled:opacity-50"
+              >
+                Report topic
+              </button>
+            )}
+          </div>
         </div>
 
         <h2 className="text-lg font-semibold text-slate-900 mt-6">
