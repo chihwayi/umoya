@@ -54,7 +54,7 @@ export type CreateTopicResult =
 // S287 — anonymized view shapes. author_clinician_id NEVER appears in these:
 // the backend computes isOwnPost server-side against the caller's own
 // clinicianId and exposes only the pseudonymous display_handle. See
-// docs/CLINICIAN-NETWORK-ARCHITECTURE.md (anonymous-to-panel posting).
+// README.md's Clinician Network section (anonymous-to-panel posting).
 export interface PanelView {
   id: string;
   name: string;
@@ -708,7 +708,7 @@ export class ClinicianNetworkService {
   // Moderator-only, deliberately high-friction de-anonymization. Resolves ONLY
   // against the calling moderator's own current tenant database — never across
   // tenants (that would defeat the architecture; see
-  // docs/CLINICIAN-NETWORK-ARCHITECTURE.md moderation section).
+  // README.md's Clinician Network section moderation section).
   async resolveAuthor(
     tenantDb: DataSource,
     userId: string,

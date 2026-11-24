@@ -425,6 +425,33 @@ Targeted enhancements built specifically for private clinic and hospital operati
 
 ---
 
+## AI/Intelligence Hardening & Hospital Accreditation Readiness (S262–S278)
+
+Two audit-driven engagements: a deep dive across CDSS, PostVisit AI, Voice/Ambient, and AI-recommendation subsystems (22 findings, all resolved), and a COHSASA-accreditation-aligned gap review against real Southern African private hospital operations standards (6 findings, all resolved).
+
+- **AI Safety & Honesty Hardening** — `apply_safety_governor()` wired into every diagnosis/discharge-intelligence endpoint; real LLM-generated SOAP notes replacing keyword-matching; PostVisit escalation delivery with no silent-swallow failure paths; AI governance dashboards that surface broken queries as broken instead of reporting false "no drift"; escalation classification routed through a real LLM call with keyword-matching retained only as an explicit fallback
+- **ICU Predictive Deterioration — Verified and Closed** — confirmed the existing NEWS2/qSOFA/MEWS scores were purely reactive (current-vitals-vs-threshold, no lookahead) and that a UI block referenced a `deteriorationProbability` field no backend code ever populated; replaced with a real patient-specific trend engine (linear-regression slope per critical vital over a trailing 12h window, honestly labeled `trend_method: 'linear_extrapolation'`, not "ML"), a facility-wide "Deterioration Trend Watch" panel, and live wiring of the existing `/risk/deterioration/ml` endpoint so predictions become ML-enhanced automatically the moment a trained model is ever deployed
+- **Patient Safety Incident Reporting & RCA** — facility-wide incident register (falls, medication errors, wrong-site/wrong-patient, specimen errors, and more — not module-specific), five-whys/fishbone root-cause-analysis workflow, corrective-action lifecycle with owner/due-date, trend dashboard by type/location/severity
+- **Clinical Staff Credentialing & Privileging** — medical staff license/malpractice/CPD register, 30/60/90-day and lapsed expiry-alert buckets, procedure-scoped privilege grant/revoke with privilege-to-procedure matching
+- **Staff Duty Rostering** — ward-level shift scheduling with double-booking conflict detection, on-call roster lookup, shift handover notes
+- **Biomedical Equipment Register** — inventory with calibration due-dates auto-advanced on each logged event, out-of-service/returned-to-service/decommission tracking, overdue and due-within-30-days facility dashboard
+
+---
+
+## Clinician Network
+
+A cross-practice, specialty-organized peer-discussion platform for doctors — private panels (General Practice, Internal Medicine, Paediatrics, O&G, General Surgery, Dermatology, plus custom panels) where clinicians post de-identified cases for peer discussion, Reddit/Discord-style, built as the first Umoya feature that deliberately spans tenant boundaries.
+
+- **Cross-Tenant Identity, Privacy-First** — a doctor's network identity is anchored on their existing license credentials (reused from Clinical Staff Credentialing, never re-entered), mapped to an auto-generated pseudonymous handle; the real-identity link lives only in the originating tenant's own database, so resolving who posted something always requires access to that specific clinic's data — not just platform-level access
+- **Two-Layer PHI Safety Pipeline** — a structured case composer (age *band*, not exact age or date of birth; no name field exists at all) plus a mandatory redaction guard on every free-text field, enforced unconditionally in the service layer with no bypass path; a PHI-tripping draft is rejected with the exact offending text highlighted, never silently stripped and posted
+- **Duplicate-Avoidance by Design** — before a topic posts, the draft is embedded and compared against existing open topics in the same panel; a near-duplicate surfaces as "this looks similar to..." with a one-click jump to reply there instead, enforced server-side so it can't be skipped
+- **Threaded Discussion** — nested (Discord-style) replies suited to clinical back-and-forth, author-only resolution marking, sort by Recent/Most Discussed/Unresolved
+- **Moderation, Deliberately High-Friction** — reporting on any topic/reply, moderator-only review queue, and a de-anonymization flow that resolves *only* against the reporting moderator's own current tenant — a post from another clinic returns a clear "not resolvable from this tenant" response rather than searching across tenants
+- **Participation Record** — a printable/exportable PDF of a doctor's own posts and replies, explicitly labeled "record of participation only — not an accredited CPD activity"
+- **Smart Suggestions** — one-click tag suggestions (diagnoses/symptoms extracted from the draft, after it passes the PHI guard) and a "related Clinician Network discussion" result surfaced directly inside the "Ask Umoya" command palette's clinical-question mode, alongside grounded CDSS citations
+
+---
+
 ## Quick Start
 
 **1. Configure environment**
@@ -518,10 +545,10 @@ cd mobile && npm run test:e2e
 | [docs/PROVISIONING_GUIDE.md](./docs/PROVISIONING_GUIDE.md) | Tenant/system DB provisioning workflow |
 | [docs/CDSS_GUIDELINE_SEARCH_TUNING.md](./docs/CDSS_GUIDELINE_SEARCH_TUNING.md) | Guideline-search RAG tuning + GPU-time tweaks |
 | [docs/UMOYA_BRAND.md](./docs/UMOYA_BRAND.md) | Brand and design guidelines |
-| [docs/AI-INTELLIGENCE-AUDIT-ROADMAP.md](./docs/AI-INTELLIGENCE-AUDIT-ROADMAP.md) | S262+ roadmap — 22 findings across CDSS/PostVisit AI/Voice-Ambient/AI-recommendation subsystems |
-| [docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md](./docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md) | S274+ roadmap — COHSASA-accreditation-aligned gaps (incident reporting, staff credentialing, rostering, biomedical equipment) |
-| [docs/COMBINED-SPRINT-SEQUENCING.md](./docs/COMBINED-SPRINT-SEQUENCING.md) | Execution order for S262–S278 across both roadmaps above — single source of truth for what's next |
+| [docs/UMOYA_EHR_Master_Assurance_Programme.md](./docs/UMOYA_EHR_Master_Assurance_Programme.md) | Governing audit/testing/gap-analysis framework for ongoing quality assurance |
+| [docs/DRILLDOWN-TESTING-CHECKLIST.md](./docs/DRILLDOWN-TESTING-CHECKLIST.md) | Living end-to-end module × platform × role test log (append-only — never delete completed rows) |
 | [DEMO_CREDENTIALS.md](./DEMO_CREDENTIALS.md) | Demo accounts provisioned per tenant |
+| [SMART_TEST_TENANT.md](./SMART_TEST_TENANT.md) | Live client testing access for the two active test tenants |
 | [.env.example](./.env.example) | All required environment variables |
 
 **Clinical LLM backend:** configurable via `CLINICAL_LLM_BACKEND` (`ollama` | `aws_bedrock` | `anthropic` | `azure_openai`). Local dev defaults to Ollama (`llama3.1`); HIPAA-eligible production uses AWS Bedrock (Claude 3.5 Sonnet) with role/profile auth — no hardcoded keys. See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md#clinical-llm-backend) and `.env.example`.

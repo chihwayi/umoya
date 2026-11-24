@@ -11,7 +11,7 @@ import { ClinicianNetworkMasterDbService } from './clinician-network-master-db.s
 // at two clinics still maps to exactly one network identity. The real-identity link
 // (tenant user_id <-> master clinician_id) is stored ONLY in the originating
 // tenant's own clinician_network_identity_links table — see
-// docs/CLINICIAN-NETWORK-ARCHITECTURE.md.
+// README.md's Clinician Network section.
 
 export interface ClinicianIdentity {
   clinicianId: string;

@@ -3,7 +3,7 @@ import { firstReturningRow } from '../utils/returning-row';
 
 // S275 — Clinical Staff Credentialing & Privileging. Tracks medical staff license
 // expiry, malpractice/indemnity cover, CPD/CME compliance, and facility-granted
-// scope-of-practice privileges. See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+// scope-of-practice privileges. See README.md's AI/Intelligence Hardening & Hospital Accreditation Readiness section.
 
 const EXPIRY_WINDOWS_DAYS = [30, 60, 90];
 

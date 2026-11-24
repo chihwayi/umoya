@@ -10,7 +10,7 @@
 // NOTE on the enable flag: the ported isPHIRedactionEnabled()/redactText() keep
 // the Python gating behavior, but the Clinician Network createTopic()/createReply()
 // path MUST NOT consult the flag — PHI enforcement there is mandatory and
-// unconditional (see docs/CLINICIAN-NETWORK-ARCHITECTURE.md §PHI safety pipeline).
+// unconditional (see README.md's Clinician Network section §PHI safety pipeline).
 // The service layer calls containsPHI()/findPhiMatch() directly for this reason.
 
 export type PhiMatchKind = 'email' | 'phone' | 'ssn' | 'id' | 'mrn' | 'dob' | 'name';

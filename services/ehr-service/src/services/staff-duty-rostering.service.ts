@@ -4,7 +4,7 @@ import { firstReturningRow } from '../utils/returning-row';
 // S276 — Staff Duty Rostering. Ward-level shift roster + on-call status + shift
 // handover notes, with double-booking conflict detection. Deliberately scoped to
 // record-keeping and conflict checks, not a full rostering optimizer.
-// See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+// See README.md's AI/Intelligence Hardening & Hospital Accreditation Readiness section.
 
 @Injectable()
 export class StaffDutyRosteringService {

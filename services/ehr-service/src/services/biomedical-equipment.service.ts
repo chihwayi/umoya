@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 
 // S277 — Biomedical Equipment Register. Clinical equipment inventory with
 // calibration due-dates, out-of-service flagging, and a maintenance history log.
-// See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+// See README.md's AI/Intelligence Hardening & Hospital Accreditation Readiness section.
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);

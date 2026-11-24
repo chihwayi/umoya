@@ -8045,7 +8045,7 @@ export class DatabaseProvisioningService {
       // near-miss tracking that already existed (oncology_near_miss_events,
       // workplace_incidents). This is the single highest-value gap found against
       // COHSASA (the region's actual accreditation body) — their own reference system
-      // for this is called PatSIS. See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+      // for this is called PatSIS. See README.md's AI/Intelligence Hardening & Hospital Accreditation Readiness section.
       {
         id: 'patient_safety_incidents',
         label: 'Patient Safety Incident Reporting & RCA (S274)',
@@ -8116,7 +8116,7 @@ export class DatabaseProvisioningService {
       // readiness gap G2: nothing previously tracked medical staff license expiry,
       // scope-of-practice privileges, malpractice cover, or CPD/CME compliance —
       // a baseline requirement of every regional accreditation framework (COHSASA
-      // included). See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+      // included). See README.md's AI/Intelligence Hardening & Hospital Accreditation Readiness section.
       {
         id: 'clinical_staff_credentialing',
         label: 'Clinical Staff Credentialing & Privileging (S275)',
@@ -8172,7 +8172,7 @@ export class DatabaseProvisioningService {
       // ward/shift, on-call status, or shift handover notes — a real operational need
       // for any facility running 24/7 wards. Scoped modestly: record-keeping +
       // double-booking conflict detection, not a full rostering optimizer.
-      // See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+      // See README.md's AI/Intelligence Hardening & Hospital Accreditation Readiness section.
       {
         id: 'staff_duty_rostering',
         label: 'Staff Duty Rostering (S276)',
@@ -8219,7 +8219,7 @@ export class DatabaseProvisioningService {
       // metrics — nothing tracked clinical equipment (ventilators, infusion pumps,
       // defibrillators, monitors) service/calibration due-dates or out-of-service
       // status. Directly maps to a COHSASA technical-services standard.
-      // See docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+      // See README.md's AI/Intelligence Hardening & Hospital Accreditation Readiness section.
       {
         id: 'biomedical_equipment_register',
         label: 'Biomedical Equipment Register (S277)',
@@ -8658,7 +8658,7 @@ export class DatabaseProvisioningService {
           'NON-TENANT-SCOPED EXCEPTION to the golden rule: this bundle is applied ONCE to the shared ' +
           'master database (via repairMasterDatabase.ts with MASTER_PROVISION_BUNDLES=clinician_network_platform), ' +
           'never to a tenant database. It backs the cross-tenant doctor discussion feature — see ' +
-          'docs/CLINICIAN-NETWORK-ARCHITECTURE.md. Do not copy this pattern for anything that should ' +
+          'the Clinician Network section in README.md. Do not copy this pattern for anything that should ' +
           'actually be tenant-scoped. S287 seeds the six default specialty panels via tasks (idempotent).',
         statements: () => [
           `CREATE SCHEMA IF NOT EXISTS clinician_network`,
@@ -8755,7 +8755,7 @@ export class DatabaseProvisioningService {
           'Maps this tenant\'s own user_id to a clinician_network.clinicians.id in the master DB. ' +
           'Deliberately stored per-tenant (not in the master DB) so that resolving a pseudonymous ' +
           'Clinician Network post back to a real staff member always requires access to this specific ' +
-          'tenant\'s own database — see docs/CLINICIAN-NETWORK-ARCHITECTURE.md.',
+          'tenant\'s own database — see the Clinician Network section in README.md.',
         statements: () => [
           `CREATE TABLE IF NOT EXISTS clinician_network_identity_links (
             user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

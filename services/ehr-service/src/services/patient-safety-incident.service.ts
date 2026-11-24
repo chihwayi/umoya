@@ -4,7 +4,7 @@ import { firstReturningRow } from '../utils/returning-row';
 // S274 — Patient Safety Incident Reporting & RCA. General-purpose incident register
 // + root-cause-analysis workflow, distinct from the module-specific near-miss tracking
 // that already existed (oncology_near_miss_events, workplace_incidents). See
-// docs/SOUTHERN-AFRICA-HOSPITAL-READINESS-ROADMAP.md.
+// README.md's AI/Intelligence Hardening & Hospital Accreditation Readiness section.
 
 const RCA_REQUIRED_HARM_LEVELS = new Set(['moderate_harm', 'severe_harm', 'death']);
 
