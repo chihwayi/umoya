@@ -548,6 +548,8 @@ cd mobile && npm run test:e2e
 | [docs/UMOYA.pdf](./docs/UMOYA.pdf) | Marketing/sales one-pager |
 | [docs/UMOYA_EHR_Master_Assurance_Programme.md](./docs/UMOYA_EHR_Master_Assurance_Programme.md) | Governing audit/testing/gap-analysis framework for ongoing quality assurance |
 | [docs/DRILLDOWN-TESTING-CHECKLIST.md](./docs/DRILLDOWN-TESTING-CHECKLIST.md) | Living end-to-end module × platform × role test log (append-only — never delete completed rows) |
+| [docs/UMOYA_AUDIT_PROMPT.md](./docs/UMOYA_AUDIT_PROMPT.md) | Master adversarial claims-vs-reality audit spec — brochure claims ledger, 14 domain audits, E2E scenarios |
+| [docs/AUDIT-SPRINT-BRIEFS.md](./docs/AUDIT-SPRINT-BRIEFS.md) | Delegable sprint briefs (A–F) for running the audit prompt above via Muse Spark |
 | [DEMO_CREDENTIALS.md](./DEMO_CREDENTIALS.md) | Demo accounts provisioned per tenant |
 | [SMART_TEST_TENANT.md](./SMART_TEST_TENANT.md) | Live client testing access for the two active test tenants |
 | [.env.example](./.env.example) | All required environment variables |
