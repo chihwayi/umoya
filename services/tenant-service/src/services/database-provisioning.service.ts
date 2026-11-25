@@ -8765,6 +8765,40 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_cnil_clinician ON clinician_network_identity_links(clinician_id)`,
         ],
       },
+      {
+        // R1 / FX-001 — backfill every entity-vs-bundle column gap found by
+        // R0 (remediation/DRIFT_ANALYSIS.md §1). All idempotent
+        // ADD COLUMN IF NOT EXISTS; safe to re-run on existing tenants.
+        id: 'r1_foundation_drift_columns',
+        label: 'R1 Foundation — Drift Column Backfill (S-003 et al)',
+        version: '2026.11.25.1',
+        description:
+          'patients confidentiality_tier/deceased_at/vip_flag + latest_risk_level/household_id; ' +
+          'post_visit_sessions.ambient_session_id; readmission_predictions.readmission_30_day_risk; ' +
+          'fhir_ingestion_logs/iot_data_ingestions/iot_device_registrations timestamps; ' +
+          'vaccine_inventory cost/temperature/funding/ndc/notes/recall columns',
+        statements: () => [
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS confidentiality_tier VARCHAR(20) NOT NULL DEFAULT 'standard'`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS deceased_at TIMESTAMPTZ`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS vip_flag BOOLEAN NOT NULL DEFAULT false`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS latest_risk_level TEXT`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS household_id BIGINT`,
+          `ALTER TABLE post_visit_sessions ADD COLUMN IF NOT EXISTS ambient_session_id VARCHAR(100)`,
+          `ALTER TABLE readmission_predictions ADD COLUMN IF NOT EXISTS readmission_30_day_risk NUMERIC`,
+          `ALTER TABLE fhir_ingestion_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+          `ALTER TABLE iot_data_ingestions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+          `ALTER TABLE iot_device_registrations ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+          `ALTER TABLE iot_device_registrations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+          `ALTER TABLE iot_device_registrations ADD COLUMN IF NOT EXISTS oauth_expires_at TIMESTAMPTZ`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS cost_per_dose NUMERIC(10,2)`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS current_temperature NUMERIC(5,2)`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS funding_source VARCHAR(100)`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS ndc_code VARCHAR(20)`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS notes TEXT`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS recall_information TEXT`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS temperature_alert BOOLEAN NOT NULL DEFAULT false`,
+        ],
+      },
     ];
   }
 
