@@ -8799,6 +8799,36 @@ export class DatabaseProvisioningService {
           `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS temperature_alert BOOLEAN NOT NULL DEFAULT false`,
         ],
       },
+      {
+        // R1 / FX-001 (S-005) — master-DB-only companion to the tenant bundle
+        // above. Applied via repairMasterDatabase.ts (see its
+        // MASTER_PROVISION_BUNDLES fallback), never per-tenant: ensures the
+        // policy columns read by ehr-service getTenantSecurityPolicy exist on
+        // master `tenants`. Idempotent; safe to re-run.
+        id: 'r1_master_tenant_policy_columns',
+        label: 'R1 Foundation — Master tenants policy columns (S-005)',
+        version: '2026.11.25.1',
+        description:
+          'mfaRequired / sessionTimeoutMinutes / allowEmergencyBypass on master tenants; ' +
+          'mirrors tenant-service ensureSubscriptionSchema so ehr-service reads stop 500ing',
+        // DO-block (not bare ALTER): tenant databases have no `tenants` table,
+        // and a bare ALTER would error, wedge the bundle in pending-retry, and
+        // block tenant provisioning. The EXISTS guard makes this a no-op there.
+        statements: () => [
+          `DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.tables
+              WHERE table_schema = 'public' AND table_name = 'tenants'
+            ) THEN
+              ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "mfaRequired" BOOLEAN NOT NULL DEFAULT false;
+              ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "sessionTimeoutMinutes" INTEGER NOT NULL DEFAULT 60;
+              ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "allowEmergencyBypass" BOOLEAN NOT NULL DEFAULT false;
+            END IF;
+          END
+          $$`,
+        ],
+      },
     ];
   }
 
