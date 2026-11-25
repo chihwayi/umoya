@@ -10,6 +10,7 @@
     "simple": "ts-node --transpile-only src/simple-main.ts",
     "mock": "ts-node --transpile-only src/mock-main.ts",
     "test": "jest",
+    "test:smoke": "jest --config jest.smoke.config.js",
     "test:ci": "jest --coverage --ci --coverageReporters=text-summary"
   },
   "dependencies": {

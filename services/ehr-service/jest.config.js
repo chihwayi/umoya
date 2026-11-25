@@ -2,6 +2,8 @@ module.exports = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: 'src',
   testRegex: '.*\\.spec\\.ts$',
+  // Live-server specs run only via jest.smoke.config.js (needs SMOKE_* env).
+  testPathIgnorePatterns: ['\\.smoke\\.spec\\.ts$'],
   transform: {
     '^.+\\.ts$': 'ts-jest',
   },
