@@ -508,7 +508,10 @@ export class FhirService {
     // Get all DiagnosticReports - use raw query to avoid recordNumber issue
     const medicalRecordRepository = tenantDb.getRepository(MedicalRecord);
     const rawDiagnosticReports = await medicalRecordRepository.query(
-      'SELECT id, "patientId", "appointmentId", "providerId", type, "recordDate", "chiefComplaint", "historyOfPresentIllness", "physicalExamination", assessment, plan, "vitalSigns", diagnoses, procedures, "followUpInstructions", attachments, "isConfidential", "createdAt", "updatedAt" FROM medical_records WHERE "patientId" = $1 AND type = $2',
+      // R1/FX-001 (F-004): physical snake_case columns with aliases — the same
+      // pattern as getDocumentReference below. CamelCase identifiers 500
+      // (`column "patientId" does not exist`).
+      'SELECT id, patient_id as "patientId", appointment_id as "appointmentId", doctor_id as "providerId", record_type as type, visit_date as "recordDate", chief_complaint as "chiefComplaint", history_present_illness as "historyOfPresentIllness", physical_examination as "physicalExamination", assessment, plan, vital_signs as "vitalSigns", diagnoses, procedures, follow_up_instructions as "followUpInstructions", attachments, is_confidential as "isConfidential", created_at as "createdAt", updated_at as "updatedAt" FROM medical_records WHERE patient_id = $1 AND record_type = $2',
       [patientId, RecordType.LAB_RESULT]
     );
     const diagnosticReports = rawDiagnosticReports.map((raw: any) => {
