@@ -8,7 +8,7 @@ export class PatientSocialHistory {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient, { onDelete: 'CASCADE' })
