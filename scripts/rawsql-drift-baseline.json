@@ -1,0 +1,2438 @@
+[
+ {
+  "file": "services/ehr-service/src/controllers/fhir-terminology.controller.ts",
+  "kind": "unknown-table",
+  "detail": "ancestors",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-table",
+  "detail": "hiv_enrollments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "schedule_type",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "next_pickup_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "is_active",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "current_regimen",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "meeting_schedule",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "location",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "joined_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "start_time",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "end_time",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal-hiv.controller.ts",
+  "kind": "unknown-column",
+  "detail": "phone_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal.controller.ts",
+  "kind": "unknown-column",
+  "detail": "expected_discharge_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal.controller.ts",
+  "kind": "unknown-column",
+  "detail": "actual_discharge_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal.controller.ts",
+  "kind": "unknown-column",
+  "detail": "admission_diagnosis",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal.controller.ts",
+  "kind": "unknown-column",
+  "detail": "admission_diagnosis_icd10",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal.controller.ts",
+  "kind": "unknown-column",
+  "detail": "length_of_stay_days",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal.controller.ts",
+  "kind": "unknown-column",
+  "detail": "primary_diagnosis",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/patient-portal.controller.ts",
+  "kind": "unknown-table",
+  "detail": "ed_dispositions",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/controllers/preferences.controller.ts",
+  "kind": "unknown-column",
+  "detail": "preferred_language",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/guards/health-educator.guard.ts",
+  "kind": "unknown-column",
+  "detail": "is_health_educator",
+  "owner": "R1-doc",
+  "note": "master/staff scope question for SCHEMA_SOURCE_OF_TRUTH follow-up"
+ },
+ {
+  "file": "services/ehr-service/src/interop/disa-smartcare.service.ts",
+  "kind": "unknown-table",
+  "detail": "hiv_enrollments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/interop/disa-smartcare.service.ts",
+  "kind": "unknown-column",
+  "detail": "art_start_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/interop/disa-smartcare.service.ts",
+  "kind": "unknown-column",
+  "detail": "current_regimen_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/interop/disa-smartcare.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/adherence-engine.service.ts",
+  "kind": "unknown-column",
+  "detail": "drug_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/adherence-engine.service.ts",
+  "kind": "unknown-column",
+  "detail": "risk_level",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/adherence-engine.service.ts",
+  "kind": "unknown-column",
+  "detail": "scored_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/adherence-engine.service.ts",
+  "kind": "unknown-column",
+  "detail": "factors",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/adt.service.ts",
+  "kind": "unknown-table",
+  "detail": "columns",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/adt.service.ts",
+  "kind": "unknown-column",
+  "detail": "column_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/analytics.service.ts",
+  "kind": "unknown-table",
+  "detail": "jsonb_array_elements",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/appointment-ai.service.ts",
+  "kind": "unknown-table",
+  "detail": "appointment_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cardiology.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cardiology.service.ts",
+  "kind": "unknown-column",
+  "detail": "elem",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cascade-analytics.service.ts",
+  "kind": "unknown-table",
+  "detail": "patient_vitals",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cascade-analytics.service.ts",
+  "kind": "unknown-column",
+  "detail": "full_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cascade-analytics.service.ts",
+  "kind": "unknown-column",
+  "detail": "phone_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cascade-analytics.service.ts",
+  "kind": "unknown-column",
+  "detail": "date_registered",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cascade-metrics.service.ts",
+  "kind": "unknown-table",
+  "detail": "hiv_enrollments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/case-management.service.ts",
+  "kind": "unknown-column",
+  "detail": "ward_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/case-management.service.ts",
+  "kind": "unknown-column",
+  "detail": "bed_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cathlab-ai.service.ts",
+  "kind": "unknown-table",
+  "detail": "cathlab_quality_metrics",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cathlab-ai.service.ts",
+  "kind": "unknown-column",
+  "detail": "recommended_strategy",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cathlab.service.ts",
+  "kind": "unknown-table",
+  "detail": "cathlab_d2b_metrics",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/chw.service.ts",
+  "kind": "unknown-column",
+  "detail": "stats",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/chw.service.ts",
+  "kind": "unknown-column",
+  "detail": "visits_30d",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/chw.service.ts",
+  "kind": "unknown-column",
+  "detail": "sam_cases",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/chw.service.ts",
+  "kind": "unknown-column",
+  "detail": "referrals",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/claims.service.ts",
+  "kind": "unknown-column",
+  "detail": "age_days",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/claims.service.ts",
+  "kind": "unknown-table",
+  "detail": "latest_submission",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/clinical-summary.service.ts",
+  "kind": "unknown-column",
+  "detail": "band",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/clinical-workflow.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/clinical-workflow.service.ts",
+  "kind": "unknown-table",
+  "detail": "user_workflow_notifications",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/consent-records.service.ts",
+  "kind": "unknown-column",
+  "detail": "phone_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cross-facility-stock.service.ts",
+  "kind": "unknown-column",
+  "detail": "item_code",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cross-facility-stock.service.ts",
+  "kind": "unknown-column",
+  "detail": "item_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cross-facility-stock.service.ts",
+  "kind": "unknown-column",
+  "detail": "category",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/cross-facility-stock.service.ts",
+  "kind": "unknown-column",
+  "detail": "current_stock",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/datim-mer.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/datim-mer.service.ts",
+  "kind": "unknown-column",
+  "detail": "date_registered",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-table",
+  "detail": "vital_signs",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "patient_id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "recorded_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "systolic_bp",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "diastolic_bp",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "heart_rate",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "respiratory_rate",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "spo2",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "temperature",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "weight",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "height",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "muac",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "pain_score",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dhis2.service.ts",
+  "kind": "unknown-column",
+  "detail": "news2_total_score",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/dialysis.service.ts",
+  "kind": "unknown-table",
+  "detail": "dialysis_adequacy_summary",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/digital-prescription.service.ts",
+  "kind": "unknown-table",
+  "detail": "pharmacy_dispensing_queue",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-table",
+  "detail": "sick_notes",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "qualification",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "hpcz_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "weight_kg",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "height_cm",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "bp_systolic",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "bp_diastolic",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "pulse_bpm",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "temperature_c",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "spo2_pct",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-table",
+  "detail": "patient_allergies",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "allergen",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "severity",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "reaction_type",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-table",
+  "detail": "active_medications",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "drug_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "dose",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "frequency",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "route",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "status",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-table",
+  "detail": "follow_up_plans",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "follow_up_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "reason",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "provider_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "instructions",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "referral_to",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/discharge-document.service.ts",
+  "kind": "unknown-column",
+  "detail": "notes",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ed.service.ts",
+  "kind": "unknown-table",
+  "detail": "ed_triage_assessments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ed.service.ts",
+  "kind": "unknown-table",
+  "detail": "bed_request_log",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/education-personalization.service.ts",
+  "kind": "unknown-column",
+  "detail": "thumbnail_url",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/education-personalization.service.ts",
+  "kind": "unknown-table",
+  "detail": "education_enrolments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/education-personalization.service.ts",
+  "kind": "unknown-column",
+  "detail": "course_id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/education-personalization.service.ts",
+  "kind": "unknown-column",
+  "detail": "status",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/encounter-coding.service.ts",
+  "kind": "unknown-column",
+  "detail": "segment_text",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/encounter-coding.service.ts",
+  "kind": "unknown-column",
+  "detail": "chief_complaint",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/encounter-coding.service.ts",
+  "kind": "unknown-column",
+  "detail": "clinical_notes",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/encounter-coding.service.ts",
+  "kind": "unknown-column",
+  "detail": "diagnosis",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/encounter-coding.service.ts",
+  "kind": "unknown-column",
+  "detail": "assessment",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/encounter-coding.service.ts",
+  "kind": "unknown-column",
+  "detail": "plan",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/encounter-copilot.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/encounter-copilot.service.ts",
+  "kind": "unknown-column",
+  "detail": "treatment_intent",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/federated-learning.service.ts",
+  "kind": "unknown-table",
+  "detail": "appointment_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/financial-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/financial-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "expenses",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/financial-reports.service.ts",
+  "kind": "unknown-column",
+  "detail": "category",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/health-records-export.service.ts",
+  "kind": "unknown-table",
+  "detail": "patient_data_exports",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hipaa-audit.service.ts",
+  "kind": "unknown-table",
+  "detail": "suspicious_patterns",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hipaa-audit.service.ts",
+  "kind": "unknown-table",
+  "detail": "failed_accesses",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hipaa-audit.service.ts",
+  "kind": "unknown-table",
+  "detail": "bulk_exports",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv-quality-metrics.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv-quality-metrics.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load_test_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv-tpt-tracker.service.ts",
+  "kind": "unknown-column",
+  "detail": "arv_status",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "arv_regimen_code",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "arv_regimen_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "next_review_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "arv_status",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "creatinine_result",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "alt_result",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load_test_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "eac_completion_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "return_to_conventional_care_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "latest_visit",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load_unit",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load_suppressed",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "arv_adherence_percentage",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "latest_intake",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "regimen",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "active_eac",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "latest_session_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "completed_eac",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "latest_completion_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "cd4_count",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/hiv.service.ts",
+  "kind": "unknown-column",
+  "detail": "cd4_test_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/icu-ai.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/icu-ai.service.ts",
+  "kind": "unknown-table",
+  "detail": "icu_fluid_48h_summary",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/icu-ai.service.ts",
+  "kind": "unknown-column",
+  "detail": "cumulative_48h_ml",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/icu.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/icu.service.ts",
+  "kind": "unknown-column",
+  "detail": "latest_vent",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/imaging.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/imaging.service.ts",
+  "kind": "unknown-column",
+  "detail": "ai_summary",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/imaging.service.ts",
+  "kind": "unknown-column",
+  "detail": "ai_review_summary",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/immunisation.service.ts",
+  "kind": "unknown-table",
+  "detail": "epi_coverage_summary",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/immunisation.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/immunisation.service.ts",
+  "kind": "unknown-column",
+  "detail": "latest_vacc",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/immunization.service.ts",
+  "kind": "unknown-table",
+  "detail": "immunization_registry_submissions",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/immunization.service.ts",
+  "kind": "unknown-column",
+  "detail": "uniquePatients",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/in-app-payment.service.ts",
+  "kind": "unknown-column",
+  "detail": "id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/in-app-payment.service.ts",
+  "kind": "unknown-column",
+  "detail": "invoice_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/in-app-payment.service.ts",
+  "kind": "unknown-column",
+  "detail": "amount_due",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/in-app-payment.service.ts",
+  "kind": "unknown-column",
+  "detail": "currency",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/in-app-payment.service.ts",
+  "kind": "unknown-column",
+  "detail": "due_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/in-app-payment.service.ts",
+  "kind": "unknown-column",
+  "detail": "description",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/infection-control.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/infection-control.service.ts",
+  "kind": "unknown-column",
+  "detail": "iso",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/lab-critical-alert.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/lab-quality.service.ts",
+  "kind": "unknown-column",
+  "detail": "ordered_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/lab-quality.service.ts",
+  "kind": "unknown-column",
+  "detail": "WITHIN",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/lab-quality.service.ts",
+  "kind": "unknown-column",
+  "detail": "FILTER",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/lab-results-matching.service.ts",
+  "kind": "unknown-column",
+  "detail": "test_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/lab-results-matching.service.ts",
+  "kind": "unknown-column",
+  "detail": "test_code",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/lab-test-catalog.service.ts",
+  "kind": "unknown-column",
+  "detail": "NULLS",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/lab-test-catalog.service.ts",
+  "kind": "unknown-column",
+  "detail": "FIRST",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/maternity.service.ts",
+  "kind": "unknown-table",
+  "detail": "maternity_alerts",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/maternity.service.ts",
+  "kind": "unknown-column",
+  "detail": "FILTER",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/mdsr.service.ts",
+  "kind": "unknown-table",
+  "detail": "death_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/mdsr.service.ts",
+  "kind": "unknown-table",
+  "detail": "delivery_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/mdsr.service.ts",
+  "kind": "unknown-table",
+  "detail": "review_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/medication-reminder.service.ts",
+  "kind": "unknown-table",
+  "detail": "columns",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/medication-reminder.service.ts",
+  "kind": "unknown-column",
+  "detail": "column_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "oncology_treatments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "blood_transfusion_reactions",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "blood_units",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "blood_crossmatches",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-column",
+  "detail": "modality",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "dialysis_sessions",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-column",
+  "detail": "access_type",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "dental_appointments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "dental_procedures",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "dental_referrals",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "aviation_medical_exams",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "oem_assessments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "oem_injuries",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/module-reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "oem_hazard_exposures",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/monthly-report-bundle.service.ts",
+  "kind": "unknown-table",
+  "detail": "programme_indicators",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/monthly-report-bundle.service.ts",
+  "kind": "unknown-column",
+  "detail": "indicator_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/monthly-report-bundle.service.ts",
+  "kind": "unknown-column",
+  "detail": "value",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/monthly-report-bundle.service.ts",
+  "kind": "unknown-column",
+  "detail": "target",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/monthly-report-bundle.service.ts",
+  "kind": "unknown-column",
+  "detail": "Achievement",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/mortality-risk.service.ts",
+  "kind": "unknown-column",
+  "detail": "band",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/mortality-risk.service.ts",
+  "kind": "unknown-column",
+  "detail": "scored_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "hba1c_value",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "hba1c_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "systolic",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "diastolic",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-table",
+  "detail": "ckd_assessment",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "stage",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "egfr_value",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "assessment_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-table",
+  "detail": "retinopathy_screening",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "grade",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "screening_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "next_screening_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "ldl_value",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ncd-comorbidity.service.ts",
+  "kind": "unknown-column",
+  "detail": "ldl_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/neonatal-screening.service.ts",
+  "kind": "unknown-table",
+  "detail": "neo_screening_coverage",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu-followup.service.ts",
+  "kind": "unknown-table",
+  "detail": "nicu_corrected_ages",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu-followup.service.ts",
+  "kind": "unknown-column",
+  "detail": "corrected_age_months",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu-followup.service.ts",
+  "kind": "unknown-column",
+  "detail": "corrected_age_days",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu-followup.service.ts",
+  "kind": "unknown-column",
+  "detail": "any_significant_delay",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-table",
+  "detail": "nicu_kmc_daily_summary",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-column",
+  "detail": "is_vlbw",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-column",
+  "detail": "is_elbw",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-column",
+  "detail": "los_days",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-column",
+  "detail": "hiv_exposed",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-column",
+  "detail": "status",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-column",
+  "detail": "latest_bili",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-column",
+  "detail": "total_hours",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nicu.service.ts",
+  "kind": "unknown-column",
+  "detail": "latest_weight",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nutrition.service.ts",
+  "kind": "unknown-table",
+  "detail": "nutrition_admissions",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nutrition.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/nutrition.service.ts",
+  "kind": "unknown-column",
+  "detail": "nfv",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/oncology.service.ts",
+  "kind": "unknown-column",
+  "detail": "study_type",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/outcome-linkage.service.ts",
+  "kind": "unknown-column",
+  "detail": "full_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/outcome-linkage.service.ts",
+  "kind": "unknown-column",
+  "detail": "id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal-h3.service.ts",
+  "kind": "unknown-table",
+  "detail": "patient_fitness_integrations",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "scheduled_end_time",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "room_status",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "patient_joined_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-table",
+  "detail": "prescription_refill_requests",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "status",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-table",
+  "detail": "patient_medication_adherence_logs",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "blood_pressure_systolic",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "blood_pressure_diastolic",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-pro.service.ts",
+  "kind": "unknown-table",
+  "detail": "user_workflow_notifications",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-pro.service.ts",
+  "kind": "unknown-column",
+  "detail": "total_score",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-pro.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-risk-scoring.service.ts",
+  "kind": "unknown-column",
+  "detail": "components",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-risk-scoring.service.ts",
+  "kind": "unknown-column",
+  "detail": "ward",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-risk-scoring.service.ts",
+  "kind": "unknown-column",
+  "detail": "bed_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-transport.service.ts",
+  "kind": "unknown-table",
+  "detail": "transport_mist_handovers",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/patient-transport.service.ts",
+  "kind": "unknown-table",
+  "detail": "transport_response_quality",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/pharmacy-intelligence.service.ts",
+  "kind": "unknown-column",
+  "detail": "generic_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/pharmacy-intelligence.service.ts",
+  "kind": "unknown-column",
+  "detail": "route",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/pharmacy-intelligence.service.ts",
+  "kind": "unknown-column",
+  "detail": "indication",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/pmtct.service.ts",
+  "kind": "unknown-table",
+  "detail": "hiv_patients",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit-session.service.ts",
+  "kind": "unknown-table",
+  "detail": "post_visit_patient_story",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "patient_id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "version",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "session_id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "content",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "created_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-table",
+  "detail": "post_visit_coordinator_tasks",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "segment_text",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-table",
+  "detail": "fhir_sync_log",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-table",
+  "detail": "post_visit_peer_consults",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "session_id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "patient_id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "request_summary_deidentified",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "response_summary_deidentified",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "status",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "requested_by",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "responded_by",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "responded_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "created_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-table",
+  "detail": "post_visit_patient_story",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "version",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "content",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/post-visit.service.ts",
+  "kind": "unknown-column",
+  "detail": "FILTER",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/pro-risk-loop.service.ts",
+  "kind": "unknown-column",
+  "detail": "primary_doctor_id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/provider-messaging.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/quality-measures.service.ts",
+  "kind": "unknown-table",
+  "detail": "lateral",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/quality-measures.service.ts",
+  "kind": "unknown-table",
+  "detail": "latest_hba1c",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/quality-measures.service.ts",
+  "kind": "unknown-quoted-column",
+  "detail": "testName",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/radiology-ai.service.ts",
+  "kind": "unknown-table",
+  "detail": "imaging_requests",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/radiology-ai.service.ts",
+  "kind": "unknown-column",
+  "detail": "study_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/radiology-ai.service.ts",
+  "kind": "unknown-column",
+  "detail": "description",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/reports.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/research-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "district",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/research-portal.service.ts",
+  "kind": "unknown-column",
+  "detail": "province",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/retention.service.ts",
+  "kind": "unknown-table",
+  "detail": "hiv_enrollments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/revenue-cycle.service.ts",
+  "kind": "unknown-column",
+  "detail": "test_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/scheduling-intelligence.service.ts",
+  "kind": "unknown-table",
+  "detail": "appointment_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/scheduling-intelligence.service.ts",
+  "kind": "unknown-column",
+  "detail": "day_of_week",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/specialty-automation.service.ts",
+  "kind": "unknown-table",
+  "detail": "notifications",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/storeroom.service.ts",
+  "kind": "unknown-column",
+  "detail": "unit_price",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/storeroom.service.ts",
+  "kind": "unknown-column",
+  "detail": "drug_id",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/supply-chain-ai.service.ts",
+  "kind": "unknown-table",
+  "detail": "prescription_items",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tax-management.service.ts",
+  "kind": "unknown-table",
+  "detail": "tax_configurations",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tax-management.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tax-management.service.ts",
+  "kind": "unknown-column",
+  "detail": "transaction_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tax-management.service.ts",
+  "kind": "unknown-column",
+  "detail": "bill_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tax-management.service.ts",
+  "kind": "unknown-table",
+  "detail": "payroll",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/teleconsult-bridge.service.ts",
+  "kind": "unknown-column",
+  "detail": "subjective_notes",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/telemedicine-postcall.service.ts",
+  "kind": "unknown-table",
+  "detail": "telemedicine_sessions",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/telemedicine-postcall.service.ts",
+  "kind": "unknown-table",
+  "detail": "clinical_notes",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/telemedicine.service.ts",
+  "kind": "unknown-column",
+  "detail": "phone_number",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tenant.service.ts",
+  "kind": "unknown-table",
+  "detail": "tenant_dhis2_config",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-table",
+  "detail": "tables",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-table",
+  "detail": "terminology_import_jobs",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-table",
+  "detail": "icd10_codes",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-table",
+  "detail": "icd11_codes",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-table",
+  "detail": "terminology_releases",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-column",
+  "detail": "terminology",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-column",
+  "detail": "release_effective_time",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-column",
+  "detail": "imported_at",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-column",
+  "detail": "source_file",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology-import.service.ts",
+  "kind": "unknown-column",
+  "detail": "row_count",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology.service.ts",
+  "kind": "unknown-table",
+  "detail": "terminology_import_jobs",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology.service.ts",
+  "kind": "unknown-column",
+  "detail": "file_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology.service.ts",
+  "kind": "unknown-column",
+  "detail": "end_time",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology.service.ts",
+  "kind": "unknown-column",
+  "detail": "total_rows",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/terminology.service.ts",
+  "kind": "unknown-column",
+  "detail": "start_time",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tier-net.service.ts",
+  "kind": "unknown-column",
+  "detail": "arv_regimen_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tier-net.service.ts",
+  "kind": "unknown-column",
+  "detail": "arv_regimen_code",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tier-net.service.ts",
+  "kind": "unknown-column",
+  "detail": "viral_load",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/tier-net.service.ts",
+  "kind": "unknown-column",
+  "detail": "cd4_count",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ussd-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "first_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ussd-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "last_name",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ussd-session.service.ts",
+  "kind": "unknown-table",
+  "detail": "hiv_enrollments",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ussd-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "current_regimen",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ussd-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "next_pickup_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ussd-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "schedule_type",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ },
+ {
+  "file": "services/ehr-service/src/services/ussd-session.service.ts",
+  "kind": "unknown-column",
+  "detail": "result_date",
+  "owner": "R7/FX-022",
+  "note": "R1 inventory of residual raw-SQL drift; R7 verifies each and fixes or documents"
+ }
+]
