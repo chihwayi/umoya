@@ -46,6 +46,7 @@ export class DeidExportService {
     cohortCriteria: any;
     purpose: string;
     approvedBy?: string;
+    cohortId?: string | null;
     db: any;
   }): Promise<{ downloadToken: string; rowCount: number; records: any[] }> {
     const deidentified = params.cohortPatients.map(p => {
@@ -58,13 +59,15 @@ export class DeidExportService {
 
     const downloadToken = randomBytes(32).toString('hex');
 
+    // R1/FX-001 (RES-003): aligned to the real bundle schema
+    // (id, cohort_id, requested_by, row_count, download_token, exported_at).
+    // R6/FX-020 owns the governance gap this exposes: purpose/approved_by and
+    // the field list have no column to live in and are NOT persisted here.
     await params.db.query(
       `INSERT INTO deid_export_log
-         (exported_by, cohort_name, cohort_criteria, row_count, export_format,
-          de_id_method, fields_exported, purpose, approved_by, download_token)
-       VALUES ($1,$2,$3,$4,'csv','safe_harbor',$5,$6,$7,$8)`,
-      [params.exportedBy, params.cohortName, JSON.stringify(params.cohortCriteria),
-       deidentified.length, params.fields, params.purpose, params.approvedBy ?? null, downloadToken],
+         (cohort_id, requested_by, row_count, download_token)
+       VALUES ($1,$2,$3,$4)`,
+      [params.cohortId ?? null, params.exportedBy, deidentified.length, downloadToken],
     );
 
     return { downloadToken, rowCount: deidentified.length, records: deidentified };
