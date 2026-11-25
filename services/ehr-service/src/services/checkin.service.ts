@@ -62,7 +62,10 @@ export class CheckinService {
     }
 
     const [patient] = await tenantDb.query(
-      `SELECT id, first_name, last_name, mrn, date_of_birth, gender FROM patients WHERE id = $1`,
+      // R1/FX-001 (P-001): `mrn` is a JS-only entity getter, not a physical
+      // column — the bundle column is patient_number (same alias pattern as
+      // getTodaysQueue below).
+      `SELECT id, first_name, last_name, patient_number AS mrn, date_of_birth, gender FROM patients WHERE id = $1`,
       [tokenRow.patient_id],
     );
 
