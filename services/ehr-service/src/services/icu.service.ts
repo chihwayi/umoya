@@ -38,7 +38,7 @@ export class IcuService {
 
   async getCensus(db: any, icuType?: string): Promise<any[]> {
     return db.query(
-      `SELECT ia.id, ia.icu_type, ia.bed_code, ia.admission_at, ia.los_days, ia.isolation_required,
+      `SELECT ia.id, ia.patient_id, ia.icu_type, ia.bed_code, ia.admission_at, ia.los_days, ia.isolation_required,
               ia.ventilator_required, ia.status,
               p.first_name, p.last_name, p.date_of_birth,
               COALESCE(latest_sofa.sofa_total, 0) AS latest_sofa,

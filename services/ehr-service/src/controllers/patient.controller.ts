@@ -9,6 +9,7 @@ import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { ProactiveAiService } from '../services/proactive-ai.service';
 import { PatientIntelligenceService } from '../services/patient-intelligence.service';
+import { PatientAccessService, Accessor } from '../services/patient-access.service';
 
 @ApiTags('Patient Management')
 @ApiBearerAuth()
@@ -21,7 +22,20 @@ export class PatientController {
     private patientService: PatientService,
     private proactiveAiService: ProactiveAiService,
     private patientIntelligenceService: PatientIntelligenceService,
+    private patientAccess: PatientAccessService,
   ) {}
+
+  // R2 / FX-011: every patient-returning handler below derives the caller
+  // from the verified JWT (never a client-supplied id) and enforces the
+  // single authorization layer before touching patient data.
+  private accessorOf(req: any): Accessor {
+    const u = req?.user ?? {};
+    return {
+      userId: u.sub || u.id || u.userId,
+      role: u.role,
+      facilityId: u.facilityId ?? u.facility_id ?? null,
+    };
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get all patients' })
@@ -29,7 +43,11 @@ export class PatientController {
   async getAllPatients(@Request() req: RequestWithTenant, @Query('page') page: string = '1', @Query('limit') limit: string = '20') {
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 20;
-    return this.patientService.getAllPatients(req.tenantDb, pageNum, limitNum);
+    const result = await this.patientService.getAllPatients(req.tenantDb, pageNum, limitNum);
+    const ids = await this.patientAccess.filterAccessiblePatientIds(
+      req.tenantDb, this.accessorOf(req), result.patients.map((r) => r.id),
+    );
+    return { ...result, patients: result.patients.filter((r) => ids.includes(r.id)) };
   }
 
   // Generous enough for legitimate search-as-you-type (staff commonly fire
@@ -41,7 +59,11 @@ export class PatientController {
   @ApiQuery({ name: 'q', required: true, type: String })
   @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
   async searchPatients(@Query('q') query: string, @Request() req: RequestWithTenant) {
-    return this.patientService.searchPatients(query, req.tenantDb);
+    const rows: any[] = await this.patientService.searchPatients(query, req.tenantDb);
+    const ids = await this.patientAccess.filterAccessiblePatientIds(
+      req.tenantDb, this.accessorOf(req), rows.map((r) => r.id ?? r.patient_id),
+    );
+    return rows.filter((r) => ids.includes(r.id ?? r.patient_id));
   }
 
   @Throttle({ default: { ttl: 60000, limit: 90 } })
@@ -83,7 +105,11 @@ export class PatientController {
     if (page) filters.page = parseInt(page, 10);
     if (limit) filters.limit = parseInt(limit, 10);
 
-    return this.patientService.advancedSearch(filters, req!.tenantDb);
+    const result = await this.patientService.advancedSearch(filters, req!.tenantDb);
+    const ids = await this.patientAccess.filterAccessiblePatientIds(
+      req!.tenantDb, this.accessorOf(req), result.patients.map((r: any) => r.id ?? r.patient_id),
+    );
+    return { ...result, patients: result.patients.filter((r: any) => ids.includes(r.id ?? r.patient_id)) };
   }
 
   @Get('stats')
@@ -95,6 +121,7 @@ export class PatientController {
   @ApiOperation({ summary: 'Get unified reusable patient context across modules' })
   @ApiResponse({ status: 200, description: 'Patient context retrieved successfully' })
   async getPatientContext(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    await this.patientAccess.assertCanAccess(req.tenantDb, this.accessorOf(req), id, 'chart-read');
     const context: any = await this.patientService.getPatientContext(id, req.tenantDb);
 
     const tenantId = req.tenantId;
@@ -128,6 +155,7 @@ export class PatientController {
   @ApiOperation({ summary: 'Get unified patient intelligence workspace payload' })
   @ApiResponse({ status: 200, description: 'Patient intelligence retrieved successfully' })
   async getPatientIntelligence(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    await this.patientAccess.assertCanAccess(req.tenantDb, this.accessorOf(req), id, 'chart-read');
     const tenantId = req.tenantId;
     const actorUserId = (req as any).user?.userId ?? (req as any).user?.id ?? null;
 
@@ -143,14 +171,18 @@ export class PatientController {
   @ApiOperation({ summary: 'Get patient by MRN' })
   @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
   async getPatientByMRN(@Param('mrn') mrn: string, @Request() req: RequestWithTenant) {
-    return this.patientService.getPatientByMRN(mrn, req.tenantDb);
+    const row: any = await this.patientService.getPatientByMRN(mrn, req.tenantDb);
+    if (row?.id) {
+      await this.patientAccess.assertCanAccess(req.tenantDb, this.accessorOf(req), row.id, 'chart-read');
+    }
+    return row;
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get patient by ID' })
   @ApiResponse({ status: 200, description: 'Patient retrieved successfully' })
   async getPatientById(@Param('id') id: string, @Request() req: RequestWithTenant) {
-    return this.patientService.getPatientById(id, req.tenantDb);
+    return this.patientService.getPatientById(id, req.tenantDb, this.accessorOf(req));
   }
 
   @Post()
@@ -174,6 +206,7 @@ export class PatientController {
     @Body() updatePatientDto: UpdatePatientDto,
     @Request() req: RequestWithTenant
   ) {
+    await this.patientAccess.assertCanAccess(req.tenantDb, this.accessorOf(req), id, 'chart-write');
     return this.patientService.updatePatient(id, updatePatientDto, req.tenantDb);
   }
 
@@ -201,6 +234,7 @@ export class PatientController {
   @ApiOperation({ summary: 'Deactivate patient' })
   @ApiResponse({ status: 200, description: 'Patient deactivated successfully' })
   async deactivatePatient(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    await this.patientAccess.assertCanAccess(req.tenantDb, this.accessorOf(req), id, 'chart-write');
     return this.patientService.deactivatePatient(id, req.tenantDb);
   }
 
@@ -210,6 +244,7 @@ export class PatientController {
   @ApiOperation({ summary: 'Get SDOH assessments for a patient' })
   @ApiResponse({ status: 200, description: 'SDOH assessments retrieved successfully' })
   async getPatientSdoh(@Param('id') id: string, @Request() req: RequestWithTenant) {
+    await this.patientAccess.assertCanAccess(req.tenantDb, this.accessorOf(req), id, 'chart-read');
     return this.patientService.getPatientSdoh(id, req.tenantDb);
   }
 
@@ -222,6 +257,24 @@ export class PatientController {
     @Request() req: RequestWithTenant
   ) {
     const userId = (req as any).user?.sub;
+    await this.patientAccess.assertCanAccess(req.tenantDb, this.accessorOf(req), id, 'chart-write');
     return this.patientService.createPatientSdoh(id, body, userId, req.tenantDb);
+  }
+
+  @Post(':id/break-glass')
+  @ApiOperation({ summary: 'Request time-boxed break-glass access to a patient (reason required, audited)' })
+  @ApiResponse({ status: 201, description: 'Break-glass grant created' })
+  async requestBreakGlass(
+    @Param('id') id: string,
+    @Body() body: { reason: string; minutes?: number },
+    @Request() req: RequestWithTenant,
+  ) {
+    const acc = this.accessorOf(req);
+    return this.patientAccess.grantBreakGlass(req.tenantDb, {
+      userId: acc.userId,
+      patientId: id,
+      reason: body?.reason,
+      minutes: body?.minutes ?? 60,
+    });
   }
 }

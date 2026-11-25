@@ -12,6 +12,7 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { AmbientService } from '../services/ambient.service';
 import { TenantService } from '../services/tenant.service';
+import { PatientAccessService } from '../services/patient-access.service';
 import { CdssDecisionLogService } from '../services/cdss-decision-log.service';
 import { authenticateSocket, getWsUser } from './ws-auth.util';
 
@@ -50,6 +51,7 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @Optional() private readonly ambientService?: AmbientService,
     @Optional() private readonly tenantService?: TenantService,
     @Optional() private readonly decisionLogService?: CdssDecisionLogService,
+    @Optional() private readonly patientAccess?: PatientAccessService,
   ) {}
 
   handleConnection(client: Socket) {
@@ -81,6 +83,21 @@ export class AmbientGateway implements OnGatewayConnection, OnGatewayDisconnect 
     try {
       const db = await this.tenantService.getTenantDatabase(user.tenantId);
       if (!db) { client.emit('ambient:error', { message: 'Tenant not found' }); return; }
+
+      // R2 / FX-011: ambient sessions transcribe a patient's visit and can
+      // record diagnoses/orders — the starting provider needs a relationship.
+      if (!this.patientAccess) { client.emit('ambient:error', { message: 'Forbidden' }); return; }
+      try {
+        await this.patientAccess.assertCanAccess(
+          db,
+          { userId: user.id, role: user.role, facilityId: null },
+          payload.patientId,
+          'ambient-start',
+        );
+      } catch {
+        client.emit('ambient:error', { message: 'Forbidden' });
+        return;
+      }
 
       const session = await this.ambientService.startSession(
         { patientId: payload.patientId, providerId: payload.providerId, appointmentId: payload.appointmentId },

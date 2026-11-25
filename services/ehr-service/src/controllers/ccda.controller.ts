@@ -3,13 +3,28 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam }
 import { CcdaService, CcdaDocumentOptions } from '../services/ccda.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RequestWithTenant } from '../middleware/tenant.middleware';
+import { PatientAccessService, Accessor } from '../services/patient-access.service';
 
 @ApiTags('CCDA Documents')
 @ApiBearerAuth()
 @Controller('ccda')
 @UseGuards(JwtAuthGuard)
 export class CcdaController {
-  constructor(private readonly ccdaService: CcdaService) {}
+  constructor(
+    private readonly ccdaService: CcdaService,
+    private readonly patientAccess: PatientAccessService,
+  ) {}
+
+  // R2 / FX-011: CCDA documents aggregate the chart — relationship required.
+  private assertChartAccess(req: RequestWithTenant | undefined, patientId: string): Promise<void> {
+    const u = (req as any)?.user ?? {};
+    const accessor: Accessor = {
+      userId: u.sub || u.id || u.userId,
+      role: u.role,
+      facilityId: u.facilityId ?? null,
+    };
+    return this.patientAccess.assertCanAccess((req as any).tenantDb, accessor, patientId, 'export');
+  }
 
   @Get('ccd/:patientId')
   @ApiOperation({ summary: 'Generate Continuity of Care Document (CCD)' })
@@ -30,6 +45,7 @@ export class CcdaController {
       effectiveTime: effectiveTime ? new Date(effectiveTime) : undefined,
       authorId: authorId || (req?.user as any)?.id || (req?.user as any)?.userId,
     };
+    await this.assertChartAccess(req, patientId);
     return this.ccdaService.generateCCD(options, req.tenantDb);
   }
 
@@ -55,6 +71,7 @@ export class CcdaController {
       effectiveTime: effectiveTime ? new Date(effectiveTime) : undefined,
       authorId: authorId || (req?.user as any)?.id || (req?.user as any)?.userId,
     };
+    await this.assertChartAccess(req, patientId);
     return this.ccdaService.generateDischargeSummary(options, req.tenantDb);
   }
 
@@ -77,6 +94,7 @@ export class CcdaController {
       effectiveTime: effectiveTime ? new Date(effectiveTime) : undefined,
       authorId: authorId || (req?.user as any)?.id || (req?.user as any)?.userId,
     };
+    await this.assertChartAccess(req, patientId);
     return this.ccdaService.generateReferralSummary(options, req.tenantDb);
   }
 
@@ -102,6 +120,7 @@ export class CcdaController {
       effectiveTime: effectiveTime ? new Date(effectiveTime) : undefined,
       authorId: authorId || (req?.user as any)?.id || (req?.user as any)?.userId,
     };
+    await this.assertChartAccess(req, patientId);
     return this.ccdaService.generateProgressNote(options, req.tenantDb);
   }
 }

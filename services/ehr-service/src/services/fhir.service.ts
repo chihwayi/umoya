@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Optional } from '@nestjs/common';
 import { TenantService } from './tenant.service';
+import { PatientAccessService, Accessor } from './patient-access.service';
 import { DataSource } from 'typeorm';
 import { firstReturningRow } from '../utils/returning-row';
 import { Patient } from '../entities/patient.entity';
@@ -47,9 +48,24 @@ export class FhirService {
   constructor(
     private readonly fhirValidator?: FhirValidatorService,
     @Optional() private readonly tenantService?: TenantService,
+    @Optional() private readonly patientAccess?: PatientAccessService,
   ) {}
+
+  private requireAccess(): PatientAccessService {
+    if (!this.patientAccess) {
+      throw new ForbiddenException('Authorization layer unavailable — denying access');
+    }
+    return this.patientAccess;
+  }
   
-  async getResourceHistory(resourceType: string, id: string, tenantDb: DataSource) {
+  async getResourceHistory(resourceType: string, id: string, tenantDb: DataSource, accessor?: Accessor) {
+    // R2 / FX-011: Patient history is patient data — gate it. Other resource
+    // types are out of R2 scope (noted as residual); their patient linkage
+    // is gated at the Patient endpoints that R2 covers.
+    if (resourceType === 'Patient') {
+      if (!accessor) throw new ForbiddenException('Authorization layer unavailable — denying access');
+      await this.requireAccess().assertCanAccess(tenantDb, accessor, id, 'chart-read');
+    }
     // Basic implementation: return current version only as history is not fully tracked yet
     // In a real implementation, this would query an audit/history table
     const repo = this.getRepositoryForResourceType(resourceType, tenantDb);
@@ -193,7 +209,9 @@ export class FhirService {
     };
   }
 
-  async searchPatients(query: any, tenantDb: DataSource, tenantId: string) {
+  async searchPatients(query: any, tenantDb: DataSource, tenantId: string, accessor: Accessor) {
+    // R2 / FX-011: FHIR patient search returns only accessible patients.
+    // The layer is required (no optional path) — callers cannot forget it.
     try {
       console.log('🔍 searchPatients called with query:', JSON.stringify(query));
       const patientRepository = tenantDb.getRepository(Patient);
@@ -284,10 +302,19 @@ export class FhirService {
 
       // Get total count for pagination
       console.log('🔍 [FHIR] Executing count query...');
-      const total = await queryBuilder.getCount();
-      console.log(`📊 [FHIR] Found ${total} patients`);
+      const rawTotal = await queryBuilder.getCount();
+      console.log(`📊 [FHIR] Found ${rawTotal} patients`);
       console.log('🔍 [FHIR] Executing getMany query...');
-      const patients = await queryBuilder.getMany();
+      const allPatients = await queryBuilder.getMany();
+      // R2 / FX-011: filter to accessible patients; the reported total is
+      // the accessible count (no count oracle for strangers).
+      const allowedIds = await this.requireAccess().filterAccessiblePatientIds(
+        tenantDb,
+        accessor,
+        allPatients.map((p) => p.id),
+      );
+      const patients = allPatients.filter((p) => allowedIds.includes(p.id));
+      const total = patients.length;
       console.log(`📋 [FHIR] Retrieved ${patients.length} patients for mapping`);
       console.log('🔍 [FHIR] First patient sample:', patients[0] ? {
         id: patients[0].id,
@@ -381,7 +408,9 @@ export class FhirService {
     }
   }
 
-  async getPatient(id: string, tenantDb: DataSource, tenantId: string) {
+  async getPatient(id: string, tenantDb: DataSource, tenantId: string, accessor: Accessor) {
+    // R2 / FX-011: check BEFORE any patient query (zero-query-before-check).
+    await this.requireAccess().assertCanAccess(tenantDb, accessor, id, 'chart-read');
     const patientRepository = tenantDb.getRepository(Patient);
     const patient = await patientRepository.findOne({ where: { id, isActive: true } });
     
@@ -396,7 +425,9 @@ export class FhirService {
    * Patient $everything operation
    * Returns all resources related to a patient
    */
-  async getPatientEverything(patientId: string, tenantDb: DataSource, tenantId: string) {
+  async getPatientEverything(patientId: string, tenantDb: DataSource, tenantId: string, accessor: Accessor) {
+    // R2 / FX-011: $everything aggregates the whole chart — check first.
+    await this.requireAccess().assertCanAccess(tenantDb, accessor, patientId, 'chart-read');
     const patientRepository = tenantDb.getRepository(Patient);
     const patient = await patientRepository.findOne({ where: { id: patientId, isActive: true } });
     
@@ -4011,7 +4042,7 @@ export class FhirService {
    * Process FHIR Batch operation
    * Processes entries independently - continues on errors
    */
-  async processBatch(bundle: any, tenantDb: DataSource, tenantId: string): Promise<any> {
+  async processBatch(bundle: any, tenantDb: DataSource, tenantId: string, accessor: Accessor): Promise<any> {
     if (bundle.resourceType !== 'Bundle' || bundle.type !== 'batch') {
       throw new BadRequestException(
         OperationOutcomeUtil.badRequest('Bundle must be of type "batch"')
@@ -4023,7 +4054,7 @@ export class FhirService {
 
     for (const entry of entries) {
       try {
-        const result = await this.processBundleEntry(entry, tenantDb, tenantId);
+        const result = await this.processBundleEntry(entry, tenantDb, tenantId, accessor);
         results.push({
           response: {
             status: result.status || '200',
@@ -4057,7 +4088,7 @@ export class FhirService {
    * Process FHIR Transaction operation
    * Processes entries atomically - rolls back on any error
    */
-  async processTransaction(bundle: any, tenantDb: DataSource, tenantId: string): Promise<any> {
+  async processTransaction(bundle: any, tenantDb: DataSource, tenantId: string, accessor: Accessor): Promise<any> {
     if (bundle.resourceType !== 'Bundle' || bundle.type !== 'transaction') {
       throw new BadRequestException(
         OperationOutcomeUtil.badRequest('Bundle must be of type "transaction"')
@@ -4073,7 +4104,7 @@ export class FhirService {
 
     try {
       for (const entry of entries) {
-        const result = await this.processBundleEntry(entry, tenantDb, tenantId, queryRunner);
+        const result = await this.processBundleEntry(entry, tenantDb, tenantId, accessor, queryRunner);
         results.push({
           response: {
             status: result.status || '200',
@@ -4111,6 +4142,7 @@ export class FhirService {
     entry: any,
     tenantDb: DataSource,
     tenantId: string,
+    accessor: Accessor,
     queryRunner?: any
   ): Promise<{ status: string; location?: string; resource?: any }> {
     const request = entry.request;
@@ -4129,7 +4161,7 @@ export class FhirService {
 
     switch (method.toUpperCase()) {
       case 'GET':
-        return await this.handleGetRequest(resourceType, resourceId, tenantDb, tenantId);
+        return await this.handleGetRequest(resourceType, resourceId, tenantDb, tenantId, accessor);
       
       case 'POST':
         if (!resource) {
@@ -4141,11 +4173,20 @@ export class FhirService {
         if (!resource || !resourceId) {
           throw new BadRequestException(OperationOutcomeUtil.badRequest('PUT requires resource and ID'));
         }
+        // R2 / FX-011: overwriting an existing Patient record needs a
+        // relationship; creates (POST without id) remain registration.
+        if (resourceType === 'Patient') {
+          await this.requireAccess().assertCanAccess(tenantDb, accessor, resourceId, 'chart-write');
+        }
         return await this.handlePutRequest(resourceType, resourceId, resource, tenantDb, tenantId);
-      
+
       case 'DELETE':
         if (!resourceId) {
           throw new BadRequestException(OperationOutcomeUtil.badRequest('DELETE requires an ID'));
+        }
+        // R2 / FX-011: deleting a Patient record needs a relationship.
+        if (resourceType === 'Patient') {
+          await this.requireAccess().assertCanAccess(tenantDb, accessor, resourceId, 'chart-write');
         }
         return await this.handleDeleteRequest(resourceType, resourceId, tenantDb);
       
@@ -4160,12 +4201,13 @@ export class FhirService {
     resourceType: string,
     resourceId: string | null,
     tenantDb: DataSource,
-    tenantId: string
+    tenantId: string,
+    accessor: Accessor
   ): Promise<{ status: string; location?: string; resource?: any }> {
     // Handle search requests (no ID)
     if (!resourceId) {
       const searchMethods: Record<string, (query: any, db: DataSource, tid: string) => Promise<any>> = {
-        Patient: (q, db, tid) => this.searchPatients(q, db, tid),
+        Patient: (q, db, tid) => this.searchPatients(q, db, tid, accessor),
         Observation: (q, db, tid) => this.searchObservations(q, db, tid),
         Encounter: (q, db, tid) => this.searchEncounters(q, db, tid),
         Condition: (q, db, tid) => this.searchConditions(q, db, tid),
@@ -4185,7 +4227,7 @@ export class FhirService {
 
     // Handle get by ID
     const getMethods: Record<string, (id: string, db: DataSource, tid: string) => Promise<any>> = {
-      Patient: (id, db, tid) => this.getPatient(id, db, tid),
+      Patient: (id, db, tid) => this.getPatient(id, db, tid, accessor),
       Observation: (id, db, tid) => this.getObservation(id, db, tid),
       Encounter: (id, db, tid) => this.getEncounter(id, db, tid),
       Condition: (id, db, tid) => this.getCondition(id, db, tid),

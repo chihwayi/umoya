@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Headers, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { FhirService } from '../services/fhir.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { TenantService } from '../services/tenant.service';
+import { PatientAccessService, Accessor } from '../services/patient-access.service';
 import { DataSource } from 'typeorm';
 
 @ApiTags('FHIR R4 Compliance')
@@ -13,8 +14,19 @@ import { DataSource } from 'typeorm';
 export class FhirController {
   constructor(
     private fhirService: FhirService,
-    private tenantService: TenantService
+    private tenantService: TenantService,
+    private patientAccess: PatientAccessService
   ) {}
+
+  // R2 / FX-011: caller identity comes from the verified JWT only.
+  private accessorOf(req: any): Accessor {
+    const u = req?.user ?? {};
+    return {
+      userId: u.sub || u.id || u.userId,
+      role: u.role,
+      facilityId: u.facilityId ?? u.facility_id ?? null,
+    };
+  }
 
   @Get('metadata')
   @ApiOperation({ summary: 'Get FHIR capability statement' })
@@ -28,7 +40,8 @@ export class FhirController {
   @ApiResponse({ status: 200, description: 'FHIR batch response bundle' })
   async processBatch(
     @Body() bundle: any,
-    @Headers('x-tenant-id') tenantId: string
+    @Headers('x-tenant-id') tenantId: string,
+    @Req() req: any
   ) {
     if (!tenantId) {
       throw new Error('Tenant ID is required in X-Tenant-ID header');
@@ -37,7 +50,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.processBatch(bundle, tenantDb, tenantId);
+    return this.fhirService.processBatch(bundle, tenantDb, tenantId, this.accessorOf(req));
   }
 
   @Post('\\$transaction')
@@ -45,7 +58,8 @@ export class FhirController {
   @ApiResponse({ status: 200, description: 'FHIR transaction response bundle' })
   async processTransaction(
     @Body() bundle: any,
-    @Headers('x-tenant-id') tenantId: string
+    @Headers('x-tenant-id') tenantId: string,
+    @Req() req: any
   ) {
     if (!tenantId) {
       throw new Error('Tenant ID is required in X-Tenant-ID header');
@@ -54,7 +68,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.processTransaction(bundle, tenantDb, tenantId);
+    return this.fhirService.processTransaction(bundle, tenantDb, tenantId, this.accessorOf(req));
   }
 
   @Get('Patient')
@@ -62,7 +76,8 @@ export class FhirController {
   @ApiResponse({ status: 200, description: 'FHIR patient bundle' })
   async searchPatients(
     @Query() query: any,
-    @Headers('x-tenant-id') tenantId: string
+    @Headers('x-tenant-id') tenantId: string,
+    @Req() req: any
   ) {
     console.log('🎯 [FHIR Controller] searchPatients called');
     console.log('🎯 [FHIR Controller] Query:', JSON.stringify(query));
@@ -81,7 +96,7 @@ export class FhirController {
     
     try {
       console.log('🎯 [FHIR Controller] Calling fhirService.searchPatients...');
-      const result = await this.fhirService.searchPatients(query, tenantDb, tenantId);
+      const result = await this.fhirService.searchPatients(query, tenantDb, tenantId, this.accessorOf(req));
       console.log('🎯 [FHIR Controller] Service returned, result type:', typeof result);
       console.log('🎯 [FHIR Controller] Result has entries:', result?.entry?.length || 0);
       return result;
@@ -100,7 +115,8 @@ export class FhirController {
   async getPatient(
     @Param('id') id: string,
     @Query('_everything') everything: string,
-    @Headers('x-tenant-id') tenantId: string
+    @Headers('x-tenant-id') tenantId: string,
+    @Req() req: any
   ) {
     if (!tenantId) {
       throw new Error('Tenant ID is required in X-Tenant-ID header');
@@ -113,10 +129,10 @@ export class FhirController {
     // Handle $everything operation via query parameter
     if (everything !== undefined || id.includes('everything')) {
       const patientId = id.replace('/everything', '').replace('everything', '');
-      return this.fhirService.getPatientEverything(patientId || id, tenantDb, tenantId);
+      return this.fhirService.getPatientEverything(patientId || id, tenantDb, tenantId, this.accessorOf(req));
     }
-    
-    return this.fhirService.getPatient(id, tenantDb, tenantId);
+
+    return this.fhirService.getPatient(id, tenantDb, tenantId, this.accessorOf(req));
   }
 
   @Get(['Patient/:id/\\$everything', 'Patient/:id/everything'])
@@ -124,7 +140,8 @@ export class FhirController {
   @ApiResponse({ status: 200, description: 'FHIR bundle containing all patient resources' })
   async getPatientEverythingRoute(
     @Param('id') id: string,
-    @Headers('x-tenant-id') tenantId: string
+    @Headers('x-tenant-id') tenantId: string,
+    @Req() req: any
   ) {
     if (!tenantId) {
       throw new Error('Tenant ID is required in X-Tenant-ID header');
@@ -133,7 +150,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.getPatientEverything(id, tenantDb, tenantId);
+    return this.fhirService.getPatientEverything(id, tenantDb, tenantId, this.accessorOf(req));
   }
 
   @Post('Patient')
@@ -1321,7 +1338,8 @@ export class FhirController {
   async getResourceHistory(
     @Param('resourceType') resourceType: string,
     @Param('id') id: string,
-    @Headers('x-tenant-id') tenantId: string
+    @Headers('x-tenant-id') tenantId: string,
+    @Req() req: any
   ) {
     if (!tenantId) {
       throw new Error('Tenant ID is required in X-Tenant-ID header');
@@ -1330,7 +1348,7 @@ export class FhirController {
     if (!tenantDb) {
       throw new Error(`Invalid tenant: ${tenantId}`);
     }
-    return this.fhirService.getResourceHistory(resourceType, id, tenantDb);
+    return this.fhirService.getResourceHistory(resourceType, id, tenantDb, this.accessorOf(req));
   }
 
   @Post('\\$validate')

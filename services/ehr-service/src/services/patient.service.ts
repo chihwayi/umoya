@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, Logger, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, Logger, Optional } from '@nestjs/common';
 import { randomInt } from 'crypto';
 import { DataSource } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
@@ -6,6 +6,7 @@ import { PatientSdoh } from '../entities/patient-sdoh.entity';
 import { CreatePatientDto, UpdatePatientDto } from '../dto/patient.dto';
 import { MedicalNlpService } from './medical-nlp.service';
 import { HipaaAuditService, HipaaAuditAction } from './hipaa-audit.service';
+import { PatientAccessService, Accessor } from './patient-access.service';
 
 export interface DuplicateCandidate {
   id: string;
@@ -74,6 +75,7 @@ export class PatientService {
   constructor(
     @Optional() private readonly medicalNlpService?: MedicalNlpService,
     @Optional() private readonly hipaaAuditService?: HipaaAuditService,
+    @Optional() private readonly patientAccess?: PatientAccessService,
   ) {}
 
   private isMissingRelationError(error: any): boolean {
@@ -139,7 +141,17 @@ export class PatientService {
     };
   }
 
-  async getPatientById(id: string, tenantDb: DataSource): Promise<Patient> {
+  async getPatientById(id: string, tenantDb: DataSource, accessor?: Accessor): Promise<Patient> {
+    // R2 / FX-011: the single authorization layer applies to getPatientById.
+    // External entry points MUST pass the caller; internal service-to-service
+    // calls (already inside an authorized request) omit it and rely on
+    // entry-point enforcement — see each controller handler.
+    if (accessor) {
+      if (!this.patientAccess) {
+        throw new ForbiddenException('Authorization layer unavailable — denying access');
+      }
+      await this.patientAccess.assertCanAccess(tenantDb, accessor, id, 'chart-read');
+    }
     const patientRepository = tenantDb.getRepository(Patient);
     const patient = await patientRepository.findOne({ 
       where: { id, isActive: true } 

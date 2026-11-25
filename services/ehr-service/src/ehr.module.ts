@@ -222,6 +222,7 @@ import { CsatController } from './controllers/csat.controller';
 import { WardRoundService } from './services/ward-round.service';
 import { WardRoundController } from './controllers/ward-round.controller';
 import { HouseholdRiskService } from './services/household-risk.service';
+import { PatientAccessService } from './services/patient-access.service';
 import { HouseholdRiskController } from './controllers/household-risk.controller';
 import { DigitalConsentService } from './services/digital-consent.service';
 import { DigitalConsentController } from './controllers/digital-consent.controller';
@@ -1239,6 +1240,7 @@ if (!jwtSecret || jwtSecret.trim().length === 0) {
     CsatService,
     WardRoundService,
     HouseholdRiskService,
+    PatientAccessService,
     DigitalConsentService,
     CrossFacilityStockService,
     WebAuthnService,

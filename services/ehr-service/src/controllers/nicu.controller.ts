@@ -1,11 +1,15 @@
 import { Controller, Get, Post, Patch, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { NicuService } from '../services/nicu.service';
+import { PatientAccessService } from '../services/patient-access.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('nicu')
 export class NicuController {
-  constructor(private readonly nicu: NicuService) {}
+  constructor(
+    private readonly nicu: NicuService,
+    private readonly patientAccess: PatientAccessService,
+  ) {}
 
   // ── Admissions ────────────────────────────────────────────────────────────
 
@@ -16,7 +20,19 @@ export class NicuController {
 
   @Get('census')
   getCensus(@Req() req: any) {
-    return this.nicu.getCensus(req.tenantDb);
+    return this.filterCensus(req);
+  }
+
+  // R2 / FX-011: census rows carry names — strangers see none.
+  private async filterCensus(req: any) {
+    const rows: any[] = await this.nicu.getCensus(req.tenantDb);
+    const u = req?.user ?? {};
+    const ids = await this.patientAccess.filterAccessiblePatientIds(
+      req.tenantDb,
+      { userId: u.sub || u.id || u.userId, role: u.role, facilityId: u.facilityId ?? null },
+      rows.map((r) => r.patient_id),
+    );
+    return rows.filter((r) => ids.includes(r.patient_id));
   }
 
   @Get('admissions/:id')
