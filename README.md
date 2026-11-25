@@ -452,6 +452,14 @@ A cross-practice, specialty-organized peer-discussion platform for doctors — p
 
 ---
 
+## Adversarial Audit & Remediation (in progress)
+
+An independent, adversarial claims-vs-reality audit was run against every brochure claim and WHO SMART Guidelines DAK conformance claim this product makes — treating "everything passes" as a failure outcome unless backed by executed evidence, not a code read. Full methodology, the 51-claim ledger, 106 findings (13 at S0), and the executive summary are in [`./audit/`](./audit/EXECUTIVE_SUMMARY.md). Headline result: **0 of 51 claims verified as stated** (21 broken, 17 partial, the rest misleading/absent/stub); real-patient pilot is a hard **NO-GO** until the S0 set — including a BCMA five-rights check that never actually checked anything, a patient-record authorization gap, and a research de-identification chain that was practically reversible — is fixed and independently re-verified.
+
+Remediation is being executed as a sequence of test-first fix sprints (red test → fix → green test → regression suite, per finding) rather than a single pass, ending in a full re-audit using the same methodology so the before/after numbers are directly comparable. Plan: [`docs/REMEDIATION-SPRINT-BRIEFS.md`](./docs/REMEDIATION-SPRINT-BRIEFS.md).
+
+---
+
 ## Quick Start
 
 **1. Configure environment**
@@ -548,8 +556,9 @@ cd mobile && npm run test:e2e
 | [docs/UMOYA.pdf](./docs/UMOYA.pdf) | Marketing/sales one-pager |
 | [docs/UMOYA_EHR_Master_Assurance_Programme.md](./docs/UMOYA_EHR_Master_Assurance_Programme.md) | Governing audit/testing/gap-analysis framework for ongoing quality assurance |
 | [docs/DRILLDOWN-TESTING-CHECKLIST.md](./docs/DRILLDOWN-TESTING-CHECKLIST.md) | Living end-to-end module × platform × role test log (append-only — never delete completed rows) |
-| [docs/UMOYA_AUDIT_PROMPT.md](./docs/UMOYA_AUDIT_PROMPT.md) | Master adversarial claims-vs-reality audit spec — brochure claims ledger, 14 domain audits, E2E scenarios |
-| [docs/AUDIT-SPRINT-BRIEFS.md](./docs/AUDIT-SPRINT-BRIEFS.md) | Delegable sprint briefs (A–F) for running the audit prompt above via Muse Spark |
+| [docs/UMOYA_AUDIT_PROMPT.md](./docs/UMOYA_AUDIT_PROMPT.md) | Master adversarial claims-vs-reality audit spec — reused as-is for the Phase 5 re-audit |
+| [docs/UMOYA_REMEDIATION_PROMPT.md](./docs/UMOYA_REMEDIATION_PROMPT.md) | Master remediation rules of engagement and fix-group (FX-###) definitions |
+| [docs/REMEDIATION-SPRINT-BRIEFS.md](./docs/REMEDIATION-SPRINT-BRIEFS.md) | Delegable remediation sprint plan (R0–R12) executing the fixes via Muse Spark |
 | [DEMO_CREDENTIALS.md](./DEMO_CREDENTIALS.md) | Demo accounts provisioned per tenant |
 | [SMART_TEST_TENANT.md](./SMART_TEST_TENANT.md) | Live client testing access for the two active test tenants |
 | [.env.example](./.env.example) | All required environment variables |
