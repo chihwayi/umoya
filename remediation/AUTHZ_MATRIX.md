@@ -21,3 +21,13 @@ below is an executed assertion, not prose. Regenerate: `npx jest r2-authz-matrix
 | admin | REST GET /patients/:id | stranger | yes | deny | deny  |
 | doctor | REST GET /patients/:id | care-team | yes | allow | allow  |
 | admin | REST GET /patients/:id | care-team | yes | allow | allow  |
+| doctor | household propagate (HIV) | no-consent | no | deny | deny  |
+| doctor | household propagate (HIV) | active-consent | no | allow | allow  |
+| doctor | household propagate (HIV) | withdrawn-consent | no | deny | deny  |
+| doctor | household propagate (HIV) | safeguard+consent | no | deny | deny  |
+| receptionist | household family panel | stranger | no | deny | deny  |
+| doctor | household family panel | no-relationship | no | deny | deny  |
+| admin | household alerts (minor patient) | stranger | no | deny | deny  |
+| any-role | SMS send (condition text) | free-text | no | deny | deny  |
+| any-role | SMS send (clean text) | free-text | no | allow | allow  |
+| any-role | offline sync hiv_disclosure_records | n/a | no | deny | deny  |

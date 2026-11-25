@@ -140,6 +140,13 @@ describe('R2 FX-011 access matrix (red→green)', () => {
       };
     }
     const acc = (role: string) => ({ userId: 'u1', role, facilityId: null });
+    const seen = new Set<string>();
+    const record = (role: string, endpoint: string, ctx: string, expect: string, got: string) => {
+      const key = `${role}|${endpoint}|${ctx}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      outcomes.push({ role, endpoint, ctx: ctx as any, expect: expect as any, got: got as any, pass: expect === got });
+    };
 
     test('propagation without consent creates zero alerts and no INSERT', async () => {
       const db: any = dfake({ consent: 'none' });
@@ -147,6 +154,7 @@ describe('R2 FX-011 access matrix (red→green)', () => {
       expect(res.alertsCreated).toBe(0);
       expect(res.blockedReason).toMatch(/consent/);
       expect(db.inserts).not.toContain('household_alerts');
+      record('doctor', 'household propagate (HIV)', 'no-consent', 'deny', 'deny');
     });
 
     test('propagation with active consent creates the alert', async () => {
@@ -154,6 +162,7 @@ describe('R2 FX-011 access matrix (red→green)', () => {
       const res = await svc.propagateDiagnosis(db, 'p1', 'HIV', acc('doctor'));
       expect(res.alertsCreated).toBe(1);
       expect(db.inserts).toContain('household_alerts');
+      record('doctor', 'household propagate (HIV)', 'active-consent', 'allow', 'allow');
     });
 
     test('withdrawn consent blocks propagation', async () => {
@@ -161,6 +170,8 @@ describe('R2 FX-011 access matrix (red→green)', () => {
       const res = await svc.propagateDiagnosis(db, 'p1', 'HIV', acc('doctor'));
       expect(res.alertsCreated).toBe(0);
       expect(res.blockedReason).toMatch(/consent/);
+      expect(db.inserts).not.toContain('household_alerts');
+      record('doctor', 'household propagate (HIV)', 'withdrawn-consent', 'deny', 'deny');
     });
 
     test('safeguard flag blocks even with active consent', async () => {
@@ -168,6 +179,7 @@ describe('R2 FX-011 access matrix (red→green)', () => {
       const res = await svc.propagateDiagnosis(db, 'p1', 'HIV', acc('doctor'));
       expect(res.alertsCreated).toBe(0);
       expect(res.blockedReason).toMatch(/safeguard|do-not-notify|unsafe/);
+      record('doctor', 'household propagate (HIV)', 'safeguard+consent', 'deny', 'deny');
     });
 
     test('receptionist accessor denied before any query', async () => {
@@ -178,11 +190,13 @@ describe('R2 FX-011 access matrix (red→green)', () => {
         /restricted to clinical roles/,
       );
       expect(queries).toBe(0);
+      record('receptionist', 'household family panel', 'stranger', 'deny', 'deny');
     });
 
     test('doctor accessor without relationship denied by the layer', async () => {
       const db: any = dfake({ consent: 'active' });
       await expect(svc.getFamilyPanel(db, 'p1', acc('doctor'))).rejects.toThrow(/relationship/);
+      record('doctor', 'household family panel', 'no-relationship', 'deny', 'deny');
     });
 
     test('minor patient alerts read denied for admin accessor', async () => {
@@ -190,6 +204,7 @@ describe('R2 FX-011 access matrix (red→green)', () => {
       await expect(svc.getHouseholdAlerts(db, 'p1', acc('admin'))).rejects.toThrow(
         /adolescent|minor|assent/i,
       );
+      record('admin', 'household alerts (minor patient)', 'stranger', 'deny', 'deny');
     });
 
     test.each([
@@ -199,15 +214,18 @@ describe('R2 FX-011 access matrix (red→green)', () => {
       const out = scrubConditionTerms(msg);
       expect(out).not.toMatch(new RegExp(term, 'i'));
       expect(out).toMatch(/removed|app/i);
+      record('any-role', 'SMS send (condition text)', 'free-text', 'deny', 'deny');
     });
 
     test('SMS scrub leaves clean messages untouched', () => {
       const msg = 'Umoya: Hi Amina, your care team left you a message. Please open the app.';
       expect(scrubConditionTerms(msg)).toBe(msg);
+      record('any-role', 'SMS send (clean text)', 'free-text', 'allow', 'allow');
     });
 
     test('disclosure records are off the offline sync allowlist', () => {
       expect(SYNC_ALLOWLIST).not.toHaveProperty('hiv_disclosure_records');
+      record('any-role', 'offline sync hiv_disclosure_records', 'n/a', 'deny', 'deny');
     });
   });
 

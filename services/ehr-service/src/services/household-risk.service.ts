@@ -59,7 +59,8 @@ export type PropagationResult = { alertsCreated: number; blockedReason?: string 
  * role-only path, kept for the pinned R1 behavior) or an Accessor (full
  * model: role gate + relationship + consent + age). HTTP handlers MUST pass
  * an Accessor; the string path exists only for pre-R2 in-process callers. */
-function roleOf(caller: string | Accessor): string | undefined {
+function roleOf(caller: string | Accessor | undefined | null): string | undefined {
+  if (caller === undefined || caller === null) return undefined;
   return typeof caller === 'string' ? caller : caller.role;
 }
 
