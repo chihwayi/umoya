@@ -211,6 +211,40 @@ export class DatabaseProvisioningService {
     }));
   }
 
+  /**
+   * R1 / FX-001 (Class D): queryable provisioning health. Diffs the bundle
+   * manifest against the tenant's version stamps — a half-provisioned tenant
+   * (failed statements retried later per the applier loop) shows up here
+   * instead of failing mysteriously at query time.
+   */
+  public async getTenantSchemaHealth(tenantDb: DataSource): Promise<{
+    ok: boolean;
+    appliedCount: number;
+    pendingCount: number;
+    pending: Array<{ id: string; expectedVersion: string; appliedVersion: string | null }>;
+  }> {
+    let rows: Array<{ bundle_id: string; version: string }> = [];
+    try {
+      rows = await tenantDb.query(`SELECT bundle_id, version FROM tenant_schema_versions`);
+    } catch {
+      // Pre-versioning tenant: everything is pending.
+    }
+    const stamped = new Map(rows.map((r) => [r.bundle_id, r.version]));
+    const pending: Array<{ id: string; expectedVersion: string; appliedVersion: string | null }> = [];
+    for (const m of this.getProvisioningBundlesManifest()) {
+      const applied = stamped.get(m.id) ?? null;
+      if (applied !== m.version) {
+        pending.push({ id: m.id, expectedVersion: m.version, appliedVersion: applied });
+      }
+    }
+    return {
+      ok: pending.length === 0,
+      appliedCount: this.getProvisioningBundlesManifest().length - pending.length,
+      pendingCount: pending.length,
+      pending,
+    };
+  }
+
   private normalizeStatements(statements: string[]): string[] {
     return statements.map((s) =>
       s
@@ -12024,6 +12058,12 @@ export class DatabaseProvisioningService {
               errorCount: bundleErrors.length,
               firstError,
             });
+            // R1/FX-001 (Class D): failures were log-level only and invisible
+            // to ops. Error-level so alerting picks up stalled tenants.
+            this.logger.error(
+              `provisioning bundle.apply.failed bundle=${bundle.id} version=${bundle.version} ` +
+                `pass=${pass} errors=${bundleErrors.length} first=${firstError}`,
+            );
             stillPending.push(bundle);
             continue;
           }
