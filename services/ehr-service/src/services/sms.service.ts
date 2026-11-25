@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { scrubConditionTerms } from '../utils/condition-scrub.util';
 
 @Injectable()
 export class SmsService {
@@ -37,6 +38,8 @@ export class SmsService {
   }
 
   async send(to: string | string[], message: string): Promise<void> {
+    // R2 / FX-012: diagnosis/condition content never leaves as readable SMS text.
+    message = scrubConditionTerms(message);
     if (!this.enabled || !this.apiKey) {
       this.logger.log(`[SMS-SKIP] ${message.slice(0, 80)}`);
       return;

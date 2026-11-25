@@ -4,10 +4,13 @@ import { RequestWithTenant } from '../middleware/tenant.middleware';
 import { OfflineSyncService } from '../services/offline-sync.service';
 import { ConflictResolverService } from '../services/conflict-resolver.service';
 
-const ENTITY_TO_TABLE: Record<string, string> = {
+// R2 / FX-012: hiv_disclosure_records REMOVED — disclosure records were
+// syncable offline with no documented justification; the audit found the
+// allowlisting unjustified. (gbv/counsellor rows remain allowlisted; flagged
+// as residual for a follow-up pass — out of R2 scope.)
+export const ENTITY_TO_TABLE: Record<string, string> = {
   hiv_clinical_visits: 'hiv_clinical_visits',
   gbv_assessments: 'gbv_assessments',
-  hiv_disclosure_records: 'hiv_disclosure_records',
   alhiv_transition_assessments: 'alhiv_transition_assessments',
   counsellor_sessions: 'counsellor_sessions',
   vitals: 'vitals',

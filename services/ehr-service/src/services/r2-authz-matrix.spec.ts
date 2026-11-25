@@ -5,6 +5,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { PatientAccessService } from './patient-access.service';
+import { HouseholdRiskService } from './household-risk.service';
+import { scrubConditionTerms } from '../utils/condition-scrub.util';
+import { ENTITY_TO_TABLE as SYNC_ALLOWLIST } from '../controllers/offline-sync.controller';
 
 type Ctx = 'stranger' | 'care-team' | 'appointment' | 'break-glass' | 'expired-break-glass';
 interface Row {
@@ -94,6 +97,118 @@ describe('R2 FX-011 access matrix (red→green)', () => {
     const got = decision.allowed ? 'allow' : 'deny';
     outcomes.push({ ...row, got, pass: got === row.expect });
     expect(got).toBe(row.expect);
+  });
+
+  // ── FX-012 disclosure rows (consent-gated propagation, age-gated reads,
+  // scrubbed payloads, de-allowlisted sync). Shared fake: scenario selects
+  // which queries return rows.
+  describe('FX-012 disclosure consent + age + scrub + sync (red→green)', () => {
+    // Constructed the way ehr.module does (layer injected); the R1 spec's
+    // bare `new HouseholdRiskService()` still denies fail-closed, just with
+    // a different message — covered by the receptionist zero-query test.
+    const svc = new HouseholdRiskService(new PatientAccessService());
+    function dfake(scenario: {
+      consent?: 'active' | 'withdrawn' | 'none';
+      safeguard?: boolean;
+      minor?: boolean;
+    }) {
+      const inserts: string[] = [];
+      return {
+        inserts,
+        query: async (sql: string, _p: any[]) => {
+          if (/INSERT INTO household_alerts/.test(sql)) { inserts.push('household_alerts'); return [{ id: 'al1' }]; }
+          if (/INSERT INTO household_disclosure_consents/.test(sql)) return [{ id: 'dc1' }];
+          if (/FROM household_disclosure_consents/.test(sql)) {
+            // Emulate the SQL predicates (status/withdrawn/expires): a
+            // withdrawn consent matches zero rows in a real database.
+            if (scenario.consent === 'active') return [{ id: 'dc1', status: 'active' }];
+            return [];
+          }
+          if (/do_not_notify/.test(sql)) return scenario.safeguard ? [{ do_not_notify: true }] : [];
+          if (/FROM patients/.test(sql)) {
+            return [{
+              id: 'p1', household_id: 'h1', is_active: true, facility_id: null,
+              vip_flag: false, confidentiality_tier: 'standard',
+              date_of_birth: scenario.minor ? '2015-01-01' : '1990-01-01',
+            }];
+          }
+          if (/FROM users/.test(sql)) return [{ id: 'u1', role: 'x', facility_id: null }];
+          if (/FROM patient_care_team/.test(sql) || /FROM appointments/.test(sql)) return [];
+          if (/FROM break_glass_access_log/.test(sql)) return [];
+          return [];
+        },
+      };
+    }
+    const acc = (role: string) => ({ userId: 'u1', role, facilityId: null });
+
+    test('propagation without consent creates zero alerts and no INSERT', async () => {
+      const db: any = dfake({ consent: 'none' });
+      const res = await svc.propagateDiagnosis(db, 'p1', 'HIV', acc('doctor'));
+      expect(res.alertsCreated).toBe(0);
+      expect(res.blockedReason).toMatch(/consent/);
+      expect(db.inserts).not.toContain('household_alerts');
+    });
+
+    test('propagation with active consent creates the alert', async () => {
+      const db: any = dfake({ consent: 'active' });
+      const res = await svc.propagateDiagnosis(db, 'p1', 'HIV', acc('doctor'));
+      expect(res.alertsCreated).toBe(1);
+      expect(db.inserts).toContain('household_alerts');
+    });
+
+    test('withdrawn consent blocks propagation', async () => {
+      const db: any = dfake({ consent: 'withdrawn' });
+      const res = await svc.propagateDiagnosis(db, 'p1', 'HIV', acc('doctor'));
+      expect(res.alertsCreated).toBe(0);
+      expect(res.blockedReason).toMatch(/consent/);
+    });
+
+    test('safeguard flag blocks even with active consent', async () => {
+      const db: any = dfake({ consent: 'active', safeguard: true });
+      const res = await svc.propagateDiagnosis(db, 'p1', 'HIV', acc('doctor'));
+      expect(res.alertsCreated).toBe(0);
+      expect(res.blockedReason).toMatch(/safeguard|do-not-notify|unsafe/);
+    });
+
+    test('receptionist accessor denied before any query', async () => {
+      const db: any = dfake({ consent: 'active' });
+      let queries = 0;
+      const counting: any = { query: async (...a: any[]) => { queries++; return db.query(...a); } };
+      await expect(svc.getFamilyPanel(counting, 'p1', acc('receptionist'))).rejects.toThrow(
+        /restricted to clinical roles/,
+      );
+      expect(queries).toBe(0);
+    });
+
+    test('doctor accessor without relationship denied by the layer', async () => {
+      const db: any = dfake({ consent: 'active' });
+      await expect(svc.getFamilyPanel(db, 'p1', acc('doctor'))).rejects.toThrow(/relationship/);
+    });
+
+    test('minor patient alerts read denied for admin accessor', async () => {
+      const db: any = dfake({ consent: 'active', minor: true });
+      await expect(svc.getHouseholdAlerts(db, 'p1', acc('admin'))).rejects.toThrow(
+        /adolescent|minor|assent/i,
+      );
+    });
+
+    test.each([
+      ['Umoya: your household contact was diagnosed with HIV, come to clinic', 'HIV'],
+      ['TB screening for household contact of TB patient', 'TB'],
+    ])('SMS scrub removes condition %s', (msg, term) => {
+      const out = scrubConditionTerms(msg);
+      expect(out).not.toMatch(new RegExp(term, 'i'));
+      expect(out).toMatch(/removed|app/i);
+    });
+
+    test('SMS scrub leaves clean messages untouched', () => {
+      const msg = 'Umoya: Hi Amina, your care team left you a message. Please open the app.';
+      expect(scrubConditionTerms(msg)).toBe(msg);
+    });
+
+    test('disclosure records are off the offline sync allowlist', () => {
+      expect(SYNC_ALLOWLIST).not.toHaveProperty('hiv_disclosure_records');
+    });
   });
 
   afterAll(() => {
