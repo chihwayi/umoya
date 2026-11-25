@@ -62,6 +62,18 @@ function validateCriticalSecurityEnv(): void {
       throw new Error('CDSS_SERVICE_JWT_SECRET is using insecure default in non-development environment.');
     }
   }
+
+  // R1/FX-002 (S-004): fail closed on the field-encryption key. The transformer
+  // self-guards at import time; this makes the requirement explicit at boot.
+  const encKey = (process.env.ENCRYPTION_KEY || '').trim();
+  if (!isDevLike) {
+    if (!encKey) {
+      throw new Error('ENCRYPTION_KEY is required in non-development environments (ehr-service refuses to store plaintext).');
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(encKey)) {
+      throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes).');
+    }
+  }
 }
 
 async function bootstrap() {

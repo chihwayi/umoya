@@ -25,14 +25,16 @@ export class Patient {
   @Column()
   gender: string;
 
-  @Column({ name: 'id_number', unique: true, nullable: true, transformer: encryptionTransformer })
+  // R1/FX-002: TEXT — ciphertext (iv:tag:ct hex, 66 overhead chars) never fits
+  // VARCHAR(50); matches bundle r1_fx002_width.
+  @Column({ name: 'id_number', type: 'text', unique: true, nullable: true, transformer: encryptionTransformer })
   nationalId: string;
 
   // ── Contact ───────────────────────────────────────────────────────────────
-  @Column({ nullable: true, transformer: encryptionTransformer })
+  @Column({ type: 'text', nullable: true, transformer: encryptionTransformer })
   phone: string;
 
-  @Column({ nullable: true, transformer: encryptionTransformer })
+  @Column({ type: 'text', nullable: true, transformer: encryptionTransformer })
   email: string;
 
   @Column({ nullable: true })

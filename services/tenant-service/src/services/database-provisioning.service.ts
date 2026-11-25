@@ -8834,6 +8834,21 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        // R1 / FX-002 (S-004): encrypted columns must fit real ciphertext.
+        // AES-256-GCM hex (iv:tag:ct) carries 66 chars of overhead alone, so
+        // VARCHAR(50) rejected every non-empty value. TEXT is the honest type
+        // (max realistic plaintext ~255 chars -> ~576 stored). Idempotent.
+        id: 'r1_fx002_width',
+        label: 'R1 Foundation — Encrypted column width (S-004)',
+        version: '2026.11.25.1',
+        description: 'patients id_number/phone/email VARCHAR -> TEXT for ciphertext',
+        statements: () => [
+          `ALTER TABLE patients ALTER COLUMN id_number TYPE TEXT`,
+          `ALTER TABLE patients ALTER COLUMN phone TYPE TEXT`,
+          `ALTER TABLE patients ALTER COLUMN email TYPE TEXT`,
+        ],
+      },
+      {
         // R1 / FX-001 (P-003 + RES-007-column): ghost tables/columns referenced
         // by raw SQL but created nowhere — two readers (family panel,
         // discharge summary) query `diagnoses` and validateToken selects
