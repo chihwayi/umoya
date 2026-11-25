@@ -10,7 +10,8 @@ export class SyncQueueLog {
   @Column({ name: 'entity_type', type: 'text' }) entityType: string; // vitals|medical_record|prescription|lab_order
   @Column({ name: 'entity_id', type: 'uuid', nullable: true }) entityId: string;
   @Column({ type: 'jsonb' }) payload: Record<string, any>;
-  @Column({ name: 'sync_status', type: 'text', default: 'pending' }) syncStatus: string; // pending|synced|conflict|failed
+  // R1/FX-003: + 'rejected' (terminal — payload will never succeed, do not retry; surfaced to clinician)
+  @Column({ name: 'sync_status', type: 'text', default: 'pending' }) syncStatus: string; // pending|synced|conflict|failed|rejected
   @Column({ name: 'client_timestamp', type: 'timestamptz' }) clientTimestamp: Date;
   @Column({ name: 'server_timestamp', type: 'timestamptz', nullable: true }) serverTimestamp: Date;
   @Column({ name: 'conflict_details', type: 'jsonb', nullable: true }) conflictDetails: Record<string, any>;

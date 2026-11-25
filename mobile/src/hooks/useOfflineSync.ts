@@ -8,6 +8,9 @@ import { useAuthStore } from '../stores/useAuthStore';
 
 interface OfflineSyncState {
   pendingCount: number;
+  /** R1/FX-003: items the server will never accept — shown to the clinician. */
+  terminalCount: number;
+  terminalItems: Array<{ id: string; label: string; terminalError?: string }>;
   isSyncing: boolean;
   refreshCount: () => Promise<void>;
   drainQueue: () => Promise<void>;
@@ -17,12 +20,20 @@ interface OfflineSyncState {
 
 const useOfflineSyncStore = create<OfflineSyncState>((set, get) => ({
   pendingCount: 0,
+  terminalCount: 0,
+  terminalItems: [],
   isSyncing: false,
   setSyncing: (v) => set({ isSyncing: v }),
   setPending: (n) => set({ pendingCount: n }),
   refreshCount: async () => {
-    const n = await OfflineQueue.count();
-    set({ pendingCount: n });
+    const all = await OfflineQueue.loadAll();
+    set({
+      pendingCount: all.filter((i) => !i.terminal).length,
+      terminalCount: all.filter((i) => i.terminal).length,
+      terminalItems: all
+        .filter((i) => i.terminal)
+        .map((i) => ({ id: i.id, label: i.label, terminalError: i.terminalError })),
+    });
   },
   drainQueue: async () => {
     // real logic lives in hook so it can access auth state safely
@@ -71,12 +82,17 @@ export function useOfflineSync() {
           await OfflineQueue.remove(item.id);
         } catch (error: any) {
           if (error?.response) {
-            // Server rejected this item (4xx/5xx): back it off and keep
-            // draining — one poisoned write must not block the whole queue.
-            await OfflineQueue.markAttempt(
-              item.id,
-              error.response?.data?.message || `HTTP ${error.response.status}`,
-            );
+            const status = error.response.status;
+            const msg = error.response?.data?.message || `HTTP ${status}`;
+            if (status >= 400 && status < 500 && status !== 408 && status !== 429) {
+              // R1/FX-003: validation-class rejection — this payload will
+              // NEVER succeed. Terminal + visible, never retried.
+              await OfflineQueue.markTerminal(item.id, msg);
+              continue;
+            }
+            // 5xx/408/429: transient — back it off and keep draining so one
+            // poisoned write still never blocks the whole queue.
+            await OfflineQueue.markAttempt(item.id, msg);
             continue;
           }
           // No response = still offline; stop and retry on the next trigger.

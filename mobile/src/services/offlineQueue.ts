@@ -21,6 +21,13 @@ export interface QueuedWrite {
   attempts: number;
   lastError?: string;
   nextAttemptAt: number;
+  /**
+   * R1/FX-003: terminal item — the server will never accept this payload
+   * (validation-class rejection). Excluded from drain rotation and shown to
+   * the clinician instead of retried forever.
+   */
+  terminal?: boolean;
+  terminalError?: string;
 }
 
 function randomId(): string {
@@ -86,10 +93,34 @@ export const OfflineQueue = {
     return readQueue();
   },
 
-  /** Items whose backoff window has elapsed (what a drain should attempt now). */
+  /** Items whose backoff window has elapsed (what a drain should attempt now). Terminal items are excluded. */
   async loadDue(now = Date.now()): Promise<QueuedWrite[]> {
     const queue = await readQueue();
-    return queue.filter((item) => (item.nextAttemptAt ?? 0) <= now);
+    return queue.filter((item) => !item.terminal && (item.nextAttemptAt ?? 0) <= now);
+  },
+
+  /** R1/FX-003: mark an item terminal — visible to the clinician, never retried. */
+  async markTerminal(id: string, error: string, now = Date.now()): Promise<void> {
+    await withQueueLock(async () => {
+      const queue = await readQueue();
+      const item = queue.find((entry) => entry.id === id);
+      if (!item) return;
+      item.attempts = (item.attempts ?? 0) + 1;
+      item.terminal = true;
+      item.terminalError = String(error).slice(0, 300);
+      item.nextAttemptAt = Number.POSITIVE_INFINITY;
+      await writeQueue(queue);
+    });
+    notify();
+  },
+
+  /** Items the server will never accept — the clinician-visible failure list. */
+  async loadTerminal(): Promise<QueuedWrite[]> {
+    return (await readQueue()).filter((item) => item.terminal);
+  },
+
+  async countTerminal(): Promise<number> {
+    return (await readQueue()).filter((item) => item.terminal).length;
   },
 
   async enqueue(item: Omit<QueuedWrite, 'id' | 'queuedAt' | 'clientOpId' | 'attempts' | 'nextAttemptAt'>): Promise<void> {

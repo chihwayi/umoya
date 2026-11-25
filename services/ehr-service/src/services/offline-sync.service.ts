@@ -15,6 +15,27 @@ interface SyncOperation {
   clientTimestamp: string;
 }
 
+/**
+ * R1 / FX-003 (O-002): terminal vs transient sync failures.
+ * 'rejected' = the payload will NEVER succeed (validation-class). The client
+ * must surface it and stop retrying. 'failed' = transient (DB/connectivity);
+ * retry with backoff. Unknown errors default to 'failed' (retry is the safe
+ * direction — a wrongly-retried op is idempotent via clientOpId; a
+ * wrongly-terminal op loses clinical data).
+ */
+export function classifySyncFailure(e: any): 'rejected' | 'failed' {
+  const msg = String(e?.message ?? e ?? '');
+  if (e?.code === 'CONFLICT') return 'failed'; // handled separately upstream
+  if (/unknown entity type|unsafe|not allowed|invalid|validation|bad request|required|missing|not found|does not exist|syntax error|malformed/i.test(msg)) {
+    return 'rejected';
+  }
+  if (/connection|terminat|timeout|econn|eai_again|temporar|deadlock|serializ|try again|lock/i.test(msg)) {
+    return 'failed';
+  }
+  if (e?.name === 'QueryFailedError') return 'rejected'; // query reached PG and PG refused the data
+  return 'failed';
+}
+
 /** Postgres identifiers we allow from client payload keys — defense in depth. */
 const SAFE_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
 
@@ -71,6 +92,10 @@ export class OfflineSyncService {
           logEntry.syncStatus = 'conflict';
           logEntry.conflictDetails = e.details;
           results.push({ clientTimestamp: op.clientTimestamp, status: 'conflict', details: e.details });
+        } else if (classifySyncFailure(e) === 'rejected') {
+          logEntry.syncStatus = 'rejected';
+          logEntry.conflictDetails = { terminal: true, reason: e.message };
+          results.push({ clientTimestamp: op.clientTimestamp, status: 'rejected', terminal: true, error: e.message });
         } else {
           logEntry.syncStatus = 'failed';
           results.push({ clientTimestamp: op.clientTimestamp, status: 'failed', error: e.message });
