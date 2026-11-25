@@ -144,7 +144,8 @@ export class FhirService {
         url: 'http://umoya.health/fhir'
       },
       fhirVersion: '4.0.1',
-      format: ['json', 'xml'],
+      // FX-004: only 'json' is advertised — no XML serializer exists for any resource type.
+      format: ['json'],
       rest: [{
         mode: 'server',
         resource: [

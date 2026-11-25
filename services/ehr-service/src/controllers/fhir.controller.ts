@@ -23,7 +23,7 @@ export class FhirController {
     return this.fhirService.getCapabilityStatement();
   }
 
-  @Post('$batch')
+  @Post('\\$batch')
   @ApiOperation({ summary: 'Process FHIR batch operation' })
   @ApiResponse({ status: 200, description: 'FHIR batch response bundle' })
   async processBatch(
@@ -40,7 +40,7 @@ export class FhirController {
     return this.fhirService.processBatch(bundle, tenantDb, tenantId);
   }
 
-  @Post('$transaction')
+  @Post('\\$transaction')
   @ApiOperation({ summary: 'Process FHIR transaction operation' })
   @ApiResponse({ status: 200, description: 'FHIR transaction response bundle' })
   async processTransaction(
@@ -119,7 +119,7 @@ export class FhirController {
     return this.fhirService.getPatient(id, tenantDb, tenantId);
   }
 
-  @Get('Patient/:id/everything')
+  @Get(['Patient/:id/\\$everything', 'Patient/:id/everything'])
   @ApiOperation({ summary: 'Get all resources for a patient (Patient $everything operation)' })
   @ApiResponse({ status: 200, description: 'FHIR bundle containing all patient resources' })
   async getPatientEverythingRoute(
@@ -1333,7 +1333,7 @@ export class FhirController {
     return this.fhirService.getResourceHistory(resourceType, id, tenantDb);
   }
 
-  @Post('$validate')
+  @Post('\\$validate')
   @ApiOperation({ summary: 'Validate a FHIR resource ($validate operation)' })
   @ApiResponse({ status: 200, description: 'Validation result as OperationOutcome' })
   async validateResource(
