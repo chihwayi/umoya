@@ -1,6 +1,20 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { shouldPropagate } from '../constants/propagation-conditions';
+
+// R1 interim disclosure rule (P-002/P-003): until R2/FX-012 lands
+// consent-based household disclosure, diagnosis-bearing household paths are
+// clinical-roles-only. This is the defense-in-depth service check; the
+// controller also carries @Roles. R2 replaces this with per-disclosure consent.
+const INTERIM_CLINICAL_ROLES = new Set(['doctor', 'nurse', 'admin']);
+
+export function assertInterimClinicalRole(callerRole: string | undefined, path: string): void {
+  if (!callerRole || !INTERIM_CLINICAL_ROLES.has(callerRole)) {
+    throw new ForbiddenException(
+      `Household disclosure path '${path}' is restricted to clinical roles until R2 authorization lands`,
+    );
+  }
+}
 
 @Injectable()
 export class HouseholdRiskService {
@@ -50,7 +64,9 @@ export class HouseholdRiskService {
     db: DataSource,
     patientId: string,
     conditionName: string,
+    callerRole?: string,
   ): Promise<number> {
+    assertInterimClinicalRole(callerRole, 'propagateDiagnosis');
     const { type, severity } = shouldPropagate(conditionName);
     if (!type) return 0;
 
@@ -80,7 +96,8 @@ export class HouseholdRiskService {
     return alertsCreated;
   }
 
-  async getFamilyPanel(db: DataSource, patientId: string): Promise<any[]> {
+  async getFamilyPanel(db: DataSource, patientId: string, callerRole?: string): Promise<any[]> {
+    assertInterimClinicalRole(callerRole, 'getFamilyPanel');
     return db.query(
       `SELECT pfl.relationship,
          p.id, p.first_name, p.last_name,
@@ -95,7 +112,8 @@ export class HouseholdRiskService {
     );
   }
 
-  async getHouseholdAlerts(db: DataSource, patientId: string): Promise<any[]> {
+  async getHouseholdAlerts(db: DataSource, patientId: string, callerRole?: string): Promise<any[]> {
+    assertInterimClinicalRole(callerRole, 'getHouseholdAlerts');
     return db.query(
       `SELECT ha.*
        FROM household_alerts ha

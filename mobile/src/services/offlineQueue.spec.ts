@@ -107,6 +107,24 @@ describe('OfflineQueue (S225 load-shedding hardening)', () => {
     expect(updated.nextAttemptAt - now).toBeLessThanOrEqual(30 * 60 * 1000);
   });
 
+  it('R1/FX-003: markTerminal removes the item from drain rotation and lists it', async () => {
+    await OfflineQueue.enqueue(baseItem);
+    const [item] = await OfflineQueue.loadAll();
+    const now = 2_000_000;
+
+    await OfflineQueue.markTerminal(item.id, 'HTTP 422: validation failed', now);
+    const [updated] = await OfflineQueue.loadAll();
+    expect(updated.terminal).toBe(true);
+    expect(updated.terminalError).toContain('422');
+    expect(updated.attempts).toBe(1);
+
+    // Never due again — no infinite retry — but still listed for the clinician.
+    expect(await OfflineQueue.loadDue(now + 1_000_000_000)).toHaveLength(0);
+    expect(await OfflineQueue.loadTerminal()).toHaveLength(1);
+    expect(await OfflineQueue.countTerminal()).toBe(1);
+    expect(await OfflineQueue.count()).toBe(1);
+  });
+
   it('upgrades pre-S225 queue items missing idempotency/retry fields', async () => {
     // Legacy items predate the encrypted-storage migration too, but they were
     // still written through AsyncStorage.setItem directly (not through

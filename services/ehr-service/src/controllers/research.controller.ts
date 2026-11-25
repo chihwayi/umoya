@@ -158,6 +158,7 @@ export class ResearchController {
       cohortCriteria: any;
       purpose: string;
       approvedBy?: string;
+      cohortId?: string | null;
     },
     @Req() req: any,
   ) {
@@ -169,6 +170,7 @@ export class ResearchController {
       cohortCriteria: body.cohortCriteria,
       purpose: body.purpose,
       approvedBy: body.approvedBy,
+      cohortId: body.cohortId ?? null,
       db: req.tenantDb,
     });
   }

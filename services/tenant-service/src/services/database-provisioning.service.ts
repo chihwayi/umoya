@@ -211,6 +211,40 @@ export class DatabaseProvisioningService {
     }));
   }
 
+  /**
+   * R1 / FX-001 (Class D): queryable provisioning health. Diffs the bundle
+   * manifest against the tenant's version stamps — a half-provisioned tenant
+   * (failed statements retried later per the applier loop) shows up here
+   * instead of failing mysteriously at query time.
+   */
+  public async getTenantSchemaHealth(tenantDb: DataSource): Promise<{
+    ok: boolean;
+    appliedCount: number;
+    pendingCount: number;
+    pending: Array<{ id: string; expectedVersion: string; appliedVersion: string | null }>;
+  }> {
+    let rows: Array<{ bundle_id: string; version: string }> = [];
+    try {
+      rows = await tenantDb.query(`SELECT bundle_id, version FROM tenant_schema_versions`);
+    } catch {
+      // Pre-versioning tenant: everything is pending.
+    }
+    const stamped = new Map(rows.map((r) => [r.bundle_id, r.version]));
+    const pending: Array<{ id: string; expectedVersion: string; appliedVersion: string | null }> = [];
+    for (const m of this.getProvisioningBundlesManifest()) {
+      const applied = stamped.get(m.id) ?? null;
+      if (applied !== m.version) {
+        pending.push({ id: m.id, expectedVersion: m.version, appliedVersion: applied });
+      }
+    }
+    return {
+      ok: pending.length === 0,
+      appliedCount: this.getProvisioningBundlesManifest().length - pending.length,
+      pendingCount: pending.length,
+      pending,
+    };
+  }
+
   private normalizeStatements(statements: string[]): string[] {
     return statements.map((s) =>
       s
@@ -8765,6 +8799,113 @@ export class DatabaseProvisioningService {
           `CREATE INDEX IF NOT EXISTS idx_cnil_clinician ON clinician_network_identity_links(clinician_id)`,
         ],
       },
+      {
+        // R1 / FX-001 — backfill every entity-vs-bundle column gap found by
+        // R0 (remediation/DRIFT_ANALYSIS.md §1). All idempotent
+        // ADD COLUMN IF NOT EXISTS; safe to re-run on existing tenants.
+        id: 'r1_foundation_drift_columns',
+        label: 'R1 Foundation — Drift Column Backfill (S-003 et al)',
+        version: '2026.11.25.1',
+        description:
+          'patients confidentiality_tier/deceased_at/vip_flag + latest_risk_level/household_id; ' +
+          'post_visit_sessions.ambient_session_id; readmission_predictions.readmission_30_day_risk; ' +
+          'fhir_ingestion_logs/iot_data_ingestions/iot_device_registrations timestamps; ' +
+          'vaccine_inventory cost/temperature/funding/ndc/notes/recall columns',
+        statements: () => [
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS confidentiality_tier VARCHAR(20) NOT NULL DEFAULT 'standard'`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS deceased_at TIMESTAMPTZ`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS vip_flag BOOLEAN NOT NULL DEFAULT false`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS latest_risk_level TEXT`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS household_id BIGINT`,
+          `ALTER TABLE post_visit_sessions ADD COLUMN IF NOT EXISTS ambient_session_id VARCHAR(100)`,
+          `ALTER TABLE readmission_predictions ADD COLUMN IF NOT EXISTS readmission_30_day_risk NUMERIC`,
+          `ALTER TABLE fhir_ingestion_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+          `ALTER TABLE iot_data_ingestions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+          `ALTER TABLE iot_device_registrations ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+          `ALTER TABLE iot_device_registrations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
+          `ALTER TABLE iot_device_registrations ADD COLUMN IF NOT EXISTS oauth_expires_at TIMESTAMPTZ`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS cost_per_dose NUMERIC(10,2)`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS current_temperature NUMERIC(5,2)`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS funding_source VARCHAR(100)`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS ndc_code VARCHAR(20)`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS notes TEXT`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS recall_information TEXT`,
+          `ALTER TABLE vaccine_inventory ADD COLUMN IF NOT EXISTS temperature_alert BOOLEAN NOT NULL DEFAULT false`,
+        ],
+      },
+      {
+        // R1 / FX-002 (S-004): encrypted columns must fit real ciphertext.
+        // AES-256-GCM hex (iv:tag:ct) carries 66 chars of overhead alone, so
+        // VARCHAR(50) rejected every non-empty value. TEXT is the honest type
+        // (max realistic plaintext ~255 chars -> ~576 stored). Idempotent.
+        id: 'r1_fx002_width',
+        label: 'R1 Foundation — Encrypted column width (S-004)',
+        version: '2026.11.25.1',
+        description: 'patients id_number/phone/email VARCHAR -> TEXT for ciphertext',
+        statements: () => [
+          `ALTER TABLE patients ALTER COLUMN id_number TYPE TEXT`,
+          `ALTER TABLE patients ALTER COLUMN phone TYPE TEXT`,
+          `ALTER TABLE patients ALTER COLUMN email TYPE TEXT`,
+        ],
+      },
+      {
+        // R1 / FX-001 (P-003 + RES-007-column): ghost tables/columns referenced
+        // by raw SQL but created nowhere — two readers (family panel,
+        // discharge summary) query `diagnoses` and validateToken selects
+        // `q.tenant_id`, with zero writers/DDL anywhere. Creating the empty
+        // table turns a 500 into an empty result; R7 reviews content seeding.
+        // No new exposure: the diagnosis-bearing read paths are gated by the
+        // R1 interim clinical-role check (household-risk.service) and the
+        // cohort run paths are suspended until R6.
+        id: 'r1_ghost_tables',
+        label: 'R1 Foundation — Ghost tables (P-003, RES-007 column)',
+        version: '2026.11.25.1',
+        description: 'diagnoses table (family panel + discharge summary readers); research_queries.tenant_id (portal token validation)',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS diagnoses (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+            encounter_id UUID,
+            code VARCHAR(50),
+            description TEXT,
+            diagnosis_type VARCHAR(50),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_diagnoses_patient ON diagnoses(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_diagnoses_encounter ON diagnoses(encounter_id)`,
+          `ALTER TABLE research_queries ADD COLUMN IF NOT EXISTS tenant_id UUID`,
+        ],
+      },
+      {
+        // R1 / FX-001 (S-005) — master-DB-only companion to the tenant bundle
+        // above. Applied via repairMasterDatabase.ts (see its
+        // MASTER_PROVISION_BUNDLES fallback), never per-tenant: ensures the
+        // policy columns read by ehr-service getTenantSecurityPolicy exist on
+        // master `tenants`. Idempotent; safe to re-run.
+        id: 'r1_master_tenant_policy_columns',
+        label: 'R1 Foundation — Master tenants policy columns (S-005)',
+        version: '2026.11.25.1',
+        description:
+          'mfaRequired / sessionTimeoutMinutes / allowEmergencyBypass on master tenants; ' +
+          'mirrors tenant-service ensureSubscriptionSchema so ehr-service reads stop 500ing',
+        // DO-block (not bare ALTER): tenant databases have no `tenants` table,
+        // and a bare ALTER would error, wedge the bundle in pending-retry, and
+        // block tenant provisioning. The EXISTS guard makes this a no-op there.
+        statements: () => [
+          `DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM information_schema.tables
+              WHERE table_schema = 'public' AND table_name = 'tenants'
+            ) THEN
+              ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "mfaRequired" BOOLEAN NOT NULL DEFAULT false;
+              ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "sessionTimeoutMinutes" INTEGER NOT NULL DEFAULT 60;
+              ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "allowEmergencyBypass" BOOLEAN NOT NULL DEFAULT false;
+            END IF;
+          END
+          $$`,
+        ],
+      },
     ];
   }
 
@@ -11932,6 +12073,12 @@ export class DatabaseProvisioningService {
               errorCount: bundleErrors.length,
               firstError,
             });
+            // R1/FX-001 (Class D): failures were log-level only and invisible
+            // to ops. Error-level so alerting picks up stalled tenants.
+            this.logger.error(
+              `provisioning bundle.apply.failed bundle=${bundle.id} version=${bundle.version} ` +
+                `pass=${pass} errors=${bundleErrors.length} first=${firstError}`,
+            );
             stillPending.push(bundle);
             continue;
           }

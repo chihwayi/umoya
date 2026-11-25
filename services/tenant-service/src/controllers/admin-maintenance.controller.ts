@@ -6,6 +6,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   Post,
   Put,
@@ -131,6 +132,25 @@ export class AdminMaintenanceController {
     const system = await this.healthMonitor.getSystemHealth();
     const tenants = this.healthMonitor.getAllHealthStatuses();
     return { message: 'Health checks completed', system, tenants };
+  }
+
+  // R1 / FX-001 (Class D): per-tenant provisioning health — which bundles are
+  // applied vs pending. Read-only; ADMIN/SUPER_ADMIN only.
+  @Get('provisioning-health/:subdomain')
+  async getProvisioningHealth(@Req() req: any, @Param('subdomain') subdomain: string) {
+    this.assertRole(req, [AdminRole.SUPER_ADMIN, AdminRole.ADMIN]);
+    const tenant = await this.tenantService.findBySubdomain(subdomain);
+    if (!tenant?.connectionString) {
+      throw new NotFoundException('Tenant database not provisioned');
+    }
+    const { DataSource } = await import('typeorm');
+    const tenantDb = new DataSource({ type: 'postgres', url: tenant.connectionString, synchronize: false });
+    await tenantDb.initialize();
+    try {
+      return { subdomain, ...(await this.provisioning.getTenantSchemaHealth(tenantDb)) };
+    } finally {
+      await tenantDb.destroy();
+    }
   }
 
   @Get('platform-services')

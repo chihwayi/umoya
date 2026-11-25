@@ -8,7 +8,7 @@ export class PatientWristband {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'patient_id' })
+  @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient)
@@ -27,7 +27,7 @@ export class PatientWristband {
   @Column({ name: 'issued_at', type: 'timestamptz', default: () => 'NOW()' })
   issuedAt: Date;
 
-  @Column({ name: 'issued_by', nullable: true })
+  @Column({ name: 'issued_by', type: 'uuid', nullable: true })
   issuedById: string;
 
   @ManyToOne(() => User)
@@ -43,7 +43,7 @@ export class PatientWristband {
   @Column({ name: 'deactivated_at', type: 'timestamptz', nullable: true })
   deactivatedAt: Date;
 
-  @Column({ name: 'deactivated_by', nullable: true })
+  @Column({ name: 'deactivated_by', type: 'uuid', nullable: true })
   deactivatedById: string;
 
   @ManyToOne(() => User)

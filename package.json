@@ -33,7 +33,7 @@
     "generate:tenant-structure-alignment": "node scripts/generate-tenant-structure-alignment.mjs",
     "seed:sample-imaging": "node scripts/seed-sample-imaging.js",
     "imaging:backfill": "ts-node scripts/backfill-imaging-objects.ts",
-"dhis2:bootstrap": "node scripts/bootstrap-dhis2-metadata.mjs",
+    "dhis2:bootstrap": "node scripts/bootstrap-dhis2-metadata.mjs",
     "report:soc2-hipaa": "node scripts/soc2-hipaa-evidence-report.js",
     "provision:all-tenants": "npx ts-node --project services/tenant-service/tsconfig.json services/tenant-service/src/scripts/repairTenants.ts",
     "provision:master-db": "npx ts-node --project services/tenant-service/tsconfig.json services/tenant-service/src/scripts/repairMasterDatabase.ts",
@@ -44,7 +44,9 @@
     "mobile:typecheck": "cd mobile && npx tsc --noEmit",
     "mobile:test": "npm --prefix ./mobile run test --if-present",
     "mobile:test:e2e": "npm --prefix ./mobile run test:e2e --if-present",
-    "mobile:doctor": "cd mobile && npx expo-doctor"
+    "mobile:doctor": "cd mobile && npx expo-doctor",
+    "audit:rawsql-drift": "node scripts/audit-rawsql-drift.mjs",
+    "audit:drift": "npm run audit:tenant-provisioning && npm run audit:tenant-fk-drift && npm run audit:rawsql-drift && npm run audit:migration-sequence"
   },
   "workspaces": [
     "packages/*",

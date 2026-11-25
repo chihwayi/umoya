@@ -19,7 +19,7 @@ function parseBooleanEnv(value: string | undefined, defaultValue: boolean): bool
 }
 
 function parseBundles(raw: string | undefined): string[] {
-  const fallback = ['sprint114_clinical_rag', 'sprint116_risk_stratification_self_learning'];
+  const fallback = ['sprint114_clinical_rag', 'sprint116_risk_stratification_self_learning', 'r1_master_tenant_policy_columns'];
   if (!raw) {
     return fallback;
   }

@@ -1,4 +1,7 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+
+// R1 interim gate flag — R6 removes it with the authorization layer.
+const COHORT_EXECUTION_SUSPENDED_UNTIL_R6 = true;
 
 @Injectable()
 export class CohortBuilderService {
@@ -39,6 +42,15 @@ export class CohortBuilderService {
   }
 
   async runCohort(criteria: any, db: any): Promise<{ count: number; patients: any[] }> {
+    // R1 interim (RES-004): row-returning cohort execution is suspended until
+    // R6/FX-020 lands the authorization layer — the audit proved identified
+    // rows reach any role. Reactivating this without the R6 gate would turn a
+    // 500 into a leak. R6 deletes this flag block.
+    if (COHORT_EXECUTION_SUSPENDED_UNTIL_R6) {
+      throw new ServiceUnavailableException(
+        'Cohort execution is suspended pending R6 (FX-020) authorization',
+      );
+    }
     const { sql, params } = this.buildQuery(criteria);
     const patients = await db.query(sql, params);
     return { count: patients.length, patients };
@@ -56,6 +68,12 @@ export class CohortBuilderService {
   }
 
   async runSavedCohort(cohortId: string, db: any): Promise<any> {
+    // Same R1 interim suspension as runCohort (checked before any query).
+    if (COHORT_EXECUTION_SUSPENDED_UNTIL_R6) {
+      throw new ServiceUnavailableException(
+        'Cohort execution is suspended pending R6 (FX-020) authorization',
+      );
+    }
     const [def] = await db.query(`SELECT * FROM cohort_definitions WHERE id = $1`, [cohortId]);
     if (!def) throw new BadRequestException('Cohort not found');
     const result = await this.runCohort(def.criteria, db);
