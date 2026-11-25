@@ -8800,6 +8800,34 @@ export class DatabaseProvisioningService {
         ],
       },
       {
+        // R1 / FX-001 (P-003 + RES-007-column): ghost tables/columns referenced
+        // by raw SQL but created nowhere — two readers (family panel,
+        // discharge summary) query `diagnoses` and validateToken selects
+        // `q.tenant_id`, with zero writers/DDL anywhere. Creating the empty
+        // table turns a 500 into an empty result; R7 reviews content seeding.
+        // No new exposure: the diagnosis-bearing read paths are gated by the
+        // R1 interim clinical-role check (household-risk.service) and the
+        // cohort run paths are suspended until R6.
+        id: 'r1_ghost_tables',
+        label: 'R1 Foundation — Ghost tables (P-003, RES-007 column)',
+        version: '2026.11.25.1',
+        description: 'diagnoses table (family panel + discharge summary readers); research_queries.tenant_id (portal token validation)',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS diagnoses (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+            encounter_id UUID,
+            code VARCHAR(50),
+            description TEXT,
+            diagnosis_type VARCHAR(50),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE INDEX IF NOT EXISTS idx_diagnoses_patient ON diagnoses(patient_id)`,
+          `CREATE INDEX IF NOT EXISTS idx_diagnoses_encounter ON diagnoses(encounter_id)`,
+          `ALTER TABLE research_queries ADD COLUMN IF NOT EXISTS tenant_id UUID`,
+        ],
+      },
+      {
         // R1 / FX-001 (S-005) — master-DB-only companion to the tenant bundle
         // above. Applied via repairMasterDatabase.ts (see its
         // MASTER_PROVISION_BUNDLES fallback), never per-tenant: ensures the

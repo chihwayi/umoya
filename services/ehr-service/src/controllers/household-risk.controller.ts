@@ -1,9 +1,11 @@
 import { UseGuards, Controller, Get, Post, Patch, Body, Param, Req } from '@nestjs/common';
 import { HouseholdRiskService } from '../services/household-risk.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 
 @Controller('household')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class HouseholdRiskController {
   constructor(private readonly household: HouseholdRiskService) {}
 
@@ -26,13 +28,15 @@ export class HouseholdRiskController {
   }
 
   @Get('patients/:patientId/family')
+  @Roles('doctor', 'nurse', 'admin')
   getFamilyPanel(@Req() req: any, @Param('patientId') id: string) {
-    return this.household.getFamilyPanel(req.tenantDb, id);
+    return this.household.getFamilyPanel(req.tenantDb, id, req.user?.role);
   }
 
   @Get('patients/:patientId/alerts')
+  @Roles('doctor', 'nurse', 'admin')
   getAlerts(@Req() req: any, @Param('patientId') id: string) {
-    return this.household.getHouseholdAlerts(req.tenantDb, id);
+    return this.household.getHouseholdAlerts(req.tenantDb, id, req.user?.role);
   }
 
   @Patch('alerts/:alertId/resolve')
@@ -41,7 +45,8 @@ export class HouseholdRiskController {
   }
 
   @Post('propagate')
+  @Roles('doctor', 'nurse', 'admin')
   propagate(@Req() req: any, @Body() body: { patientId: string; conditionName: string }) {
-    return this.household.propagateDiagnosis(req.tenantDb, body.patientId, body.conditionName);
+    return this.household.propagateDiagnosis(req.tenantDb, body.patientId, body.conditionName, req.user?.role);
   }
 }
