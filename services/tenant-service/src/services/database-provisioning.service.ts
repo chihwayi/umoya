@@ -8913,7 +8913,7 @@ export class DatabaseProvisioningService {
         // this bundle only creates the tables/columns. Idempotent.
         id: 'r2_authz_disclosure',
         label: 'R2 AuthZ — care-team, break-glass, disclosure consents, safeguard flag, facility scope',
-        version: '2026.11.26.1',
+        version: '2026.11.26.2',
         description:
           'patient_care_team; break_glass_access_log; household_disclosure_consents; ' +
           'patient_family_links.do_not_notify; patients/users.facility_id (nullable legacy)',
@@ -8952,6 +8952,12 @@ export class DatabaseProvisioningService {
           `ALTER TABLE patient_family_links ADD COLUMN IF NOT EXISTS do_not_notify BOOLEAN NOT NULL DEFAULT false`,
           `ALTER TABLE patients ADD COLUMN IF NOT EXISTS facility_id UUID`,
           `ALTER TABLE users ADD COLUMN IF NOT EXISTS facility_id UUID`,
+          // 2026.11.26.2: target_household_id must match household_groups.id
+          // (BIGINT) — the 26.1 UUID type could never join and would deny by
+          // accident. No production rows exist under R2 (unmerged bundle);
+          // DROP+ADD is the honest forward fix. Idempotent.
+          `ALTER TABLE household_disclosure_consents DROP COLUMN IF EXISTS target_household_id`,
+          `ALTER TABLE household_disclosure_consents ADD COLUMN IF NOT EXISTS target_household_id BIGINT`,
         ],
       },
     ];

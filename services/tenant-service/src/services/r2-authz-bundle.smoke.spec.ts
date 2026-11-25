@@ -63,4 +63,12 @@ describe('R2 bundle r2_authz_disclosure (red→green)', () => {
     );
     expect(rows.map((r: any) => r.table_name).sort()).toEqual(['patients', 'users']);
   });
+
+  test('consent household reference matches household_groups id type (bigint)', async () => {
+    const rows = await db.query(
+      `SELECT data_type FROM information_schema.columns
+       WHERE table_name = 'household_disclosure_consents' AND column_name = 'target_household_id'`,
+    );
+    expect(rows[0]?.data_type).toBe('bigint');
+  });
 });
