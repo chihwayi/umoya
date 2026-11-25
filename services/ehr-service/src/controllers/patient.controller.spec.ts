@@ -3,6 +3,7 @@ import { PatientController } from './patient.controller';
 import { PatientService } from '../services/patient.service';
 import { ProactiveAiService } from '../services/proactive-ai.service';
 import { PatientIntelligenceService } from '../services/patient-intelligence.service';
+import { PatientAccessService } from '../services/patient-access.service';
 
 describe('PatientController', () => {
   let controller: PatientController;
@@ -31,6 +32,15 @@ describe('PatientController', () => {
     getPatientIntelligence: jest.fn(),
   };
 
+  // R2: controller delegates authz decisions to the layer (covered by the
+  // r2-authz-matrix suite); here the layer is mocked so these tests keep
+  // asserting controller behavior, not layer behavior.
+  const mockPatientAccessService = {
+    assertCanAccess: jest.fn(),
+    filterAccessiblePatientIds: jest.fn((_db: any, _acc: any, ids: string[]) => ids),
+    grantBreakGlass: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PatientController],
@@ -46,6 +56,10 @@ describe('PatientController', () => {
         {
           provide: PatientIntelligenceService,
           useValue: mockPatientIntelligenceService,
+        },
+        {
+          provide: PatientAccessService,
+          useValue: mockPatientAccessService,
         },
       ],
     }).compile();

@@ -50,10 +50,14 @@ function schemaStrictRepo() {
 
 describe('R1 FX-001 F-004 $everything column names (red→green)', () => {
   it('queries medical_records with physical columns only', async () => {
-    const svc = new FhirService();
+    // R2: getPatientEverything now requires an accessor; the layer is stubbed
+    // to allow so this test keeps asserting the SQL shape, not authz (the
+    // r2-authz-matrix suite owns the access decision).
+    const layerStub: any = { assertCanAccess: async () => undefined };
+    const svc = new FhirService(undefined, undefined, layerStub);
     const repo: any = schemaStrictRepo();
     const tenantDb: any = { getRepository: () => repo };
-    await svc.getPatientEverything('p1', tenantDb, 't1');
+    await svc.getPatientEverything('p1', tenantDb, 't1', { userId: 'u1', role: 'doctor' });
     const raw = repo.seen.find((s: string) => /FROM medical_records/i.test(s));
     expect(raw).toBeDefined();
     expect(raw).toContain('patient_id');
