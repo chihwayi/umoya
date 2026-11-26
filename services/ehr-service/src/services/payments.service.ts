@@ -6,6 +6,13 @@ import { Bill, BillStatus } from '../entities/billing.entity';
 import { PaymentGatewayConfig, PaymentProviderType } from '../entities/payment-gateway-config.entity';
 import { PaymentProviderEvent } from '../entities/payment-provider-event.entity';
 import { PaymentVerificationAttempt } from '../entities/payment-verification-attempt.entity';
+import {
+  NEVER_CONFIRM_HTTP,
+  SUPPORTED_CURRENCIES,
+  extractCallbackEventId,
+  normalizeCallbackProvider,
+  verifyProviderCallback,
+} from './payment-callback-verification';
 
 type SupportedMobileMoneyProvider = PaymentProviderType.ECOCASH | PaymentProviderType.ONEMONEY;
 
@@ -49,11 +56,19 @@ export class PaymentsService {
       throw new BadRequestException('Unsupported payment provider');
     }
 
+    const currency = String(paymentData?.currency || 'USD').trim().toUpperCase();
+    // FX-019 / P-005: single-currency-per-bill, no conversion layer — unknown
+    // codes (including ZiG) are rejected outright rather than mis-credited.
+    if (!SUPPORTED_CURRENCIES.includes(currency)) {
+      throw new BadRequestException(
+        `unsupported currency ${currency} — single-currency-per-bill, no conversion layer this sprint (USD/ZWL only)`,
+      );
+    }
     const payload = {
       billId: paymentData?.billId,
       amount: Number(paymentData?.amount || 0),
       phoneNumber: String(paymentData?.phoneNumber || '').trim(),
-      currency: String(paymentData?.currency || 'USD').trim().toUpperCase(),
+      currency,
     };
 
     switch (provider) {
@@ -259,17 +274,41 @@ export class PaymentsService {
     };
   }
 
-  async recordProviderCallback(callbackData: any, tenantDb: DataSource) {
+  async recordProviderCallback(
+    callbackData: any,
+    tenantDb: DataSource,
+    opts?: { headers?: Record<string, any> },
+  ) {
     const transactionId = String(callbackData?.transactionId || callbackData?.transaction_id || '').trim();
     if (!transactionId) {
       throw new BadRequestException('transactionId is required');
     }
 
     const latestEvent = await this.getLatestProviderEvent(transactionId, tenantDb);
+    // Idempotency: an already-settled transaction returns its current status
+    // without re-crediting — duplicate legitimate callbacks never double-pay.
+    if (latestEvent && this.mapPublicStatus(latestEvent.providerStatus) !== 'PENDING') {
+      await this.recordProviderEvent(tenantDb, {
+        transactionId,
+        billId: latestEvent.billId,
+        providerType: latestEvent.providerType,
+        eventType: 'provider_callback_duplicate',
+        providerStatus: latestEvent.providerStatus,
+        reference: latestEvent.reference,
+        correlationId: String(callbackData?.correlationId || callbackData?.correlation_id || '').trim() || null,
+        requestPayload: {},
+        responsePayload: callbackData || {},
+      });
+      return this.getPaymentStatus(transactionId, tenantDb);
+    }
+
     const providerType =
       this.normalizeProvider(callbackData?.provider || callbackData?.providerType || callbackData?.provider_type) ||
       latestEvent?.providerType ||
       this.inferProviderFromTransactionId(transactionId);
+    if (!providerType) {
+      throw new BadRequestException('Unsupported payment provider');
+    }
     const providerStatus = this.mapProviderStatus(
       callbackData?.status || callbackData?.providerStatus || callbackData?.provider_status || callbackData?.result,
     );
@@ -279,6 +318,31 @@ export class PaymentsService {
       String(callbackData?.correlationId || callbackData?.correlation_id || '').trim() || null;
     const billId =
       String(callbackData?.billId || callbackData?.bill_id || latestEvent?.billId || '').trim() || null;
+
+    // FX-019: verify the callback BEFORE recording a creditable event. A
+    // forged callback dies here instead of flipping the bill to paid.
+    const callbackProvider =
+      providerType === PaymentProviderType.ECOCASH
+        ? 'ecocash'
+        : providerType === PaymentProviderType.ONEMONEY
+          ? 'onemoney'
+          : String(providerType);
+    const headers = opts?.headers ?? {};
+    const callbackEventId = extractCallbackEventId(
+      normalizeCallbackProvider(callbackProvider),
+      callbackData,
+      headers,
+    );
+    await verifyProviderCallback({
+      provider: callbackProvider,
+      headers,
+      payload: callbackData,
+      tenantDb,
+      http: NEVER_CONFIRM_HTTP,
+      transactionId,
+      callbackEventId,
+      billId,
+    });
 
     await this.recordProviderEvent(tenantDb, {
       transactionId,
