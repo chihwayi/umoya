@@ -220,6 +220,9 @@ export class PatientController {
     @Body() body: { deceasedAt?: string },
     @Request() req: RequestWithTenant,
   ) {
+    // R2 gap-close: marking deceased is consequential and hard to reverse —
+    // relationship required, same as every sibling route in this file.
+    await this.patientAccess.assertCanAccess(req.tenantDb, this.accessorOf(req), id, 'chart-write');
     const actingUser = req.user as any;
     return this.patientService.markDeceased(id, body?.deceasedAt, req.tenantDb, {
       userId: actingUser?.id || actingUser?.userId,
