@@ -327,64 +327,97 @@ describe('PaymentsService', () => {
     expect(result.reference).toBe('REF_ONE_REFRESH');
   });
 
-  it('records provider callbacks and derives completed status from persisted events', async () => {
-    const service = new PaymentsService();
-    const tenantDb = makeTenantDb({
-      latestEvent: {
-        transactionId: 'ECO_999',
-        providerType: PaymentProviderType.ECOCASH,
-        providerStatus: 'PENDING_PROVIDER_CONFIRMATION',
-        eventType: 'payment_initiated',
-        eventTimestamp: new Date('2026-03-25T08:00:00.000Z'),
-        createdAt: new Date('2026-03-25T08:00:00.000Z'),
-        reference: 'REF_ECO_999',
-        requestPayload: { amount: 85, currency: 'USD' },
-        responsePayload: {},
-        billId: 'bill-9',
-      },
-    });
-
-    tenantDb.__repos.eventRepo.findOne
-      .mockResolvedValueOnce({
-        transactionId: 'ECO_999',
-        providerType: PaymentProviderType.ECOCASH,
-        providerStatus: 'PENDING_PROVIDER_CONFIRMATION',
-        eventType: 'payment_initiated',
-        eventTimestamp: new Date('2026-03-25T08:00:00.000Z'),
-        createdAt: new Date('2026-03-25T08:00:00.000Z'),
-        reference: 'REF_ECO_999',
-        requestPayload: { amount: 85, currency: 'USD' },
-        responsePayload: {},
-        billId: 'bill-9',
-      })
-      .mockResolvedValueOnce({
-        transactionId: 'ECO_999',
-        providerType: PaymentProviderType.ECOCASH,
-        providerStatus: 'COMPLETED',
-        eventType: 'provider_callback',
-        eventTimestamp: new Date('2026-03-25T08:10:00.000Z'),
-        createdAt: new Date('2026-03-25T08:10:00.000Z'),
-        reference: 'REF_ECO_999',
-        requestPayload: {},
-        responsePayload: { amount: 85, currency: 'USD' },
-        billId: 'bill-9',
+  // STALE-TEST REPAIR (R3/FX-019): the old version asserted that an
+  // unsigned ecocash callback credits the bill — the exact audit bug (forged
+  // callbacks flipping pending → success). Correct behaviour: only a
+  // verified callback credits; unverified callbacks are rejected and the
+  // bill is untouched.
+  it('records verified provider callbacks and rejects unverified ones without crediting', async () => {
+    const { createHmac, randomBytes } = require('crypto');
+    // Fresh test-only secret every run — never a real credential.
+    const secret = randomBytes(32).toString('hex');
+    const prevFlag = process.env.PAYMENT_CALLBACK_ECOCASH_ENABLED;
+    process.env.PAYMENT_CALLBACK_ECOCASH_ENABLED = 'true';
+    try {
+      const service = new PaymentsService();
+      const tenantDb = makeTenantDb({
+        latestEvent: {
+          transactionId: 'ECO_999',
+          providerType: PaymentProviderType.ECOCASH,
+          providerStatus: 'PENDING_PROVIDER_CONFIRMATION',
+          eventType: 'payment_initiated',
+          eventTimestamp: new Date('2026-03-25T08:00:00.000Z'),
+          createdAt: new Date('2026-03-25T08:00:00.000Z'),
+          reference: 'REF_ECO_999',
+          requestPayload: { amount: 85, currency: 'USD' },
+          responsePayload: {},
+          billId: 'bill-9',
+        },
       });
+      tenantDb.query.mockImplementation(async (sql: string) =>
+        /payment_gateway_configurations/.test(sql)
+          ? [{ provider_type: 'ecocash', webhook_secret: secret, is_active: true }]
+          : [],
+      );
 
-    const result = await service.recordProviderCallback(
-      {
+      tenantDb.__repos.eventRepo.findOne
+        .mockResolvedValueOnce({
+          transactionId: 'ECO_999',
+          providerType: PaymentProviderType.ECOCASH,
+          providerStatus: 'PENDING_PROVIDER_CONFIRMATION',
+          eventType: 'payment_initiated',
+          eventTimestamp: new Date('2026-03-25T08:00:00.000Z'),
+          createdAt: new Date('2026-03-25T08:00:00.000Z'),
+          reference: 'REF_ECO_999',
+          requestPayload: { amount: 85, currency: 'USD' },
+          responsePayload: {},
+          billId: 'bill-9',
+        })
+        .mockResolvedValueOnce({
+          transactionId: 'ECO_999',
+          providerType: PaymentProviderType.ECOCASH,
+          providerStatus: 'COMPLETED',
+          eventType: 'provider_callback',
+          eventTimestamp: new Date('2026-03-25T08:10:00.000Z'),
+          createdAt: new Date('2026-03-25T08:10:00.000Z'),
+          reference: 'REF_ECO_999',
+          requestPayload: {},
+          responsePayload: { amount: 85, currency: 'USD' },
+          billId: 'bill-9',
+        });
+
+      const callback = {
         transactionId: 'ECO_999',
         provider: 'ecocash',
         status: 'completed',
         reference: 'REF_ECO_999',
-      },
-      tenantDb,
-    );
+        clientCorrelator: 'ECOCB-1',
+      };
+      const signature = createHmac('sha256', secret)
+        .update('ECOCB-1.ECO_999.COMPLETED')
+        .digest('hex');
+      const result = await service.recordProviderCallback(callback, tenantDb, {
+        headers: { 'x-callback-signature': signature },
+      });
 
-    expect(result.status).toBe('COMPLETED');
-    expect(tenantDb.query).toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE billing'),
-      expect.arrayContaining(['paid', 'REF_ECO_999', 'ecocash', 'bill-9']),
-    );
+      expect(result.status).toBe('COMPLETED');
+      expect(tenantDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE billing'),
+        expect.arrayContaining(['paid', 'REF_ECO_999', 'ecocash', 'bill-9']),
+      );
+
+      // Same callback without proof: rejected, bill untouched.
+      const unsignedDb = makeTenantDb({ latestEvent: null });
+      (unsignedDb.query as jest.Mock).mockClear();
+      await expect(service.recordProviderCallback(callback, unsignedDb)).rejects.toThrow();
+      expect(unsignedDb.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE billing'),
+        expect.anything(),
+      );
+    } finally {
+      if (prevFlag === undefined) delete process.env.PAYMENT_CALLBACK_ECOCASH_ENABLED;
+      else process.env.PAYMENT_CALLBACK_ECOCASH_ENABLED = prevFlag;
+    }
   });
 
   it('throws not found when a status lookup has no persisted event', async () => {
