@@ -72,14 +72,66 @@ export class BcmaController {
   @ApiOperation({ summary: 'Verify 5 Rights before medication administration' })
   @ApiResponse({ status: 200, description: '5 Rights verification result' })
   async verify5Rights(
-    @Body() data: { patientBarcode: string; medicationBarcode: string; prescriptionId: string },
+    @Body()
+    data: {
+      patientBarcode: string;
+      medicationBarcode: string;
+      prescriptionId: string;
+      dose: string;
+      route: string;
+      scannedAt?: string;
+    },
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    return this.bcmaService.verify5Rights(
-      data.patientBarcode,
-      data.medicationBarcode,
-      data.prescriptionId,
+    const user = req.user as any;
+    // FX-010: accessor is REQUIRED — a missing identity fails closed inside
+    // the service instead of bypassing the R2 composition check.
+    return this.bcmaService.verifyFiveRightsStrict(
+      {
+        patientBarcode: data.patientBarcode,
+        medicationBarcode: data.medicationBarcode,
+        prescriptionId: data.prescriptionId,
+        dose: data.dose,
+        route: data.route,
+        scannedAt: data.scannedAt ? new Date(data.scannedAt) : new Date(),
+      },
+      { userId: user?.userId ?? user?.id ?? user?.sub, role: user?.role, facilityId: user?.facilityId ?? null },
+      tenantDb,
+    );
+  }
+
+  @Post('verify-5-rights/override')
+  @Roles('nurse', 'doctor', 'pharmacist', 'admin')
+  @ApiOperation({ summary: 'Override a five-rights block with role + reason (+ witness for high-alert/controlled)' })
+  @ApiResponse({ status: 201, description: 'Override recorded with audit entry' })
+  async overrideFiveRights(
+    @Body()
+    data: {
+      patientBarcode: string;
+      medicationBarcode: string;
+      prescriptionId: string;
+      dose: string;
+      route: string;
+      scannedAt?: string;
+      reason: string;
+      witnessUserId?: string;
+    },
+    @Req() req: RequestWithTenant,
+  ) {
+    const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
+    const user = req.user as any;
+    return this.bcmaService.overrideFiveRights(
+      {
+        patientBarcode: data.patientBarcode,
+        medicationBarcode: data.medicationBarcode,
+        prescriptionId: data.prescriptionId,
+        dose: data.dose,
+        route: data.route,
+        scannedAt: data.scannedAt ? new Date(data.scannedAt) : new Date(),
+      },
+      { reason: data.reason, witnessUserId: data.witnessUserId },
+      { userId: user?.userId ?? user?.id ?? user?.sub, role: user?.role, facilityId: user?.facilityId ?? null },
       tenantDb,
     );
   }
@@ -95,8 +147,12 @@ export class BcmaController {
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    const userId = req.user?.userId ?? (req.user as any)?.id;
-    return this.bcmaService.administerMedication(marData, userId, tenantDb);
+    const user = req.user as any;
+    return this.bcmaService.administerMedication(
+      marData,
+      { userId: user?.userId ?? user?.id ?? user?.sub, role: user?.role, facilityId: user?.facilityId ?? null },
+      tenantDb,
+    );
   }
 
   @Get('mar/patient/:patientId')
@@ -275,12 +331,17 @@ export class BcmaController {
   @ApiOperation({ summary: 'Administer from scheduled entry (witness enforced if required)' })
   async administerFromScheduled(
     @Param('id') id: string,
-    @Body() body: { witnessedById?: string; notes?: string },
+    @Body() body: { witnessedById?: string; notes?: string; patientBarcode?: string; medicationBarcode?: string },
     @Req() req: RequestWithTenant,
   ) {
     const tenantDb = await this.tenantService.getTenantDatabase(req.tenantId);
-    const userId = req.user?.userId ?? (req.user as any)?.id;
-    return this.bcmaService.administerFromScheduledEntry(id, body, userId, tenantDb);
+    const user = req.user as any;
+    return this.bcmaService.administerFromScheduledEntry(
+      id,
+      body,
+      { userId: user?.userId ?? user?.id ?? user?.sub, role: user?.role, facilityId: user?.facilityId ?? null },
+      tenantDb,
+    );
   }
 
   @Get('ward-stock')
