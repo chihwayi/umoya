@@ -11,7 +11,8 @@ import {
   type CallbackHttpClient,
 } from './payment-callback-verification';
 
-const SECRET = 'per-tenant-webhook-secret';
+// Fresh test-only secret every run — never a real credential, never hardcoded.
+const SECRET = require('crypto').randomBytes(32).toString('hex');
 
 function fakeTenantDb(opts: {
   webhookSecret?: string | null;
