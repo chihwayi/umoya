@@ -1,5 +1,20 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+
+// R3 / FX-018 (UX-002, UX-003): acknowledging a critical result is a clinical
+// act. Only the ordering clinician or an on-duty covering clinician for that
+// patient/ward may acknowledge — everyone else (receptionists included) gets
+// a 403, the same pattern R2 used for its role gates. Unacknowledged alerts
+// escalate on a timer to whoever is actually covering (on-call roster via
+// staff_duty_shifts), and escalated-but-unacknowledged alerts stay visible
+// instead of silently expiring.
+export interface CriticalAlertAccessor {
+  userId: string;
+  role: string;
+}
+
+/** Roles permitted to acknowledge/escalate critical results. */
+const CRITICAL_ACK_ROLES = new Set(['doctor', 'admin', 'nurse', 'clinical_officer']);
 
 @Injectable()
 export class LabCriticalAlertService {
@@ -73,14 +88,15 @@ export class LabCriticalAlertService {
   async getAlertsForUser(tenantDb: DataSource, userId: string) {
     const alerts = await tenantDb.query(
       `
-      SELECT 
+      SELECT
         lca.*,
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number
       FROM lab_critical_alerts lca
       INNER JOIN patients p ON p.id = lca.patient_id
       WHERE lca.alerted_to = $1
-        AND lca.alert_status = 'pending'
+        AND lca.alert_status IN ('pending', 'escalated')
+        AND lca.acknowledged_at IS NULL
       ORDER BY lca.created_at DESC
       `,
       [userId],
@@ -90,9 +106,11 @@ export class LabCriticalAlertService {
   }
 
   async getPendingAlerts(tenantDb: DataSource) {
+    // FX-018: escalated-but-unacknowledged alerts re-surface here instead of
+    // silently expiring from view. Acknowledged alerts never appear.
     const alerts = await tenantDb.query(
       `
-      SELECT 
+      SELECT
         lca.*,
         p.first_name || ' ' || p.last_name as patient_name,
         p.patient_number,
@@ -103,8 +121,11 @@ export class LabCriticalAlertService {
       FROM lab_critical_alerts lca
       INNER JOIN patients p ON p.id = lca.patient_id
       LEFT JOIN users u ON u.id = lca.alerted_to
-      WHERE lca.alert_status = 'pending'
-      ORDER BY lca.severity DESC, lca.created_at ASC
+      WHERE lca.alert_status IN ('pending', 'escalated')
+        AND lca.acknowledged_at IS NULL
+      ORDER BY
+        CASE WHEN lca.alert_status = 'escalated' THEN 0 ELSE 1 END,
+        lca.severity DESC, lca.created_at ASC
       `,
     );
 
@@ -302,16 +323,148 @@ export class LabCriticalAlertService {
     return { alerts, generated: alerts.length };
   }
 
+  private requireCriticalAccessor(accessor: CriticalAlertAccessor | undefined | null): CriticalAlertAccessor {
+    if (!accessor || typeof accessor.userId !== 'string' || !accessor.userId) {
+      // Lesson 1 again: no optional identity — a missing accessor denies
+      // instead of bypassing the role gate.
+      throw new ForbiddenException('Critical-result acknowledgment requires an authenticated accessor');
+    }
+    return accessor;
+  }
+
+  /**
+   * Resolve the on-duty covering clinicians: users with an on-call scheduled
+   * shift for today, ward-scoped when the ward is known, otherwise any
+   * on-call cover. Returns user ids with their roles.
+   */
+  private async resolveCoveringClinicians(
+    tenantDb: DataSource,
+    opts?: { tenantId?: string; ward?: string | null },
+  ): Promise<Array<{ userId: string; role: string; ward: string | null }>> {
+    const tryWard = async (ward: string | null | undefined) => {
+      const params: any[] = [];
+      const conditions = [
+        "sds.status = 'scheduled'",
+        'sds.on_call = true',
+        'sds.shift_date = CURRENT_DATE',
+      ];
+      if (opts?.tenantId) {
+        params.push(opts.tenantId);
+        conditions.push(`sds.tenant_id = $${params.length}`);
+      }
+      if (ward) {
+        params.push(ward);
+        conditions.push(`sds.ward = $${params.length}`);
+      }
+      const rows = await tenantDb.query(
+        `SELECT sds.user_id, u.role, sds.ward
+         FROM staff_duty_shifts sds
+         JOIN users u ON u.id = sds.user_id
+         WHERE ${conditions.join(' AND ')}
+         ORDER BY sds.start_time ASC`,
+        params,
+      );
+      return (rows || []).map((r: any) => ({
+        userId: r.user_id,
+        role: String(r.role || ''),
+        ward: r.ward ?? null,
+      }));
+    };
+
+    if (opts?.ward) {
+      const scoped = await tryWard(opts.ward);
+      if (scoped.length > 0) return scoped;
+    }
+    // Fall back to any on-call cover rather than a static role list.
+    return tryWard(null);
+  }
+
+  /**
+   * Best-effort ward for a patient: active admission → ward location name.
+   * Returns null when unknown — callers then use any-ward on-call cover.
+   */
+  private async resolveAlertWard(
+    tenantDb: DataSource,
+    patientId: string,
+    wardOverride?: string | null,
+  ): Promise<string | null> {
+    if (wardOverride) return wardOverride;
+    try {
+      const admissions = await tenantDb.query(
+        `SELECT ward_location_id FROM admissions
+         WHERE patient_id = $1 AND status = 'active'
+         ORDER BY admission_date DESC LIMIT 1`,
+        [patientId],
+      );
+      const locationId = admissions?.[0]?.ward_location_id;
+      if (!locationId) return null;
+      const locations = await tenantDb.query(
+        `SELECT name FROM inventory_locations WHERE id = $1 LIMIT 1`,
+        [locationId],
+      );
+      return locations?.[0]?.name ?? null;
+    } catch (e: any) {
+      this.logger.warn(`Ward resolution failed closed to any-ward cover: ${e?.message}`);
+      return null;
+    }
+  }
+
   async acknowledgeAlert(
     tenantDb: DataSource,
     alertId: string,
-    userId: string,
+    accessor: CriticalAlertAccessor,
     acknowledgmentNotes?: string,
+    opts?: { tenantId?: string; ward?: string },
   ) {
+    const acc = this.requireCriticalAccessor(accessor);
+    const rows = await tenantDb.query(
+      `SELECT * FROM lab_critical_alerts WHERE id = $1`,
+      [alertId],
+    );
+    const alert = rows?.[0];
+    if (!alert) {
+      throw new NotFoundException(`Alert with ID ${alertId} not found`);
+    }
+    if (alert.acknowledged_at || alert.alert_status === 'acknowledged') {
+      return alert; // idempotent: already acknowledged
+    }
+
+    let orderingProviderId: string | null = null;
+    if (alert.lab_order_id) {
+      const orders = await tenantDb.query(
+        `SELECT ordering_provider_id FROM lab_orders WHERE id = $1`,
+        [alert.lab_order_id],
+      );
+      orderingProviderId = orders?.[0]?.ordering_provider_id ?? null;
+    }
+
+    const isOrderer =
+      Boolean(orderingProviderId) &&
+      orderingProviderId === acc.userId &&
+      CRITICAL_ACK_ROLES.has(String(acc.role));
+
+    let isCovering = false;
+    if (!isOrderer) {
+      const ward = await this.resolveAlertWard(tenantDb, alert.patient_id, opts?.ward);
+      const covering = await this.resolveCoveringClinicians(tenantDb, {
+        tenantId: opts?.tenantId,
+        ward,
+      });
+      isCovering =
+        CRITICAL_ACK_ROLES.has(String(acc.role)) &&
+        covering.some((c) => c.userId === acc.userId);
+    }
+
+    if (!isOrderer && !isCovering) {
+      throw new ForbiddenException(
+        'Only the ordering clinician or the on-duty covering clinician may acknowledge a critical result',
+      );
+    }
+
     const result = await tenantDb.query(
       `
       UPDATE lab_critical_alerts
-      SET 
+      SET
         alert_status = 'acknowledged',
         acknowledged_by = $1,
         acknowledged_at = NOW(),
@@ -319,14 +472,14 @@ export class LabCriticalAlertService {
       WHERE id = $3
       RETURNING *
       `,
-      [userId, acknowledgmentNotes, alertId],
+      [acc.userId, acknowledgmentNotes, alertId],
     );
 
     if (result.length === 0) {
       throw new NotFoundException(`Alert with ID ${alertId} not found`);
     }
 
-    this.logger.log(`Alert ${alertId} acknowledged by user ${userId}`);
+    this.logger.log(`Alert ${alertId} acknowledged by user ${acc.userId}`);
     return result[0];
   }
 
@@ -385,29 +538,54 @@ export class LabCriticalAlertService {
     }
   }
 
-  // Background task to auto-escalate unacknowledged alerts
-  async autoEscalateUnacknowledgedAlerts(tenantDb: DataSource, escalationThresholdMinutes = 30) {
+  // Background task to auto-escalate unacknowledged alerts. Escalation goes
+  // to whoever is actually covering (on-call roster, ward-scoped when known)
+  // — not a static admin/doctor list. Alerts with no covering on-call stay
+  // pending and are reported as unescalated, never silently dropped.
+  async autoEscalateUnacknowledgedAlerts(
+    tenantDb: DataSource,
+    escalationThresholdMinutes = 30,
+    opts?: { tenantId?: string; ward?: string },
+  ) {
+    const threshold = Number(escalationThresholdMinutes);
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      throw new ForbiddenException('Escalation threshold must be a non-negative number');
+    }
     const unacknowledged = await tenantDb.query(
       `
-      SELECT 
+      SELECT
         lca.id,
-        lca.alerted_to,
-        u.role,
-        sup.id as supervisor_id
+        lca.patient_id,
+        lca.alerted_to
       FROM lab_critical_alerts lca
-      INNER JOIN users u ON u.id = lca.alerted_to
-      LEFT JOIN users sup ON sup.role IN ('admin', 'doctor') AND sup.id != lca.alerted_to
       WHERE lca.alert_status = 'pending'
-        AND lca.alerted_at < NOW() - INTERVAL '${escalationThresholdMinutes} minutes'
-      LIMIT 10
+        AND lca.acknowledged_at IS NULL
+        AND lca.alerted_at < NOW() - ($1 || ' minutes')::INTERVAL
+      ORDER BY lca.alerted_at ASC
+      LIMIT 50
       `,
+      [String(Math.floor(threshold))],
     );
 
     let escalatedCount = 0;
-    for (const alert of unacknowledged) {
-      if (alert.supervisor_id) {
-        await this.escalateAlert(tenantDb, alert.id, alert.supervisor_id, 'system');
+    let unescalatedCount = 0;
+    for (const alert of unacknowledged || []) {
+      const ward =
+        (await this.resolveAlertWard(tenantDb, alert.patient_id, opts?.ward)) ?? null;
+      const covering = await this.resolveCoveringClinicians(tenantDb, {
+        tenantId: opts?.tenantId,
+        ward: ward ?? opts?.ward ?? null,
+      });
+      const target =
+        covering.find((c) => c.userId !== alert.alerted_to) ?? covering[0] ?? null;
+      if (target) {
+        await this.escalateAlert(tenantDb, alert.id, target.userId, 'system');
         escalatedCount++;
+      } else {
+        unescalatedCount++;
+        this.logger.warn(
+          `Critical alert ${alert.id} has no on-duty cover — left pending and reported, not dropped`,
+        );
       }
     }
 
@@ -415,6 +593,6 @@ export class LabCriticalAlertService {
       this.logger.warn(`Auto-escalated ${escalatedCount} unacknowledged alerts`);
     }
 
-    return { escalated: escalatedCount };
+    return { escalated: escalatedCount, unescalated: unescalatedCount };
   }
 }
