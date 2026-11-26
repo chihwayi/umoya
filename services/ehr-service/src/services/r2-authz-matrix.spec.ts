@@ -84,6 +84,51 @@ function fakeDb(scenario: { ctx: Ctx; vip: boolean }) {
 
 describe('R2 FX-011 access matrix (red→green)', () => {
   const outcomes: Array<Row & { got: string; pass: boolean }> = [];
+  const seenRows = new Set<string>();
+  const record = (role: string, endpoint: string, ctx: string, expect: string, got: string) => {
+    const key = `${role}|${endpoint}|${ctx}`;
+    if (seenRows.has(key)) return;
+    seenRows.add(key);
+    outcomes.push({ role, endpoint, ctx: ctx as any, expect: expect as any, got: got as any, pass: expect === got });
+  };
+
+  test('receptionist denied Observation by ID (resource seam)', async () => {
+    const { FhirService } = require('./fhir.service');
+    const denyLayer = {
+      assertCanAccess: async () => {
+        throw new (require('@nestjs/common').ForbiddenException)('no relationship');
+      },
+      filterAccessiblePatientIds: async () => [],
+    };
+    const svc = new FhirService(undefined, undefined, denyLayer);
+    const db: any = {
+      query: async (sql: string) =>
+        /FROM vitals/.test(sql) ? [{ patient_id: 'p-other' }] : [],
+    };
+    await expect(
+      svc.assertResourceAccess(db, { userId: 'u', role: 'receptionist', facilityId: null }, 'Observation', '11111111-2222-3333-4444-555555555555-temp', 'chart-read'),
+    ).rejects.toThrow(/relationship|denied|Forbidden/i);
+    record('receptionist', 'FHIR Observation read', 'stranger', 'deny', 'deny');
+  });
+
+  test('receptionist denied Condition by ID (resource seam)', async () => {
+    const { FhirService } = require('./fhir.service');
+    const denyLayer = {
+      assertCanAccess: async () => {
+        throw new (require('@nestjs/common').ForbiddenException)('no relationship');
+      },
+      filterAccessiblePatientIds: async () => [],
+    };
+    const svc = new FhirService(undefined, undefined, denyLayer);
+    const db: any = {
+      query: async (sql: string) =>
+        /FROM problems/.test(sql) ? [{ patient_id: 'p-other' }] : [],
+    };
+    await expect(
+      svc.assertResourceAccess(db, { userId: 'u', role: 'receptionist', facilityId: null }, 'Condition', 'c1', 'chart-read'),
+    ).rejects.toThrow(/relationship|denied|Forbidden/i);
+    record('receptionist', 'FHIR Condition read', 'stranger', 'deny', 'deny');
+  });
 
   test.each(MATRIX.map((r, i) => [i, r] as const))('row %i: %s', async (_i, row) => {
     const db = fakeDb({ ctx: row.ctx, vip: !!row.vip }) as any;
@@ -140,14 +185,7 @@ describe('R2 FX-011 access matrix (red→green)', () => {
       };
     }
     const acc = (role: string) => ({ userId: 'u1', role, facilityId: null });
-    const seen = new Set<string>();
-    const record = (role: string, endpoint: string, ctx: string, expect: string, got: string) => {
-      const key = `${role}|${endpoint}|${ctx}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      outcomes.push({ role, endpoint, ctx: ctx as any, expect: expect as any, got: got as any, pass: expect === got });
-    };
-
+    // record() lives in the outer describe; FX-012 rows reuse it.
     test('propagation without consent creates zero alerts and no INSERT', async () => {
       const db: any = dfake({ consent: 'none' });
       const res = await svc.propagateDiagnosis(db, 'p1', 'HIV', acc('doctor'));

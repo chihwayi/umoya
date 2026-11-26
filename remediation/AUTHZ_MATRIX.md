@@ -5,6 +5,8 @@ below is an executed assertion, not prose. Regenerate: `npx jest r2-authz-matrix
 
 | role | endpoint | context | VIP | expected | got |
 |---|---|---|---|---|---|
+| receptionist | FHIR Observation read | stranger | no | deny | deny  |
+| receptionist | FHIR Condition read | stranger | no | deny | deny  |
 | receptionist | REST GET /patients/:id | stranger | no | deny | deny  |
 | pharmacist | REST GET /patients/:id | stranger | no | deny | deny  |
 | nurse | REST GET /patients/:id | stranger | no | deny | deny  |

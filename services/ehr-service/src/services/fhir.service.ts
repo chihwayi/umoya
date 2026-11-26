@@ -57,6 +57,149 @@ export class FhirService {
     }
     return this.patientAccess;
   }
+
+  // R2 gap-close: resource → owning-patient resolution. ONE static map, ONE
+  // check (assertResourceAccess), ONE list filter (filterResourcesByAccess).
+  // Every patient-linked FHIR resource funnels through these; directory /
+  // catalog types (Medication, CarePlan-as-drug-catalog, Location,
+  // Organization, Practitioner, PractitionerRole) carry no patient data and
+  // are deliberately absent. Fully static SQL so the raw-SQL drift gate can
+  // parse each statement.
+  private static readonly RESOURCE_PATIENT_LOOKUP: Record<string, { single: string; batch: string }> = {
+    Encounter: {
+      single: `SELECT patient_id FROM appointments WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM appointments WHERE id = ANY($1)`,
+    },
+    MedicationRequest: {
+      single: `SELECT patient_id FROM prescriptions WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM prescriptions WHERE id = ANY($1)`,
+    },
+    MedicationDispense: {
+      single: `SELECT patient_id FROM pharmacy_dispensings WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM pharmacy_dispensings WHERE id = ANY($1)`,
+    },
+    DiagnosticReport: {
+      single: `SELECT patient_id FROM lab_orders WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM lab_orders WHERE id = ANY($1)`,
+    },
+    Condition: {
+      single: `SELECT patient_id FROM problems WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM problems WHERE id = ANY($1)`,
+    },
+    Immunization: {
+      single: `SELECT patient_id FROM immunizations WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM immunizations WHERE id = ANY($1)`,
+    },
+    Procedure: {
+      single: `SELECT patient_id FROM surgical_cases WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM surgical_cases WHERE id = ANY($1)`,
+    },
+    ImagingStudy: {
+      single: `SELECT patient_id FROM dicom_studies WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM dicom_studies WHERE id = ANY($1)`,
+    },
+    AllergyIntolerance: {
+      single: `SELECT patient_id FROM allergies WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM allergies WHERE id = ANY($1)`,
+    },
+    ServiceRequest: {
+      single: `SELECT patient_id FROM lab_orders WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM lab_orders WHERE id = ANY($1)`,
+    },
+    DocumentReference: {
+      single: `SELECT patient_id FROM medical_records WHERE id = $1`,
+      batch: `SELECT id, patient_id FROM medical_records WHERE id = ANY($1)`,
+    },
+    // Observation is NOT in the map: its FHIR ids are composite
+    // ({vitalsId}-{type} / {labOrderId}-{index}) spanning two tables —
+    // resolved by resolveObservationOwner below. The single exception.
+  };
+
+  private static observationBaseId(compositeId: string): string | null {
+    const parts = String(compositeId).split('-');
+    if (parts.length < 5) return null;
+    return parts.slice(0, 5).join('-');
+  }
+
+  private async resolveObservationOwner(db: any, compositeId: string): Promise<string | null> {
+    const base = FhirService.observationBaseId(compositeId);
+    if (!base) return null;
+    const [v] = await db.query(`SELECT patient_id FROM vitals WHERE id = $1`, [base]);
+    if (v?.patient_id) return String(v.patient_id);
+    const [l] = await db.query(`SELECT patient_id FROM lab_orders WHERE id = $1`, [base]);
+    return l?.patient_id ? String(l.patient_id) : null;
+  }
+
+  async resolveOwningPatientId(db: any, resourceType: string, resourceId: string): Promise<string | null> {
+    try {
+      if (resourceType === 'Observation') return this.resolveObservationOwner(db, resourceId);
+      const entry = FhirService.RESOURCE_PATIENT_LOOKUP[resourceType];
+      if (!entry) return null; // directory/catalog: no patient linkage
+      const [row] = await db.query(entry.single, [resourceId]);
+      return row?.patient_id ? String(row.patient_id) : null;
+    } catch {
+      return null; // fail closed at the caller (null owner denies)
+    }
+  }
+
+  async assertResourceAccess(
+    db: any,
+    accessor: Accessor | undefined,
+    resourceType: string,
+    resourceId: string,
+    purpose: string,
+  ): Promise<void> {
+    if (!accessor || !accessor.userId) {
+      throw new ForbiddenException('Authorization layer unavailable — denying access');
+    }
+    if (resourceType === 'Patient') {
+      await this.requireAccess().assertCanAccess(db, accessor, resourceId, purpose);
+      return;
+    }
+    if (!FhirService.RESOURCE_PATIENT_LOOKUP[resourceType] && resourceType !== 'Observation') {
+      return; // directory/catalog resource: no patient data to scope
+    }
+    const owner = await this.resolveOwningPatientId(db, resourceType, resourceId);
+    if (!owner) {
+      // Unknown owner denies indistinguishably from forbidden (anti-enum).
+      throw new ForbiddenException('Access denied: no established relationship to this patient');
+    }
+    await this.requireAccess().assertCanAccess(db, accessor, owner, purpose);
+  }
+
+  async filterResourcesByAccess(
+    db: any,
+    accessor: Accessor | undefined,
+    resourceType: string,
+    resourceIds: string[],
+  ): Promise<string[]> {
+    if (!accessor || !accessor.userId) {
+      throw new ForbiddenException('Authorization layer unavailable — denying access');
+    }
+    if (resourceIds.length === 0) return [];
+    if (resourceType !== 'Observation' && !FhirService.RESOURCE_PATIENT_LOOKUP[resourceType]) {
+      return resourceIds; // directory/catalog: nothing to filter
+    }
+    const ownerById = new Map<string, string>();
+    if (resourceType === 'Observation') {
+      for (const id of resourceIds) {
+        const owner = await this.resolveOwningPatientId(db, resourceType, id);
+        if (owner) ownerById.set(id, owner);
+      }
+    } else {
+      const entry = FhirService.RESOURCE_PATIENT_LOOKUP[resourceType];
+      const rows = await db.query(entry.batch, [resourceIds]);
+      for (const r of rows) {
+        if (r?.id && r?.patient_id) ownerById.set(String(r.id), String(r.patient_id));
+      }
+    }
+    const owners = [...new Set(ownerById.values())];
+    const allowedOwners = await this.requireAccess().filterAccessiblePatientIds(db, accessor, owners);
+    return resourceIds.filter((id) => {
+      const o = ownerById.get(id);
+      return o !== undefined && allowedOwners.includes(o);
+    });
+  }
   
   async getResourceHistory(resourceType: string, id: string, tenantDb: DataSource, accessor?: Accessor) {
     // R2 / FX-011: Patient history is patient data — gate it. Other resource
@@ -4163,31 +4306,36 @@ export class FhirService {
       case 'GET':
         return await this.handleGetRequest(resourceType, resourceId, tenantDb, tenantId, accessor);
       
-      case 'POST':
-        if (!resource) {
-          throw new BadRequestException(OperationOutcomeUtil.badRequest('POST requires a resource'));
-        }
-        return await this.handlePostRequest(resourceType, resource, tenantDb, tenantId);
-      
       case 'PUT':
         if (!resource || !resourceId) {
           throw new BadRequestException(OperationOutcomeUtil.badRequest('PUT requires resource and ID'));
         }
-        // R2 / FX-011: overwriting an existing Patient record needs a
-        // relationship; creates (POST without id) remain registration.
-        if (resourceType === 'Patient') {
-          await this.requireAccess().assertCanAccess(tenantDb, accessor, resourceId, 'chart-write');
-        }
+        // R2 gap-close: overwriting ANY patient-linked record needs a
+        // relationship (uniform owner check; directories pass through).
+        await this.assertResourceAccess(tenantDb, accessor, resourceType, resourceId, 'chart-write');
         return await this.handlePutRequest(resourceType, resourceId, resource, tenantDb, tenantId);
+
+      case 'POST': {
+        if (!resource) {
+          throw new BadRequestException(OperationOutcomeUtil.badRequest('POST requires a resource'));
+        }
+        // R2 gap-close: creating a record under another patient's chart
+        // needs a relationship; subject-less bodies (catalog/definitional)
+        // and brand-new Patient registrations pass through.
+        const ref = resource?.subject?.reference || resource?.patient?.reference;
+        if (typeof ref === 'string' && ref.startsWith('Patient/')) {
+          await this.assertResourceAccess(tenantDb, accessor, 'Patient', ref.slice('Patient/'.length), 'chart-write');
+        }
+        return await this.handlePostRequest(resourceType, resource, tenantDb, tenantId);
+      }
 
       case 'DELETE':
         if (!resourceId) {
           throw new BadRequestException(OperationOutcomeUtil.badRequest('DELETE requires an ID'));
         }
-        // R2 / FX-011: deleting a Patient record needs a relationship.
-        if (resourceType === 'Patient') {
-          await this.requireAccess().assertCanAccess(tenantDb, accessor, resourceId, 'chart-write');
-        }
+        // R2 gap-close: deleting ANY patient-linked record needs a
+        // relationship (uniform owner check; directories pass through).
+        await this.assertResourceAccess(tenantDb, accessor, resourceType, resourceId, 'chart-write');
         return await this.handleDeleteRequest(resourceType, resourceId, tenantDb);
       
       default:
@@ -4222,9 +4370,14 @@ export class FhirService {
       }
 
       const result = await searchMethod({}, tenantDb, tenantId);
-      return { status: '200', resource: result };
+      // R2 gap-close: batch searches funnel through the same owner filter.
+      const filtered = await this.filterBundleResult(tenantDb, accessor, resourceType, result);
+      return { status: '200', resource: filtered };
     }
 
+    // R2 gap-close: uniform pre-check for EVERY resource type — owner
+    // resolved via the single map, layer enforced, directories pass through.
+    await this.assertResourceAccess(tenantDb, accessor, resourceType, resourceId, 'chart-read');
     // Handle get by ID
     const getMethods: Record<string, (id: string, db: DataSource, tid: string) => Promise<any>> = {
       Patient: (id, db, tid) => this.getPatient(id, db, tid, accessor),
@@ -4249,6 +4402,16 @@ export class FhirService {
 
     const resource = await getMethod(resourceId, tenantDb, tenantId);
     return { status: '200', location: `${resourceType}/${resourceId}`, resource };
+  }
+
+  // R2 gap-close: filter a search Bundle to entries the caller may see.
+  private async filterBundleResult(db: any, accessor: Accessor, resourceType: string, bundle: any): Promise<any> {
+    const entries: any[] = bundle?.entry ?? [];
+    if (entries.length === 0) return bundle;
+    const ids = entries.map((e) => e?.resource?.id).filter((id) => typeof id === 'string');
+    const allowed = await this.filterResourcesByAccess(db, accessor, resourceType, ids);
+    const kept = entries.filter((e) => allowed.includes(e?.resource?.id));
+    return { ...bundle, entry: kept, total: kept.length };
   }
 
   private async handlePostRequest(
