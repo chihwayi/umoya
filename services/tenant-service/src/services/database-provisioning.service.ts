@@ -8906,6 +8906,60 @@ export class DatabaseProvisioningService {
           $$`,
         ],
       },
+      {
+        // R2 / FX-011 + FX-012 (S-001, B-011, S-002, P-002, P-003): the
+        // authorization + disclosure-consent schema. Behavior lands in
+        // ehr-service (PatientAccessService + consent-gated disclosure);
+        // this bundle only creates the tables/columns. Idempotent.
+        id: 'r2_authz_disclosure',
+        label: 'R2 AuthZ — care-team, break-glass, disclosure consents, safeguard flag, facility scope',
+        version: '2026.11.26.2',
+        description:
+          'patient_care_team; break_glass_access_log; household_disclosure_consents; ' +
+          'patient_family_links.do_not_notify; patients/users.facility_id (nullable legacy)',
+        statements: () => [
+          `CREATE TABLE IF NOT EXISTS patient_care_team (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            user_id UUID NOT NULL,
+            role TEXT NOT NULL,
+            active BOOLEAN NOT NULL DEFAULT true,
+            assigned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (patient_id, user_id)
+          )`,
+          `CREATE TABLE IF NOT EXISTS break_glass_access_log (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL,
+            patient_id UUID NOT NULL,
+            reason TEXT NOT NULL,
+            action TEXT NOT NULL,
+            expires_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+          )`,
+          `CREATE TABLE IF NOT EXISTS household_disclosure_consents (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            source_patient_id UUID NOT NULL,
+            target_household_id UUID,
+            target_patient_id UUID,
+            condition_category TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            granted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            expires_at TIMESTAMPTZ,
+            withdrawn_at TIMESTAMPTZ,
+            withdrawn_reason TEXT,
+            collected_by UUID
+          )`,
+          `ALTER TABLE patient_family_links ADD COLUMN IF NOT EXISTS do_not_notify BOOLEAN NOT NULL DEFAULT false`,
+          `ALTER TABLE patients ADD COLUMN IF NOT EXISTS facility_id UUID`,
+          `ALTER TABLE users ADD COLUMN IF NOT EXISTS facility_id UUID`,
+          // 2026.11.26.2: target_household_id must match household_groups.id
+          // (BIGINT) — the 26.1 UUID type could never join and would deny by
+          // accident. No production rows exist under R2 (unmerged bundle);
+          // DROP+ADD is the honest forward fix. Idempotent.
+          `ALTER TABLE household_disclosure_consents DROP COLUMN IF EXISTS target_household_id`,
+          `ALTER TABLE household_disclosure_consents ADD COLUMN IF NOT EXISTS target_household_id BIGINT`,
+        ],
+      },
     ];
   }
 

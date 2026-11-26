@@ -4,6 +4,7 @@ import { RolesGuard } from '../guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { IcuService } from '../services/icu.service';
 import { OutcomeLinkageService } from '../services/outcome-linkage.service';
+import { PatientAccessService } from '../services/patient-access.service';
 
 // ICU admission/discharge, ventilator settings, and critical-drug infusions
 // are life-critical — every write route previously required only
@@ -18,11 +19,24 @@ export class IcuController {
   constructor(
     private readonly icu: IcuService,
     private readonly outcomeLinkage: OutcomeLinkageService,
+    private readonly patientAccess: PatientAccessService,
   ) {}
 
   @Get('census')
   getCensus(@Req() req: any, @Query('icuType') icuType?: string) {
-    return this.icu.getCensus(req.tenantDb, icuType);
+    return this.filterCensus(req, icuType);
+  }
+
+  // R2 / FX-011: census rows carry names + DOB — strangers see none.
+  private async filterCensus(req: any, icuType?: string) {
+    const rows: any[] = await this.icu.getCensus(req.tenantDb, icuType);
+    const u = req?.user ?? {};
+    const ids = await this.patientAccess.filterAccessiblePatientIds(
+      req.tenantDb,
+      { userId: u.sub || u.id || u.userId, role: u.role, facilityId: u.facilityId ?? null },
+      rows.map((r) => r.patient_id),
+    );
+    return rows.filter((r) => ids.includes(r.patient_id));
   }
 
   @Post('admissions')

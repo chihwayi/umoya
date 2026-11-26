@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { SmsService } from './sms.service';
 import { EmailService } from './email.service';
+import { scrubConditionTerms } from '../utils/condition-scrub.util';
 
 export const DEFAULT_NOTIFICATION_TRIGGERS: Array<{ key: string; label: string; description: string }> = [
   { key: 'appointment_booked', label: 'Appointment Booked', description: 'Confirmation with date, time, practitioner, and location when an appointment is created.' },
@@ -88,7 +89,9 @@ export class NotificationCenterService {
     body: { patientId?: string; recipient: string; channel: 'sms' | 'email'; subject?: string; message: string },
   ) {
     const recipient = String(body?.recipient ?? '').trim();
-    const message = String(body?.message ?? '').trim();
+    // R2 / FX-012: free-text notification content is scrubbed of condition
+    // terms on every channel (SMS and email previews alike).
+    const message = scrubConditionTerms(String(body?.message ?? '').trim());
     const channel = body?.channel;
     if (!recipient) throw new BadRequestException('recipient is required');
     if (!message) throw new BadRequestException('message is required');
@@ -136,6 +139,8 @@ export class NotificationCenterService {
     triggerKey: string,
     payload: { recipientSms?: string; recipientEmail?: string; patientId?: string; subject?: string; message: string },
   ) {
+    // R2 / FX-012: scrub once up front so sends AND the stored log are clean.
+    payload = { ...payload, message: scrubConditionTerms(String(payload.message ?? '')) };
     const [config] = await tenantDb.query(
       `SELECT sms_enabled, email_enabled FROM notification_trigger_configs WHERE trigger_key = $1`,
       [triggerKey],

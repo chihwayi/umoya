@@ -1,15 +1,31 @@
 import { UseGuards, Controller, Get, Post, Patch, Body, Param, Query, Req } from '@nestjs/common';
 import { WardRoundService } from '../services/ward-round.service';
+import { PatientAccessService } from '../services/patient-access.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 
 @Controller('ward')
 @UseGuards(JwtAuthGuard)
 export class WardRoundController {
-  constructor(private readonly ward: WardRoundService) {}
+  constructor(
+    private readonly ward: WardRoundService,
+    private readonly patientAccess: PatientAccessService,
+  ) {}
 
   @Get('census')
   getCensus(@Req() req: any, @Query('doctorId') doctorId?: string) {
-    return this.ward.getInpatientCensus(req.tenantDb, doctorId);
+    return this.filterCensus(req, doctorId);
+  }
+
+  // R2 / FX-011: census rows carry names + DOB + risk — strangers see none.
+  private async filterCensus(req: any, doctorId?: string) {
+    const rows: any[] = await this.ward.getInpatientCensus(req.tenantDb, doctorId);
+    const u = req?.user ?? {};
+    const ids = await this.patientAccess.filterAccessiblePatientIds(
+      req.tenantDb,
+      { userId: u.sub || u.id || u.userId, role: u.role, facilityId: u.facilityId ?? null },
+      rows.map((r) => r.patient_id),
+    );
+    return rows.filter((r) => ids.includes(r.patient_id));
   }
 
   @Post('admissions')
