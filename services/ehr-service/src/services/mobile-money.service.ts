@@ -10,6 +10,13 @@ import { TenantService } from './tenant.service';
 import { BillingService } from './billing.service';
 import { MobileMoneyConfig } from '../entities/mobile-money-config.entity';
 import { MobileMoneyTransaction } from '../entities/mobile-money-transaction.entity';
+import {
+  SUPPORTED_CURRENCIES,
+  extractCallbackEventId,
+  normalizeCallbackProvider,
+  queryBackClientFor,
+  verifyProviderCallback,
+} from './payment-callback-verification';
 
 @Injectable()
 export class MobileMoneyService {
@@ -37,6 +44,14 @@ export class MobileMoneyService {
     amount: number;
     currency: string;
   }): Promise<MobileMoneyTransaction> {
+    // FX-019 / P-005: single-currency-per-bill — reject unknown codes
+    // (including ZiG) at initiation, never convert silently.
+    const currency = String(body.currency || 'USD').trim().toUpperCase();
+    if (!SUPPORTED_CURRENCIES.includes(currency)) {
+      throw new BadRequestException(
+        `unsupported currency ${currency} — single-currency-per-bill, no conversion layer this sprint (USD/ZWL only)`,
+      );
+    }
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const repo = db.getRepository(MobileMoneyTransaction);
 
@@ -46,7 +61,7 @@ export class MobileMoneyService {
       provider: body.provider,
       phoneNumber: body.phoneNumber,
       amount: body.amount,
-      currency: body.currency,
+      currency,
       status: 'pending',
     });
     const saved = await repo.save(tx);
@@ -260,9 +275,15 @@ export class MobileMoneyService {
     return true; // no supported verification mechanism for this provider — see note above
   }
 
-  async handleCallback(tenantId: string, provider: string, payload: any): Promise<void> {
+  async handleCallback(
+    tenantId: string,
+    provider: string,
+    payload: any,
+    opts?: { headers?: Record<string, any> },
+  ): Promise<void> {
     const db = await this.tenantService.getTenantDatabase(tenantId);
     const repo = db.getRepository(MobileMoneyTransaction);
+    const headers = opts?.headers ?? {};
 
     let txId: string | undefined;
     let success = false;
@@ -325,11 +346,29 @@ export class MobileMoneyService {
 
     // A transaction can only be confirmed once — without this, a replayed or
     // forged callback for an already-settled transaction would re-invoke
-    // billingService.addPayment() and double-credit the invoice.
+    // billingService.addPayment() and double-credit the invoice. This guard
+    // stays: it is the idempotency half (duplicate legitimate callbacks),
+    // while the verifier below is the authenticity half (forged callbacks).
     if (tx.status !== 'pending') {
       this.logger.warn(`Ignoring ${provider} callback for non-pending transaction ${tx.id} (status=${tx.status})`);
       return;
     }
+
+    // FX-019: verify the callback BEFORE crediting anything. A forged
+    // Daraja-style callback (ResultCode 0 + attacker receipt) now dies here
+    // instead of flipping pending → success.
+    const providerId = normalizeCallbackProvider(provider);
+    const callbackEventId = extractCallbackEventId(providerId, payload, headers);
+    await verifyProviderCallback({
+      provider: providerId,
+      headers,
+      payload,
+      tenantDb: db,
+      http: queryBackClientFor(providerId),
+      transactionId: tx.id,
+      callbackEventId,
+      billId: (tx as any).invoiceId ?? null,
+    });
 
     await repo.update(tx.id, {
       status: success ? 'success' : 'failed',

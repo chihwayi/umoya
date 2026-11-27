@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { MedicationAdministrationRecord } from '../entities/medication-administration-record.entity';
 import { PatientWristband } from '../entities/patient-wristband.entity';
@@ -6,6 +6,38 @@ import { MedicationBarcodeMaster } from '../entities/medication-barcode-master.e
 import { MedicationAlert } from '../entities/medication-alert.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { StoreroomService } from './storeroom.service';
+import { PatientAccessService, Accessor } from './patient-access.service';
+import {
+  evaluateFiveRights,
+  isVerifiablePrescriptionRef,
+  OFFLINE_CACHED_MAR_STALENESS_LIMIT_MINUTES,
+  type FiveRightsEvidence,
+} from './bcma-five-rights';
+
+export interface FiveRightsInput {
+  patientBarcode: string;
+  medicationBarcode: string;
+  prescriptionId: string;
+  dose: string;
+  route: string;
+  scannedAt?: Date | string;
+}
+
+/** Roles permitted to record a five-rights override (role + reason + audit). */
+const OVERRIDE_ROLES = new Set(['nurse', 'doctor', 'pharmacist', 'admin']);
+
+/**
+ * Internal callers that act without an interactive accessor (order-set
+ * dispense, telemedicine mid-call Rx, offline-then-sync replay, scheduled MAR
+ * administration). Closed allowlist — anything else throws. Each use is
+ * reason-logged so it stays greppable.
+ */
+const PRE_AUTHORIZED_REASONS = new Set([
+  'order-set-dispense',
+  'telemedicine-mid-call',
+  'offline-sync-replay',
+  'scheduled-mar-admin',
+]);
 
 @Injectable()
 export class BcmaService {
@@ -13,6 +45,7 @@ export class BcmaService {
 
   constructor(
     @Optional() private readonly storeroomService: StoreroomService,
+    @Optional() private readonly patientAccessService: PatientAccessService,
   ) {}
 
   private async resolveWardLocationId(
@@ -125,65 +158,370 @@ export class BcmaService {
 
   // ==================== MEDICATION ADMINISTRATION ====================
 
-  async verify5Rights(
-    patientBarcode: string,
-    medicationBarcode: string,
-    prescriptionId: string,
+  // ==================== FIVE-RIGHTS GATE (FX-010) ====================
+  // Every administration path calls verifyFiveRightsStrict (interactive) or
+  // the explicitly named verifyFiveRightsPreAuthorized (system callers with a
+  // closed-allowlist reason). There is deliberately NO optional accessor: a
+  // missing accessor throws instead of bypassing the check.
+
+  private requireAccessor(accessor: Accessor | undefined | null): Accessor {
+    if (!accessor || typeof accessor.userId !== 'string' || !accessor.userId) {
+      throw new ForbiddenException(
+        'BCMA verification requires an authenticated accessor — anonymous verification is denied',
+      );
+    }
+    return accessor;
+  }
+
+  private requireAuthzLayer(): PatientAccessService {
+    if (!this.patientAccessService) {
+      throw new ForbiddenException(
+        'BCMA authorization layer is unavailable — failing closed',
+      );
+    }
+    return this.patientAccessService;
+  }
+
+  private accessorForR2(accessor: Accessor): Accessor {
+    return {
+      userId: accessor.userId,
+      role: accessor.role,
+      facilityId: (accessor as any).facilityId ?? null,
+    };
+  }
+
+  private async loadFiveRightsEvidence(
+    input: FiveRightsInput,
+    scheduledOverride: FiveRightsEvidence['scheduled'],
     tenantDb: DataSource,
-  ): Promise<{
-    verified: boolean;
-    patient: any;
-    medication: any;
-    failures: string[];
-    alerts: any[];
-  }> {
-    const failures: string[] = [];
-    const alerts: any[] = [];
-
-    // Verify patient
-    const wristband = await this.verifyWristband(patientBarcode, tenantDb);
-    const patient = wristband.patient;
-
-    // Verify medication
-    const medication = await this.verifyMedicationBarcode(medicationBarcode, tenantDb);
-
-    // Get prescription details (would need prescription service)
-    // For now, basic verification
-
-    // Check for high-alert drugs
-    if (medication.isHighAlert) {
-      alerts.push({
-        type: 'high_alert_drug',
-        severity: 'high',
-        message: `${medication.medicationName} is a HIGH-ALERT medication. Double-check required.`,
-      });
+  ): Promise<Omit<FiveRightsEvidence, 'administered' | 'scannedAt'> & { patient: any }> {
+    if (!input || !isVerifiablePrescriptionRef(input.prescriptionId)) {
+      throw new BadRequestException(
+        `invalid-prescription-id: prescription reference is not a usable UUID`,
+      );
+    }
+    if (!input.patientBarcode || !input.medicationBarcode) {
+      throw new BadRequestException(
+        'BCMA verification requires both the patient wristband and medication barcode scans',
+      );
     }
 
-    // Check for controlled substances
-    if (medication.isControlled) {
-      alerts.push({
-        type: 'controlled_substance',
-        severity: 'moderate',
-        message: `${medication.medicationName} is a controlled substance. Witness required.`,
-      });
+    const wristband = await this.verifyWristband(input.patientBarcode, tenantDb);
+    const medication = await this.verifyMedicationBarcode(input.medicationBarcode, tenantDb);
+    const prescription = await tenantDb.getRepository(Prescription).findOne({
+      where: { id: input.prescriptionId },
+    });
+    if (!prescription) {
+      throw new BadRequestException(
+        `prescription-not-found: no prescription ${input.prescriptionId}`,
+      );
     }
 
-    const verified = failures.length === 0;
+    let scheduled = scheduledOverride ?? null;
+    if (!scheduled) {
+      const rows = await tenantDb.query(
+        `SELECT dose, unit, route, scheduled_time FROM mar_scheduled_entries
+         WHERE prescription_id = $1 AND patient_id = $2
+         ORDER BY ABS(EXTRACT(EPOCH FROM (scheduled_time - NOW()))) ASC LIMIT 1`,
+        [input.prescriptionId, wristband.patientId ?? (wristband as any).patient_id],
+      );
+      const entry = rows?.[0];
+      scheduled = entry
+        ? { dose: entry.dose, unit: entry.unit, route: entry.route, scheduledTime: entry.scheduled_time }
+        : null;
+    }
+
+    const dupes = await tenantDb.query(
+      `SELECT id FROM medication_administration_records
+       WHERE prescription_id = $1 AND patient_id = $2 AND administration_status = 'administered' LIMIT 1`,
+      [input.prescriptionId, wristband.patientId ?? (wristband as any).patient_id],
+    );
 
     return {
-      verified,
-      patient,
-      medication,
-      failures,
-      alerts,
+      wristband: {
+        barcode: wristband.barcode,
+        patientId: wristband.patientId ?? (wristband as any).patient_id,
+        isActive: wristband.isActive ?? true,
+        expiresAt: (wristband as any).expiresAt ?? (wristband as any).expires_at ?? null,
+      },
+      prescription: {
+        id: prescription.id,
+        patientId: prescription.patientId,
+        medicationName: prescription.medicationName,
+        dosage: prescription.dosage,
+        frequency: prescription.frequency,
+        status: prescription.status,
+      },
+      medication: {
+        barcode: medication.barcode,
+        medicationName: medication.medicationName,
+        genericName: (medication as any).genericName ?? (medication as any).generic_name,
+        brandName: (medication as any).brandName ?? (medication as any).brand_name,
+        strength: (medication as any).strength,
+        unit: (medication as any).unit,
+        route: (medication as any).route,
+        isActive: medication.isActive ?? true,
+        isHighAlert: medication.isHighAlert ?? false,
+        isControlled: medication.isControlled ?? false,
+      },
+      scheduled,
+      alreadyAdministered: Array.isArray(dupes) && dupes.length > 0,
+      patient: (wristband as any).patient ?? null,
     };
+  }
+
+  private async assertFiveRightsAccess(
+    accessor: Accessor,
+    wristbandPatientId: string,
+    prescriptionPatientId: string,
+    tenantDb: DataSource,
+  ): Promise<void> {
+    const authz = this.requireAuthzLayer();
+    const asR2 = this.accessorForR2(accessor);
+    // Both the wristband patient and the prescription patient must be
+    // accessible — identical 403s either way, so no oracle on mismatch.
+    await authz.assertCanAccess(tenantDb, asR2, wristbandPatientId, 'bcma-five-rights');
+    if (prescriptionPatientId !== wristbandPatientId) {
+      await authz.assertCanAccess(tenantDb, asR2, prescriptionPatientId, 'bcma-five-rights');
+    }
+  }
+
+  async verifyFiveRightsStrict(
+    input: FiveRightsInput,
+    accessor: Accessor,
+    tenantDb: DataSource,
+  ): Promise<{ verified: true; patient: any; medication: any; failures: string[]; alerts: string[] }> {
+    const acc = this.requireAccessor(accessor);
+    const loaded = await this.loadFiveRightsEvidence(input, null, tenantDb);
+    await this.assertFiveRightsAccess(acc, loaded.wristband!.patientId, loaded.prescription!.patientId, tenantDb);
+    const result = evaluateFiveRights({
+      ...loaded,
+      administered: { dose: input.dose, route: input.route },
+      scannedAt: input.scannedAt ?? new Date(),
+    });
+    if (!result.verified) {
+      throw new BadRequestException(`Five-rights hard block: ${result.failures.join(', ')}`);
+    }
+    return {
+      verified: true,
+      patient: loaded.patient,
+      medication: loaded.medication,
+      failures: [],
+      alerts: result.alerts,
+    };
+  }
+
+  /**
+   * Explicit, named, greppable exception for internal pre-authorized callers
+   * (order sets, telemedicine mid-call, offline replay). The reason must come
+   * from a closed allowlist and is logged — never an omitted argument.
+   */
+  async verifyFiveRightsPreAuthorized(
+    input: FiveRightsInput,
+    preAuth: { reason: string },
+    scheduledOverride: FiveRightsEvidence['scheduled'],
+    tenantDb: DataSource,
+  ): Promise<{ verified: true; patient: any; medication: any; failures: string[]; alerts: string[] }> {
+    const reason = String(preAuth?.reason ?? '');
+    if (!PRE_AUTHORIZED_REASONS.has(reason)) {
+      throw new ForbiddenException(
+        `BCMA pre-authorized verification requires a known internal reason — got ${JSON.stringify(reason)}`,
+      );
+    }
+    this.logger.warn(`BCMA pre-authorized verification used (reason=${reason}, rx=${input?.prescriptionId})`);
+    const loaded = await this.loadFiveRightsEvidence(input, scheduledOverride, tenantDb);
+    const result = evaluateFiveRights({
+      ...loaded,
+      administered: { dose: input.dose, route: input.route },
+      scannedAt: input.scannedAt ?? new Date(),
+    });
+    if (!result.verified) {
+      throw new BadRequestException(`Five-rights hard block: ${result.failures.join(', ')}`);
+    }
+    return { verified: true, patient: loaded.patient, medication: loaded.medication, failures: [], alerts: result.alerts };
+  }
+
+  /**
+   * Offline-then-sync replay: verifies against a cached MAR snapshot with an
+   * explicit staleness limit. A stale cache fails closed — the client must
+   * re-sync before administering. The cached authorization grant (recorded at
+   * sync time) substitutes for the live R2 check only while both the cache
+   * and the grant are fresh; otherwise the live R2 layer decides.
+   */
+  async verifyFiveRightsOffline(
+    input: FiveRightsInput,
+    cached: {
+      scheduled: FiveRightsEvidence['scheduled'];
+      cachedAt: Date | string;
+      authorization?: { userId: string; patientId: string; grantedAt: Date | string };
+      prescription?: FiveRightsEvidence['prescription'];
+      medication?: FiveRightsEvidence['medication'];
+      wristbandPatientId?: string;
+    },
+    accessor: Accessor,
+    tenantDb: DataSource,
+  ): Promise<{ verified: true; patient: any; medication: any; failures: string[]; alerts: string[]; offline: true }> {
+    const acc = this.requireAccessor(accessor);
+    const cachedAt = cached?.cachedAt ? new Date(cached.cachedAt) : null;
+    const cacheAgeMinutes = cachedAt && !Number.isNaN(cachedAt.getTime())
+      ? (Date.now() - cachedAt.getTime()) / 60000
+      : Number.POSITIVE_INFINITY;
+    if (!Number.isFinite(cacheAgeMinutes) || cacheAgeMinutes > OFFLINE_CACHED_MAR_STALENESS_LIMIT_MINUTES) {
+      throw new BadRequestException(
+        `stale-offline-cache: cached MAR is ${Number.isFinite(cacheAgeMinutes) ? Math.round(cacheAgeMinutes) : 'unknown'} minutes old (limit ${OFFLINE_CACHED_MAR_STALENESS_LIMIT_MINUTES}) — re-sync before administering`,
+      );
+    }
+    if (!cached?.scheduled) {
+      throw new BadRequestException('no-scheduled-time: offline cache carries no scheduled dose');
+    }
+
+    const grant = cached.authorization;
+    if (grant) {
+      const grantedAt = new Date(grant.grantedAt);
+      const grantAgeMinutes = !Number.isNaN(grantedAt.getTime())
+        ? (Date.now() - grantedAt.getTime()) / 60000
+        : Number.POSITIVE_INFINITY;
+      if (grant.userId !== acc.userId || grantAgeMinutes > OFFLINE_CACHED_MAR_STALENESS_LIMIT_MINUTES) {
+        throw new ForbiddenException('offline authorization grant is stale or does not match this accessor — failing closed');
+      }
+    } else {
+      // No offline grant: fall back to the live R2 layer (online replay).
+      const live = await this.loadFiveRightsEvidence(input, cached.scheduled, tenantDb);
+      await this.assertFiveRightsAccess(acc, live.wristband!.patientId, live.prescription!.patientId, tenantDb);
+      const result = evaluateFiveRights({
+        ...live,
+        administered: { dose: input.dose, route: input.route },
+        scannedAt: input.scannedAt ?? new Date(),
+      });
+      if (!result.verified) {
+        throw new BadRequestException(`Five-rights hard block: ${result.failures.join(', ')}`);
+      }
+      return { verified: true, patient: live.patient, medication: live.medication, failures: [], alerts: result.alerts, offline: true };
+    }
+
+    // Fully offline path: evidence from the verified cache, same core check.
+    const evidence: FiveRightsEvidence = {
+      wristband: { barcode: input.patientBarcode, patientId: grant.patientId, isActive: true },
+      prescription: cached.prescription ?? null,
+      medication: cached.medication ?? null,
+      scheduled: cached.scheduled,
+      administered: { dose: input.dose, route: input.route },
+      scannedAt: input.scannedAt ?? new Date(),
+      alreadyAdministered: false,
+    };
+    if (!evidence.prescription || !evidence.medication) {
+      throw new BadRequestException('offline cache lacks prescription/medication snapshots — re-sync before administering');
+    }
+    const result = evaluateFiveRights(evidence);
+    if (!result.verified) {
+      throw new BadRequestException(`Five-rights hard block: ${result.failures.join(', ')}`);
+    }
+    return { verified: true, patient: null, medication: evidence.medication, failures: [], alerts: result.alerts, offline: true };
+  }
+
+  /**
+   * Override path: role + recorded reason + audit entry. High-alert and
+   * controlled medications additionally require a second-nurse witness.
+   * NOTE (residual): overrides are recorded even for wrong-patient/wrong-drug
+   * blocks — policy should forbid administering those outright; flagged in
+   * NEEDS_CLINICAL_REVIEW rather than silently allowed.
+   */
+  async overrideFiveRights(
+    input: FiveRightsInput,
+    override: { reason: string; witnessUserId?: string },
+    accessor: Accessor,
+    tenantDb: DataSource,
+  ): Promise<{ overridden: boolean; verified?: true; failures: string[]; alerts: string[]; alertId?: string }> {
+    const acc = this.requireAccessor(accessor);
+    if (!OVERRIDE_ROLES.has(String(acc.role))) {
+      throw new ForbiddenException(`Override requires a clinical role — ${acc.role} may not override five-rights blocks`);
+    }
+    const reason = String(override?.reason ?? '').trim();
+    if (!reason) {
+      throw new BadRequestException('Override requires a recorded reason');
+    }
+    const loaded = await this.loadFiveRightsEvidence(input, null, tenantDb);
+    await this.assertFiveRightsAccess(acc, loaded.wristband!.patientId, loaded.prescription!.patientId, tenantDb);
+    const result = evaluateFiveRights({
+      ...loaded,
+      administered: { dose: input.dose, route: input.route },
+      scannedAt: input.scannedAt ?? new Date(),
+    });
+    if (result.verified) {
+      return { overridden: false, verified: true, failures: [], alerts: result.alerts };
+    }
+    const needsWitness = Boolean(loaded.medication?.isHighAlert || loaded.medication?.isControlled);
+    const witness = String(override?.witnessUserId ?? '').trim();
+    if (needsWitness && (!witness || witness === acc.userId)) {
+      throw new BadRequestException(
+        'High-alert/controlled override requires a second-nurse witness distinct from the overrider',
+      );
+    }
+    const repository = tenantDb.getRepository(MedicationAlert);
+    const entry = repository.create({
+      patientId: loaded.wristband!.patientId,
+      prescriptionId: loaded.prescription!.id,
+      marId: null,
+      alertType: 'five_rights_override',
+      severity: 'high',
+      alertMessage: `Five-rights override by ${acc.userId} (${acc.role}): ${result.failures.join(', ')}. Reason: ${reason}`,
+      alertDetails: {
+        failures: result.failures,
+        reason,
+        overriddenBy: acc.userId,
+        overriderRole: acc.role,
+        witnessUserId: witness || null,
+        scannedAt: (input.scannedAt ?? new Date()).toString(),
+      },
+      acknowledged: true,
+      acknowledgedById: acc.userId,
+      acknowledgedAt: new Date(),
+      overrideReason: reason,
+    });
+    const saved = await repository.save(entry);
+    this.logger.warn(`Five-rights override recorded: rx=${loaded.prescription!.id} by=${acc.userId} failures=${result.failures.join(',')}`);
+    return { overridden: true, failures: result.failures, alerts: result.alerts, alertId: (saved as any)?.id };
   }
 
   async administerMedication(
     marData: any,
-    userId: string,
+    accessor: Accessor,
     tenantDb: DataSource,
   ): Promise<MedicationAdministrationRecord> {
+    // FX-010: direct administration runs the same five-rights gate — a MAR
+    // must never be created from unscanned call data. Missing scan evidence
+    // fails closed.
+    const acc = this.requireAccessor(accessor);
+    const userId = acc.userId;
+    const verifyInput: FiveRightsInput = {
+      patientBarcode: marData?.patient_barcode ?? marData?.patientBarcode,
+      medicationBarcode: marData?.medication_barcode ?? marData?.medicationBarcode,
+      prescriptionId: marData?.prescription_id ?? marData?.prescriptionId,
+      dose: String(marData?.dose ?? ''),
+      route: String(marData?.route ?? ''),
+      scannedAt: marData?.scan_timestamp ?? marData?.scanTimestamp ?? new Date(),
+    };
+    const scheduledTimeRaw = marData?.scheduled_time ?? marData?.scheduledTime ?? null;
+    const scheduledTime = scheduledTimeRaw ? new Date(scheduledTimeRaw) : null;
+    if (!scheduledTime || Number.isNaN(scheduledTime.getTime())) {
+      throw new BadRequestException('no-scheduled-time: administration requires a scheduled dose time');
+    }
+    const loaded = await this.loadFiveRightsEvidence(verifyInput, {
+      dose: String(marData?.dose ?? ''),
+      unit: marData?.unit ?? null,
+      route: String(marData?.route ?? ''),
+      scheduledTime,
+    }, tenantDb);
+    await this.assertFiveRightsAccess(acc, loaded.wristband!.patientId, loaded.prescription!.patientId, tenantDb);
+    const gate = evaluateFiveRights({
+      ...loaded,
+      administered: { dose: verifyInput.dose, route: verifyInput.route },
+      scannedAt: verifyInput.scannedAt ?? new Date(),
+    });
+    if (!gate.verified) {
+      throw new BadRequestException(`Five-rights hard block: ${gate.failures.join(', ')}`);
+    }
+
     const repository = tenantDb.getRepository(MedicationAdministrationRecord);
 
     // ── Ward stock check ─────────────────────────────────────────────────────
@@ -215,6 +553,17 @@ export class BcmaService {
       administeredById: userId,
       actualAdministrationTime: new Date(),
       administrationStatus: 'administered',
+      // FX-010: the gate above passed — persist the verified five rights.
+      rightPatientVerified: true,
+      rightMedicationVerified: true,
+      rightDoseVerified: true,
+      rightRouteVerified: true,
+      rightTimeVerified: true,
+      patientWristbandScanned: true,
+      medicationBarcodeScanned: true,
+      scanTimestamp: verifyInput.scannedAt instanceof Date ? verifyInput.scannedAt : new Date(verifyInput.scannedAt ?? Date.now()),
+      patientBarcode: verifyInput.patientBarcode,
+      medicationBarcode: verifyInput.medicationBarcode,
     });
 
     const saved = await repository.save(mar) as unknown as MedicationAdministrationRecord;
@@ -897,16 +1246,34 @@ export class BcmaService {
 
   async administerFromScheduledEntry(
     marEntryId: string,
-    body: { witnessedById?: string; notes?: string },
-    actorId: string,
+    body: { witnessedById?: string; notes?: string; patientBarcode?: string; medicationBarcode?: string },
+    accessor: Accessor,
     tenantDb: DataSource,
   ): Promise<any> {
+    // FX-010: the scheduled path previously skipped verification entirely.
+    // It now runs the same gate via the pre-authorized system entry point.
+    const acc = this.requireAccessor(accessor);
+    const actorId = acc.userId;
     const [entry] = await tenantDb.query(`SELECT * FROM mar_scheduled_entries WHERE id = $1`, [marEntryId]);
     if (!entry) throw new NotFoundException('MAR scheduled entry not found');
     if (entry.status === 'administered') throw new BadRequestException('Already administered');
     if (entry.requires_witness && !body.witnessedById) {
       throw new BadRequestException('Witness required for this medication');
     }
+    // Strict (not pre-authorized): this path has an interactive accessor,
+    // so the R2 composition check applies here too.
+    await this.verifyFiveRightsStrict(
+      {
+        patientBarcode: body.patientBarcode as string,
+        medicationBarcode: body.medicationBarcode as string,
+        prescriptionId: entry.prescription_id,
+        dose: String(entry.dose ?? ''),
+        route: String(entry.route ?? 'oral'),
+        scannedAt: new Date(),
+      },
+      acc,
+      tenantDb,
+    );
     const marRepo = tenantDb.getRepository(MedicationAdministrationRecord);
     const mar = marRepo.create({
       patientId: entry.patient_id,
@@ -921,6 +1288,17 @@ export class BcmaService {
       witnessedById: body.witnessedById || null,
       administrationStatus: 'administered',
       notes: body.notes,
+      // FX-010: the strict gate above passed — persist the verified rights.
+      rightPatientVerified: true,
+      rightMedicationVerified: true,
+      rightDoseVerified: true,
+      rightRouteVerified: true,
+      rightTimeVerified: true,
+      patientWristbandScanned: true,
+      medicationBarcodeScanned: true,
+      scanTimestamp: new Date(),
+      patientBarcode: body.patientBarcode || null,
+      medicationBarcode: body.medicationBarcode || null,
     });
     const saved = await marRepo.save(mar);
     await tenantDb.query(

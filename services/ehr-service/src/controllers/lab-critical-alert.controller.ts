@@ -85,19 +85,22 @@ export class LabCriticalAlertController {
   }
 
   @Patch(':alertId/acknowledge')
-  @ApiOperation({ summary: 'Acknowledge critical alert' })
+  @ApiOperation({ summary: 'Acknowledge critical alert (ordering clinician or on-duty cover only)' })
   @ApiResponse({ status: 200, description: 'Alert acknowledged successfully' })
   async acknowledgeAlert(
     @Request() req: RequestWithTenant,
     @Param('alertId') alertId: string,
-    @Body() body: { acknowledgment_notes?: string },
+    @Body() body: { acknowledgment_notes?: string; ward?: string },
   ) {
-    const userId = (req.user?.sub || req.user?.id);
+    const user = req.user as any;
+    // FX-018: accessor (identity + role) is REQUIRED — the service denies
+    // when it is missing instead of bypassing the gate.
     return this.labCriticalAlertService.acknowledgeAlert(
       req.tenantDb,
       alertId,
-      userId,
+      { userId: user?.sub || user?.id, role: user?.role },
       body.acknowledgment_notes,
+      { tenantId: req.tenantId, ward: body?.ward },
     );
   }
 

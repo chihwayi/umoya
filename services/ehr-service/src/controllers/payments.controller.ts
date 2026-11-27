@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, Request, Headers } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
 import { PaymentsService } from '../services/payments.service';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
@@ -63,10 +63,16 @@ export class PaymentsController {
 
   @Public()
   @Post('provider-callback')
-  @ApiOperation({ summary: 'Record a provider callback/payment event' })
+  @ApiOperation({ summary: 'Record a provider callback/payment event (verified before crediting)' })
   @ApiResponse({ status: 200, description: 'Provider callback processed' })
-  async recordProviderCallback(@Body() data: any, @Request() req: RequestWithTenant) {
-    return this.paymentsService.recordProviderCallback(data, req.tenantDb);
+  async recordProviderCallback(
+    @Body() data: any,
+    @Request() req: RequestWithTenant,
+    @Headers() headers: Record<string, any>,
+  ) {
+    // FX-019: provider authentication headers ride along — without them the
+    // callback fails closed inside the service instead of crediting blindly.
+    return this.paymentsService.recordProviderCallback(data, req.tenantDb, { headers });
   }
 
   @Get('methods')
